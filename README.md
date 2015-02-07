@@ -11,4 +11,3 @@ when we start the development of operating system from scratch.
 
 ## Developer
 Hirochika Asai
-
