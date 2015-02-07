@@ -10,7 +10,7 @@
 	.text
 
 	.code16
-	.globl	start
+	.globl	start		/* Entry point */
 
 start:
 	/* Display the welcome message */
