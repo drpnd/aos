@@ -11,3 +11,13 @@ when we start the development of operating system from scratch.
 
 ## Developer
 Hirochika Asai
+
+## Checkpoints
+| Checkpoint   | Tag     | Branch          |
+| ------------ | ------- | --------------- |
+| checkpoint 0 | bootmsg | release/bootmsg |
+| checkpoint 1 | bootmon | release/bootmon |
+
+
+### Checkpoint 0
+
