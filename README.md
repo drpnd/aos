@@ -13,11 +13,9 @@ when we start the development of operating system from scratch.
 Hirochika Asai
 
 ## Checkpoints
-| Checkpoint   | Tag     | Branch          |
-| ------------ | ------- | --------------- |
-| checkpoint 0 | bootmsg | release/bootmsg |
-| checkpoint 1 | bootmon | release/bootmon |
-
-
-### Checkpoint 0
+| Checkpoint   | Tag      | Branch           |
+| ------------ | -------- | ---------------- |
+| checkpoint 0 | bootmsg  | release/bootmsg  |
+| checkpoint 1 | diskload | release/diskload |
+| checkpoint 2 | bootmon  | release/bootmon  |
 
