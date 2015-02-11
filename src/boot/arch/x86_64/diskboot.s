@@ -33,6 +33,17 @@ start:
 	/* Save drive information */
 	movb	%dl,drive
 
+	cld			/* Clear direction flag */
+				/*  (inc di/si for str ops) */
+
+	/* Setup stack */
+	cli			/* Disable interrupts */
+	xorw	%ax,%ax
+	movw	%ax,%ss		/* Stack segment (%ss=0) */
+	movw	%ax,%ds		/* Data segment (%ds=0) */
+	movw	%ax,%es		/* Data segment (%es=0) */
+	sti			/* Disable interrupts */
+
 	/* Read a sector from the drive */
 	movw	$BOOTMON_SEG,%bx
 	movw	%bx,%es		/* Buffer address pointer (Segment) */
