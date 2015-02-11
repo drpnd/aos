@@ -78,7 +78,7 @@ get_drive_params:
 	call	read		/* Read %cx sectors starting at LBA %ax on */
 				/*  drive %dl into %es:[%bx] */
 
-	/* Jump to boot monitro*/
+	/* Jump to boot monitor */
 	ljmp	$BOOTMON_SEG,$BOOTMON_OFF
 
 
