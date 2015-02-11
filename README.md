@@ -38,4 +38,9 @@ using int 13h BIOS call.
 It then jumps to that address using far jump call
 to execute the program that displays a welcome message.
 
-
+## Checkpoint 2
+This checkpoint is a small extension from the checkpoint 1 although
+many lines of code are added.
+This includes two main updates from the checkpoint 1:
+1) This supports to read multiple sectors for the other program,
+and 2) This displays the error code in case of disk read failure.
