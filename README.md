@@ -17,7 +17,8 @@ Hirochika Asai
 | ------------ | -------- | ---------------- |
 | checkpoint 0 | bootmsg  | release/bootmsg  |
 | checkpoint 1 | diskload | release/diskload |
-| checkpoint 2 | bootmon  | release/bootmon  |
+| checkpoint 2 | msecload | release/msecload |
+| checkpoint 3 | bootmon  | release/bootmon  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
