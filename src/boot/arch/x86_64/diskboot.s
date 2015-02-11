@@ -27,6 +27,17 @@
 	.globl	start		/* Entry point */
 
 start:
+	cld			/* Clear direction flag */
+				/*  (inc di/si for str ops) */
+
+	/* Setup stack */
+	cli			/* Disable interrupts */
+	xorw	%ax,%ax
+	movw	%ax,%ss		/* Stack segment (%ss=0) */
+	movw	%ax,%ds		/* Data segment (%ds=0) */
+	movw	%ax,%es		/* Data segment (%es=0) */
+	sti			/* Disable interrupts */
+
 	/* Display the welcome message */
 	movw	$msg_welcome,%si	/* %ds:(%si) -> welcome message */
 	call	putstr
