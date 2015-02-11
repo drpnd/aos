@@ -39,14 +39,11 @@ start:
 	movw	$BOOTMON_OFF,%bx	/* Buffer address pointer (Offset) */
 	movb	$0x02,%ah	/* Function: Read sectors from drive */
 	movb	$0x01,%al	/* # of sectors to be read */
-	movw	$0x0002,%cx	/* Cylinder[6:15] | Sector[0:5] */
+	movw	$0x0002,%cx	/* Cylinder[7:6]Cylinder[15:8] | Sector[5:0] */
 	movb	$0x00,%dh	/* Head */
 	movb	drive,%dl	/* Drive */
 	int	$0x13
-
-	/* Check the status code */
-	testb	%ah,%ah
-	jnz	1f
+	jc	1f		/* Jump if an error occurs */
 	/* Jump to boot monitro*/
 	ljmp	$BOOTMON_SEG,$BOOTMON_OFF
 
