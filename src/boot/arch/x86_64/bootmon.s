@@ -21,11 +21,9 @@
  * SOFTWARE.
  */
 
-
 	.text
 
 	.code16
-
 	.globl	bootmon		/* Entry point */
 
 /*
@@ -65,10 +63,3 @@ putc:
 msg_welcome:
 	.ascii	"Welcome to Academic Operating System!\r\n\n"
 	.asciz	"Let's get it started.\r\n\n"
-
-/*
- * Boot monitor (from BIOS)
- *   %cs:%ip=0x0900:0x0000 (=0x9000)
- *   %ss:%sp=0x0000:0x7c00 (=0x7c00)
- *   %dl: drive
- */
