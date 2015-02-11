@@ -42,5 +42,5 @@ to execute the program that displays a welcome message.
 This checkpoint is a small extension from the checkpoint 1 although
 many lines of code are added.
 This includes two main updates from the checkpoint 1:
-1) This supports to read multiple sectors for the other program,
-and 2) This displays the error code in case of disk read failure.
+1) This supports to read multiple sectors for the other program.
+2) This displays the error code in case of disk read failure.
