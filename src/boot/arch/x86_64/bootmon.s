@@ -32,12 +32,71 @@
  *   %dl: drive
  */
 bootmon:
-	movw	$msg_welcome,%si	/* %ds:(%si) -> welcome message */
-	call	putstr
+	/* Save parameters from IPL */
+	movb	%dl,drive
+
+	call	poweroff
 
 	/* Halt */
 	cli
 	hlt
+
+
+/* Power off the machine using APM */
+poweroff:
+	/* Disable PIC */
+	call	disable_pic
+
+	/* Power off with APM */
+	movw	$0x5301,%ax	/* Connect APM interface */
+	movw	$0x0,%bx	/* Specify system BIOS */
+	int	$0x15		/* Return error code in %ah with CF */
+	jc	1f		/* Error */
+
+	movw	$0x530e,%ax	/* Set APM version */
+	movw	$0x0,%bx	/* Specify system BIOS */
+	movw	$0x102,%cx	/* Version 1.2 */
+	int	$0x15		/* Return error code in %ah with CF */
+	jc	1f		/* Error */
+
+	movw	$0x5308,%ax	/* Enable power management */
+	movw	$0x1,%bx	/* All devices managed by the system BIOS */
+	movw	$0x1,%cx	/* Enable */
+	int	$0x15		/* Ignore errors */
+
+	movw	$0x5307,%ax	/* Set power state */
+	movw	$0x1,%bx	/* All devices managed by the system BIOS */
+	movw	$0x3,%cx	/* Off */
+	int	$0x15
+1:
+	ret			/* Return on error */
+
+
+/* Disable i8259 PIC */
+disable_pic:
+	pushw	%ax
+	movb	$0xff,%al
+	outb	%al,$0xa1
+	movb	$0xff,%al
+	outb	%al,$0x21
+	popw	%ax
+	ret
+
+
+/* Display the error message (%ah = error code) */
+int_error:
+	movb	%ah,%al
+	movw	$error_code,%di
+	xorw	%bx,%bx
+	movw	%bx,%es
+	call	hex8
+	movw	$msg_error,%si	/* %ds:(%si) -> error message */
+	call	putstr		/* Display error message at %si and then halt */
+
+/* Halt */
+halt:
+	hlt
+	jmp	halt
 
 /* Display a null-terminated string */
 putstr:
@@ -58,8 +117,33 @@ putc:
 	popw	%bx		/* Restore %bx */
 	ret
 
+/* Convert %al to hex characters, saving the result to [%di] */
+hex8:
+	pushw	%ax		/* Save %ax */
+	shrb	$0x4,%al	/* Get most significant 4 bits in %al */
+	call	hex8.allsb4	/* Convert the least significant 4 bits in */
+				/*  %al to a hex character */
+	popw	%ax		/* Restore %ax */
+hex8.allsb4:
+	andb	$0xf,%al	/* Get least significant 4 bits in %al */
+	cmpb	$0xa,%al	/* CF=1 if %al < $0xa (0..9) */
+	sbbb	$0x69,%al	/* %al <= %al - ($0x69 + CF) */
+	das			/* BCD (N.B., %al - 0x60 if AF is not set) */
+	orb	$0x20,%al	/* To lower case */
+	stosb			/* Save char to %es:[%di] and inc %di */
+	ret
+
+
 	.data
 
 msg_welcome:
 	.ascii	"Welcome to Academic Operating System!\r\n\n"
 	.asciz	"Let's get it started.\r\n\n"
+
+msg_error:
+	.ascii  "Error: 0x"
+error_code:
+        .asciz  "00\r\r"
+
+drive:
+	.byte	0
