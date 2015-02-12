@@ -18,7 +18,8 @@ Hirochika Asai
 | checkpoint 0 | bootmsg  | release/bootmsg  |
 | checkpoint 1 | diskload | release/diskload |
 | checkpoint 2 | msecload | release/msecload |
-| checkpoint 3 | bootmon  | release/bootmon  |
+| checkpoint 3 | apmoff   | release/apmoff   |
+| checkpoint 4 | bootmon  | release/bootmon  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -44,3 +45,7 @@ many lines of code are added.
 This includes two main updates from the checkpoint 1:
 1) This supports to read multiple sectors for the other program.
 2) This displays the error code in case of disk read failure.
+
+## Checkpoint 3
+This checkpoint implements a function to power off the machine
+using Advanced Power Management (APM) API.
