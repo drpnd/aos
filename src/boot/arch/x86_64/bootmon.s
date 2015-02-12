@@ -83,16 +83,6 @@ disable_pic:
 	ret
 
 
-/* Display the error message (%ah = error code) */
-int_error:
-	movb	%ah,%al
-	movw	$error_code,%di
-	xorw	%bx,%bx
-	movw	%bx,%es
-	call	hex8
-	movw	$msg_error,%si	/* %ds:(%si) -> error message */
-	call	putstr		/* Display error message at %si and then halt */
-
 /* Halt */
 halt:
 	hlt
@@ -139,11 +129,6 @@ hex8.allsb4:
 msg_welcome:
 	.ascii	"Welcome to Academic Operating System!\r\n\n"
 	.asciz	"Let's get it started.\r\n\n"
-
-msg_error:
-	.ascii  "Error: 0x"
-error_code:
-        .asciz  "00\r\r"
 
 drive:
 	.byte	0
