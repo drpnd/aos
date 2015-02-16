@@ -21,6 +21,8 @@
  * SOFTWARE.
  */
 
+	.set	VGA_TEXT_COLOR_80x25,0x03
+
 	.text
 
 	.code16
@@ -32,6 +34,11 @@
  *   %dl: drive
  */
 bootmon:
+	/* Set video mode to 16bit color text mode */
+	movb	VGA_TEXT_COLOR_80x25,%al
+	movb	$0x00,%ah
+	int	$0x10
+
 	movw	$msg_welcome,%si	/* %ds:(%si) -> welcome message */
 	call	putstr
 
