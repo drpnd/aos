@@ -21,6 +21,8 @@
  * SOFTWARE.
  */
 
+	.set	VGA_TEXT_COLOR_80x25,0x03
+
 	.text
 
 	.code16
@@ -37,6 +39,11 @@ start:
 	movw	%ax,%ds		/* Data segment (%ds=0) */
 	movw	%ax,%es		/* Data segment (%es=0) */
 	sti			/* Disable interrupts */
+
+	/* Set video mode to 16bit color text mode */
+	movb	VGA_TEXT_COLOR_80x25,%al
+	movb	$0x00,%ah
+	int	$0x10
 
 	/* Display the welcome message */
 	movw	$msg_welcome,%si	/* %ds:(%si) -> welcome message */
