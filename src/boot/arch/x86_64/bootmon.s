@@ -21,18 +21,6 @@
  * SOFTWARE.
  */
 
-	.set	IVT_IRQ0,0x08	/* IRQ0 = 0x08 (BIOS default) */
-	.set	IVT_IRQ8,0x70	/* IRQ0 = 0x70 (BIOS default) */
-	.set	KBD_LCTRL,0x1d	/* Left ctrl */
-	.set	KBD_LSHIFT,0x2a	/* Left shift */
-	.set	KBD_RSHIFT,0x36	/* Right shift */
-	.set	KBD_CAPS,0x3a	/* Caps lock */
-	.set	KBD_RCTRL,0x5a	/* Right ctrl */
-	.set	KBD_UP,0x48	/* Up */
-	.set	KBD_LEFT,0x4b	/* Left */
-	.set	KBD_RIGHT,0x4d	/* Right */
-	.set	KBD_DOWN,0x50	/* Down */
-
 	.text
 
 	.code16
@@ -47,81 +35,11 @@ bootmon:
 	/* Save parameters from IPL */
 	movb	%dl,drive
 
-	/* Setup the keyboard interrupt handler */
-	xorw	%ax,%ax
-	movw	%ax,%es
-	movw	$intr_irq1,%ax
-	movw	$(IVT_IRQ0+1),%bx
-	call	setup_intvec
+	call	poweroff
 
-	/* Wait for keyboard interrupts */
-1:
-	sti
-	hlt
+	/* Halt */
 	cli
-	jmp	1b
-
-
-/*
- * Setup interrupt vector
- *   %es: code segment
- *   %ax: instruction pointer
- *   %bx: interrupt vector number
- */
-setup_intvec:
-	pushw	%bx
-	shlw	$2,%bx
-	movw	%ax,(%bx)
-	addw	$2,%bx
-	movw	%es,(%bx)
-	popw	%bx
-	ret
-
-
-/*
- * Keyboard interrupt handler
- */
-intr_irq1:
-	pushw	%ax
-	pushw	%bx
-	xorw	%ax,%ax		/* Zero */
-	inb	$0x60,%al	/* Scan code from the keyboard controller */
-	cmpb	$1,%al		/* If `ESC' is pressed */
-	jne	1f
-	call	poweroff	/*  then power off */
-1:
-	cmpb	KBD_LSHIFT,%al	/* Left shift */
-	je	4f		/* Jump if left shift */
-	cmpb	KBD_RSHIFT,%al	/* Right shift */
-	je	4f		/* Jump if right shift */
-	/* Otherwise */
-	testb	$0x80,%al	/* Released? */
-	jnz	6f		/*  Yes, then ignore the key */
-	cmpb	$0,(keyboard_shift)	/* Shift key is released? */
-	je	2f		/*  Yes, then use base keymap */
-	movw	$keymap_shift,%bx	/*  Otherwise, use shifted keymap */
-	jmp	3f
-2:
-	movw	$keymap_base,%bx	/* Use base keymap */
-3:
-	addw	%ax,%bx
-	movb	(%bx),%al	/* Get ascii code from the keyboard code */
-	call	putc		/* Print the character */
-	jmp	6f
-4:
-	testb	$0x80,%al	/* Released? */
-	jnz	5f		/*  Yes, then clear shift key */
-	movb	$1,(keyboard_shift)	/* Set shift key */
-	jmp	6f
-5:
-	movb	$0,(keyboard_shift)	/* Clear shift key */
-6:
-	movb	$0x20,%al	/* Notify */
-	outb	%al,$0x20	/*  End-Of-Interrupt (EOI) */
-	popw	%bx
-	popw	%ax
-	iret
-
+	hlt
 
 
 /* Power off the machine using APM */
@@ -213,21 +131,4 @@ msg_welcome:
 	.asciz	"Let's get it started.\r\n\n"
 
 drive:
-	.byte	0
-
-
-/* Keymap (US) */
-keymap_base:
-	.ascii	"  1234567890-=\x08\tqwertyuiop[]\r as"
-	.ascii	"dfghjkl;'` \\zxcvbnm,./          "
-	.ascii	"                                "
-	.ascii	"                                "
-keymap_shift:
-	.ascii	"  !@#$%^&*()_+\x08\tQWERTYUIOP{}\r AS"
-	.ascii	"DFGHJKL:\"~ |ZXCVBNM<>?          "
-	.ascii	"                                "
-	.ascii	"                                "
-
-/* Keybaord status */
-keyboard_shift:
 	.byte	0
