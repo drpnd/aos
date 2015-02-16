@@ -32,6 +32,7 @@
 	.set	KBD_LEFT,0x4b	/* Left */
 	.set	KBD_RIGHT,0x4d	/* Right */
 	.set	KBD_DOWN,0x50	/* Down */
+	.set	VGA_TEXT_COLOR_80x25,0x03
 
 	.text
 
@@ -46,6 +47,11 @@
 bootmon:
 	/* Save parameters from IPL */
 	movb	%dl,drive
+
+	/* Set video mode to 16bit color text mode */
+	movb	VGA_TEXT_COLOR_80x25,%al
+	movb	$0x00,%ah
+	int	$0x10
 
 	/* Setup the keyboard interrupt handler */
 	xorw	%ax,%ax
