@@ -27,6 +27,7 @@
 	.set	NUM_RETRIES,3		/* # of retries for disk read */
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
+	.set	VGA_TEXT_COLOR_80x25,0x03
 
 	.text
 
@@ -47,6 +48,11 @@ start:
 	movw	%ax,%ds		/* Data segment (%ds=0) */
 	movw	%ax,%es		/* Data segment (%es=0) */
 	sti			/* Disable interrupts */
+
+	/* Set video mode to 16bit color text mode */
+	movb	VGA_TEXT_COLOR_80x25,%al
+	movb	$0x00,%ah
+	int	$0x10
 
 	/* Get drive parameters */
 get_drive_params:
