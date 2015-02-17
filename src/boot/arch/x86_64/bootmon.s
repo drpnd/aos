@@ -53,12 +53,25 @@ bootmon:
 	movb	$0x00,%ah
 	int	$0x10
 
+	/* Setup the timer interrupt handler */
+	xorw	%ax,%ax
+	movw	%ax,%es
+	movw	$intr_irq0,%ax
+	movw	$(IVT_IRQ0+0),%bx
+	call	setup_intvec
+
 	/* Setup the keyboard interrupt handler */
 	xorw	%ax,%ax
 	movw	%ax,%es
 	movw	$intr_irq1,%ax
 	movw	$(IVT_IRQ0+1),%bx
 	call	setup_intvec
+
+	/* Initialize the counter */
+	movw	$99*100,(counter)
+
+	/* Start the timer */
+	call	init_pit
 
 	/* Wait for keyboard interrupts */
 1:
@@ -67,6 +80,17 @@ bootmon:
 	cli
 	jmp	1b
 
+/* Initialize programmable interval timer */
+init_pit:
+	pushw	%ax
+	movb	$(0x00|0x30|0x06),%al
+	outb	%al,$0x43
+	movw	$0x2e9b,%ax	/* Frequency=100Hz: 1193181.67/100 */
+	outb	%al,$0x40	/* Counter 0 */
+	movb	%ah,%al
+	outb	%al,$0x40	/* Counter 0 */
+	popw	%ax
+	ret
 
 /*
  * Setup interrupt vector
@@ -83,6 +107,52 @@ setup_intvec:
 	popw	%bx
 	ret
 
+/*
+ * Timer interrupt handler
+ */
+intr_irq0:
+	/* Save registers to the stack */
+	pushw	%ax
+	pushw	%bx
+	pushw	%cx
+	pushw	%dx
+	pushw	%ds
+	pushw	%si
+
+	movw	(counter),%ax	/* Get the previous counter value */
+	testw	%ax,%ax
+	jz	1f		/* Jump if the counter reaches zero */
+	decw	%ax		/* Decrease the counter by one */
+	movw	%ax,(counter)	/* Save the counter */
+1:
+	movb	$100,%dl	/* Convert centisecond to second */
+	divb	%dl		/*  Q=%al, R=%ah */
+	xorb	%ah,%ah
+	movb	$10,%dl
+	divb	%dl		/* Q(%al) = tens digit, R(%ah) = unit digit */
+	addb	$'0',%al	/* To ascii */
+	addb	$'0',%ah	/* To ascii */
+	movw	%ax,%dx
+	call	putc
+	movb	%dh,%al
+	call	putc
+	movb	$0x08,%al
+	call	putc
+	movb	$0x08,%al
+	call	putc
+
+	/* EOI for PIC1 */
+	movb	$0x20,%al
+	outb	%al,$0x20
+
+	/* Restore registers */
+	popw	%si
+	popw	%dx
+	popw	%dx
+	popw	%cx
+	popw	%bx
+	popw	%ax
+	iret
 
 /*
  * Keyboard interrupt handler
@@ -96,9 +166,11 @@ intr_irq1:
 	jne	1f
 	call	poweroff	/*  then power off */
 1:
-	cmpb	KBD_LSHIFT,%al	/* Left shift */
+	movb	%al,%bl		/* Ignore the flag */
+	and	$0x7f,%bl	/*  indicating released in %bl */
+	cmpb	$KBD_LSHIFT,%bl	/* Left shift */
 	je	4f		/* Jump if left shift */
-	cmpb	KBD_RSHIFT,%al	/* Right shift */
+	cmpb	$KBD_RSHIFT,%bl	/* Right shift */
 	je	4f		/* Jump if right shift */
 	/* Otherwise */
 	testb	$0x80,%al	/* Released? */
@@ -221,6 +293,9 @@ msg_welcome:
 drive:
 	.byte	0
 
+/* Counter */
+counter:
+	.word	0
 
 /* Keymap (US) */
 keymap_base:
