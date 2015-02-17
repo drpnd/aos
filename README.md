@@ -19,8 +19,8 @@ Hirochika Asai
 | checkpoint 1 | diskload | release/diskload |
 | checkpoint 2 | msecload | release/msecload |
 | checkpoint 3 | apmoff   | release/apmoff   |
-| checkpoint 4 | pitkbd   | release/pitkbd   |
-| checkpoint 5 | bootmon  | release/bootmon  |
+| checkpoint 4 | pickbd   | release/pickbd   |
+| checkpoint X | bootmon  | release/bootmon  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -54,7 +54,7 @@ using Advanced Power Management (APM) API.
 ## Checkpoint 4
 Interrupts from peripheral devices (IRQ: Interrupt Request)
 are routed to a processor
-by a Programmable Interrupt Controller (PIT), Intel 8259(A).
+by a Programmable Interrupt Controller (PIC), Intel 8259(A).
 To handle an interrupt from the keyboard,
 the corresponding interrupt handler that reads keyboard input
 from the keyboard controller
