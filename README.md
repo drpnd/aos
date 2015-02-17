@@ -20,6 +20,7 @@ Hirochika Asai
 | checkpoint 2 | msecload | release/msecload |
 | checkpoint 3 | apmoff   | release/apmoff   |
 | checkpoint 4 | pickbd   | release/pickbd   |
+| checkpoint 5 | pit      | release/pit      |
 | checkpoint X | bootmon  | release/bootmon  |
 
 ## Checkpoint 0
@@ -59,3 +60,10 @@ To handle an interrupt from the keyboard,
 the corresponding interrupt handler that reads keyboard input
 from the keyboard controller
 is setup in the Interrupt Vector Table (IVT) in this checkpoint.
+
+## Checkpoint 5
+Programmable Interval Timer (PIT), Intel 8253/8254
+implements a crystal oscillator
+and generates a periodic or interval signal output.
+Usually, the signal output is handled by CPU as an interrupt through PIC.
+Here, PIT is used as timer.
