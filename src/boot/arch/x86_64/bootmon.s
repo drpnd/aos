@@ -284,6 +284,32 @@ hex8.allsb4:
 	ret
 
 
+/* Enable A20 address line */
+enable_a20:
+	cli
+	pushw	%ax
+	pushw	%cx
+	xorw	%cx,%cx
+1:
+	incw	%cx		/* Try until %cx overflows (2^16 times) */
+	jz	3f		/*  Failed to enable a20 */
+	inb	$0x64,%al	/* Get status from the keyboard controller */
+	testb	$0x2,%al	/* Busy? */
+	jnz	1b		/* Yes, busy.  Then try again */
+	movb	$0xd1,%al	/* Command: Write output port (0x60 to P2) */
+	outb	%al,$0x64	/* Write the command to the control register */
+2:
+	inb	$0x64,%al	/* Get status from the keyboard controller */
+	testb	$0x2,%al	/* Busy? */
+	jnz	2b		/* Yes, busy.  Then try again */
+	movb	$0xdf,%al	/* Command: Enable A20 */
+	outb	%al,$0x60	/* Write to P2 via 0x60 output register */
+3:
+	popw	%cx
+	popw	%ax
+	sti
+	ret
+
 	.data
 
 msg_welcome:
