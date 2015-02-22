@@ -300,7 +300,7 @@ enable_a20:
 	testb	$0x2,%al	/* Busy? */
 	jnz	1b		/* Yes, busy.  Then try again */
 	movb	$0xd1,%al	/* Command: Write output port (0x60 to P2) */
-	outb	%al,$0x64	/* Write the command to the control register */
+	outb	%al,$0x64	/* Write the command to the command register */
 2:
 	inb	$0x64,%al	/* Get status from the keyboard controller */
 	testb	$0x2,%al	/* Busy? */
