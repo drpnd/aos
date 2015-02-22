@@ -56,16 +56,6 @@ bootmon:
 	/* Enable A20 */
 	call	enable_a20
 
-	/* Test code for A20.. */
-	movw	$0xffff,%ax
-	movw	%ax,%es
-	movw	$0x1234,%bx
-	movw	%bx,%es:(0x10)
-	xorw	%ax,%ax
-	movw	%ax,%es
-	movl	(0),%eax
-	movl	%eax,%dr0
-
 	/* Setup the timer interrupt handler */
 	xorw	%ax,%ax
 	movw	%ax,%es
