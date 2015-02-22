@@ -9,11 +9,20 @@
 ARCH=x86_64
 
 diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
+bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
+bootmon: CFLAGS=-I./include \
+	-Wall -mno-sse3 -fleading-underscore -nostdlib -m64
+
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o
 	$(LD) -N -e start -Ttext=0x7c00 --oformat binary -o $@ $^
 
 ## Boot monitor
-bootmon: boot/arch/$(ARCH)/bootmon.o
+bootmon: boot/arch/$(ARCH)/bootmon.o \
+	boot/arch/$(ARCH)/entry16.o \
+	boot/arch/$(ARCH)/entry32.o \
+	boot/arch/$(ARCH)/entry64.o \
+	boot/arch/$(ARCH)/boot.o
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
+

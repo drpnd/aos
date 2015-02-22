@@ -33,6 +33,9 @@
 	.set	KBD_RIGHT,0x4d	/* Right */
 	.set	KBD_DOWN,0x50	/* Down */
 	.set	VGA_TEXT_COLOR_80x25,0x03
+	.set	NUM_RETRIES,3		/* # of retries for disk read */
+	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
+	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
 
 	.text
 
@@ -94,11 +97,12 @@ bootmon:
 	je	3f
 	jmp	1b
 2:
-	hlt
-	jmp	2b
+	/* Boot */
+	jmp	entry16
 3:
-	call	poweroff	/*  then power off */
-	jmp	1b
+	/* Power off */
+	call	poweroff	/* Call power off function */
+	jmp	1b		/* If failed, then go back */
 
 
 
@@ -263,6 +267,17 @@ disable_pic:
 	ret
 
 
+/* Display the read error message (%ah = error code) */
+read_error:
+	movb	%ah,%al
+	movw	$error_code,%di
+	xorw	%bx,%bx
+	movw	%bx,%es
+	call	hex8
+	movw	$msg_error,%si	/* %ds:(%si) -> error message */
+	call	putstr		/* Display error message at %si and then halt */
+
+
 /* Halt */
 halt:
 	hlt
@@ -357,6 +372,120 @@ enable_a20:
 	sti
 	ret
 
+
+/* Read %cx sectors starting at LBA %ax on drive %dl into %es:[%bx] */
+read:
+	pushw	%bp		/* Save the base pointer*/
+	movw	%sp,%bp		/* Copy the stack pointer to the base pointer */
+	/* Save general purpose registers */
+	movw	%ax,-2(%bp)
+	movw	%bx,-4(%bp)
+	movw	%cx,-6(%bp)
+	movw	%dx,-8(%bp)
+	/* Prepare space for local variables */
+	/* u16 cx -10(%bp) */
+	/* u16 counter -12(%bp) */
+	subw	$12,%sp
+
+	/* Reset counter */
+	xorw	%ax,%ax
+	movw	%ax,-12(%bp)
+
+	/* Set number of sectors to be read */
+	movw	%cx,-10(%bp)
+1:
+	movw	-2(%bp),%ax	/* Restore %ax */
+	addw	-12(%bp),%ax	/* Current LBA */
+	call	lba2chs		/* Convert LBA (%ax) to CHS (%cx,%dh) */
+	call	read_sector	/* Read a sector */
+	addw	$SECTOR_SIZE,%bx
+	movw	-12(%bp),%ax	/* Get */
+	incw	%ax		/*  and increase the current LBA %ax */
+	movw	%ax,-12(%bp)	/*  then write back */
+	cmpw	-10(%bp),%ax
+	jb	1b		/* Need to read more sectors */
+
+	/* Restore the saved registers */
+	movw	-8(%bp),%dx
+	movw	-6(%bp),%cx
+	movw	-4(%bp),%bx
+	movw	-2(%bp),%ax
+	movw	%bp,%sp		/* Restore the stack pointer and base pointer */
+	popw	%bp
+	ret
+
+
+/* Read one sector from CHS (specified by %dh and %cx) specified on drive %dl to
+ * %es:[%bx]
+ */
+read_sector:
+	pushw	%bp		/* Save the base pointer*/
+	movw	%sp,%bp		/* Copy the stack pointer to the base pointer */
+	/* Save registers */
+	movw	%ax,-2(%bp)
+	/* Prepare space for local variables */
+	/* u16 retries -4(%bp) */
+	/* u16 error -6(%bp) */
+	subw	$6,%sp
+	/* Reset retry counter */
+	xorw	%ax,%ax
+	movw	%ax,-4(%bp)
+1:
+	/* Read a sector from the drive */
+	movb	$0x02,%ah	/* Function: Read sectors from drive */
+	movb	$0x01,%al	/* # of sectors to be read */
+	int	$0x13
+	jnc	2f		/* Jump if success */
+	movw	%ax,-6(%bp)	/* Save the return code */
+	movw	-4(%bp),%ax	/* Get */
+	incw	%ax		/*  and increase the number of retries */
+	movw	%ax,-4(%bp)	/*  then write back */
+	cmpw	$NUM_RETRIES,%ax
+	movw	-6(%bp),%ax	/* Restore the return code */
+	ja	read_error	/* Exceeding the maximum number of retries */
+	cmpb	$ERRCODE_TIMEOUT,%ah
+	je	read_error	/* Timeout */
+2:
+	/* Restore the saved registers */
+	movw	-2(%bp),%ax
+	movw	%bp,%sp		/* Restore the stack pointer and base pointer */
+	popw	%bp
+	ret
+
+
+/* Calculate CHS (%cx[7:6]%cx[15:8] ,%dh, %cx[5:0]) from LBA (%ax) */
+lba2chs:
+	/* Save registers */
+	pushw	%ax
+	pushw	%bx
+	pushw	%dx
+	/* Compute sector number */
+	xorw	%bx,%bx
+	movw	%bx,%dx
+	movw	%bx,%cx
+	movb	sectors,%bl
+	divw	%bx		/* %dx:%ax / %bx; %ax:quotient, %dx:remainder */
+	incb	%dl		/* Sector number is one-based numbering */
+	movb	%dl,%cl		/* Sector: %cx[5:0] */
+	/* Compute head and track (cylinder) numbers */
+	xorw	%bx,%bx
+	movw	%bx,%dx
+	movb	heads,%bl
+	divw	%bx		/* %dx:%ax / %bx; %ax:cylinder, %dx:head */
+	movb	%al,%ch		/* Cylinder[7:0]: %cx[15:8] */
+	movb	%ah,%bl		/* Take the least significant two bits */
+	shlb	$6,%bl		/*  from %ah, and copy to %bl[7:6] */
+	orb	%bl,%cl		/* Cylinder[9:8]: %cx[7:6]*/
+	movw	%dx,%bx		/* Save the remainer to %bx */
+	popw	%dx		/* Restore %dx */
+	movb	%bl,%dh		/* Head */
+	/* Restore registers */
+	popw	%bx
+	popw	%ax
+	ret
+
+
+
 	.data
 
 /* Messages */
@@ -371,8 +500,22 @@ msg_countdown:
 msg_count:
 	.asciz	"00 sec."
 
+msg_error:
+	.ascii  "Disk read error: 0x"
+error_code:
+        .asciz  "00\r\r"
+
+
+/* Drive information */
 drive:
 	.byte	0
+heads:
+	.byte	0
+cylinders:
+	.word	0
+sectors:
+	.byte	0
+
 
 /* Saved boot mode */
 bootmode:
