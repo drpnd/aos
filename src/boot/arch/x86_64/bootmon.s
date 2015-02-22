@@ -56,6 +56,12 @@ bootmon:
 	/* Enable A20 */
 	call	enable_a20
 
+	/* Print out boot option message */
+	movw	$0,%ax
+	movw	%ax,%ds
+	movw	$msg_bootopt,%si
+	call	putstr
+
 	/* Setup the timer interrupt handler */
 	xorw	%ax,%ax
 	movw	%ax,%es
@@ -81,7 +87,20 @@ bootmon:
 	sti
 	hlt
 	cli
+	movb	(bootmode),%al
+	cmpb	$'1',%al	/* If `1' is pressed */
+	je	2f
+	cmpb	$'2',%al	/* If `1' is pressed */
+	je	3f
 	jmp	1b
+2:
+	hlt
+	jmp	2b
+3:
+	call	poweroff	/*  then power off */
+	jmp	1b
+
+
 
 /* Initialize programmable interval timer */
 init_pit:
@@ -135,14 +154,12 @@ intr_irq0:
 	divb	%dl		/* Q(%al) = tens digit, R(%ah) = unit digit */
 	addb	$'0',%al	/* To ascii */
 	addb	$'0',%ah	/* To ascii */
-	movw	%ax,%dx
-	call	putc
-	movb	%dh,%al
-	call	putc
-	movb	$0x08,%al
-	call	putc
-	movb	$0x08,%al
-	call	putc
+	movw	%ax,msg_count
+
+	xorw	%ax,%ax
+	movw	%ax,%ds
+	movw	$msg_countdown,%si
+	call	putbstr
 
 	/* EOI for PIC1 */
 	movb	$0x20,%al
@@ -165,9 +182,6 @@ intr_irq1:
 	pushw	%bx
 	xorw	%ax,%ax		/* Zero */
 	inb	$0x60,%al	/* Scan code from the keyboard controller */
-	cmpb	$1,%al		/* If `ESC' is pressed */
-	jne	1f
-	call	poweroff	/*  then power off */
 1:
 	movb	%al,%bl		/* Ignore the flag */
 	and	$0x7f,%bl	/*  indicating released in %bl */
@@ -187,7 +201,10 @@ intr_irq1:
 3:
 	addw	%ax,%bx
 	movb	(%bx),%al	/* Get ascii code from the keyboard code */
-	call	putc		/* Print the character */
+	movb	%al,(bootmode)
+	call	putc		/* Print out the character */
+	movb	$0x08,%al	/* Print backspace */
+	call	putc		/*  for the next input */
 	jmp	6f
 4:
 	testb	$0x80,%al	/* Released? */
@@ -270,6 +287,33 @@ putc:
 	popw	%bx		/* Restore %bx */
 	ret
 
+/*
+ * Display a null-terminated string at the bottom-line
+ *   %ds:%si --> 0xb800:**
+  */
+putbstr:
+	/* Save registers */
+	pushw	%ax
+	pushw	%es
+	pushw	%di
+	movw	$0xb800,%ax	/* Memory 0xb8000 */
+	movw	%ax,%es
+	movw	$(80*24*2),%di	/* 24th (zero-numbering) line */
+putbstr.load:
+	lodsb			/* Load %al from %ds:(%si) , then incl %si */
+	testb	%al,%al		/* Stop at null */
+	jnz	putbstr.putc	/* Call the function to output %al */
+	/* Restore registers */
+	popw	%di
+	popw	%es
+	popw	%ax
+	ret
+putbstr.putc:
+	movb	$0x7,%ah
+	stosw
+	jmp     putbstr.load
+
+
 /* Convert %al to hex characters, saving the result to [%di] */
 hex8:
 	pushw	%ax		/* Save %ax */
@@ -315,11 +359,23 @@ enable_a20:
 
 	.data
 
-msg_welcome:
+/* Messages */
+msg_bootopt:
 	.ascii	"Welcome to Academic Operating System!\r\n\n"
-	.asciz	"Let's get it started.\r\n\n"
+	.ascii	"Select one:\r\n"
+	.ascii	"    1: Boot (64 bit mode)\r\n"
+	.ascii	"    2: Power off\r\n"
+	.asciz	"Press key:[ ]\x08\x08"
+msg_countdown:
+	.ascii	"AOS will boot in "
+msg_count:
+	.asciz	"00 sec."
 
 drive:
+	.byte	0
+
+/* Saved boot mode */
+bootmode:
 	.byte	0
 
 /* Counter */
@@ -328,12 +384,12 @@ counter:
 
 /* Keymap (US) */
 keymap_base:
-	.ascii	"  1234567890-=\x08\tqwertyuiop[]\r as"
+	.ascii	"  1234567890-=  qwertyuiop[]  as"
 	.ascii	"dfghjkl;'` \\zxcvbnm,./          "
 	.ascii	"                                "
 	.ascii	"                                "
 keymap_shift:
-	.ascii	"  !@#$%^&*()_+\x08\tQWERTYUIOP{}\r AS"
+	.ascii	"  !@#$%^&*()_+  QWERTYUIOP{}  AS"
 	.ascii	"DFGHJKL:\"~ |ZXCVBNM<>?          "
 	.ascii	"                                "
 	.ascii	"                                "
