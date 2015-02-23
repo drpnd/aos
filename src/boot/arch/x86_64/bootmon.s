@@ -33,6 +33,7 @@
 	.set	KBD_RIGHT,0x4d	/* Right */
 	.set	KBD_DOWN,0x50	/* Down */
 	.set	VGA_TEXT_COLOR_80x25,0x03
+	.set	BOOT_TIMEOUT,3	/* Timeout in seconds */
 	.set	NUM_RETRIES,3		/* # of retries for disk read */
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
@@ -80,7 +81,7 @@ bootmon:
 	call	setup_intvec
 
 	/* Initialize the counter */
-	movw	$99*100,(counter)	/* 99 seconds (in centisecond) */
+	movw	$BOOT_TIMEOUT*100,(counter)	/* 99 seconds (in centisecond) */
 
 	/* Start the timer */
 	call	init_pit
@@ -93,8 +94,10 @@ bootmon:
 	movb	(bootmode),%al
 	cmpb	$'1',%al	/* If `1' is pressed */
 	je	2f
-	cmpb	$'2',%al	/* If `1' is pressed */
+	cmpb	$'2',%al	/* If `2' is pressed */
 	je	3f
+	cmpw	$0,(counter)	/* If the counter reached zero */
+	je	2f
 	jmp	1b
 2:
 	/* Boot */
