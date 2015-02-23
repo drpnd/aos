@@ -21,9 +21,32 @@
  * SOFTWARE.
  */
 
+typedef unsigned short u16;
+
+void hlt(void);
+
+/*
+ * Entry point for C code
+ */
 void
 centry(void)
 {
+    /* Print message */
+    u16 *base;
+    char *msg = "Congraturations!  Welcome to the 64-bit world!";
+    int offset;
+
+    base = (u16 *)0xb8000;
+    offset = 0;
+    while ( msg[offset] ) {
+        *(base + offset) = 0x0700 | msg[offset];
+        offset++;
+    }
+
+    /* Sleep forever */
+    for ( ;; ) {
+        hlt();
+    }
 }
 
 /*

@@ -328,7 +328,7 @@ putbstr.load:
 	ret
 putbstr.putc:
 	movb	$0x7,%ah
-	stosw
+	stosw			/* Write %ax to [%edi], then add 2 to %edi */
 	jmp     putbstr.load
 
 
