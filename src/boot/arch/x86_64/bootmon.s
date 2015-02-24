@@ -228,7 +228,6 @@ intr_irq1:
 	iret
 
 
-
 /* Power off the machine using APM */
 poweroff:
 	/* Disable PIC */
@@ -328,7 +327,7 @@ putbstr.load:
 	ret
 putbstr.putc:
 	movb	$0x7,%ah
-	stosw			/* Write %ax to [%edi], then add 2 to %edi */
+	stosw			/* Write %ax to [%di], then add 2 to %di */
 	jmp     putbstr.load
 
 
