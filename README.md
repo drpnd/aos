@@ -21,7 +21,8 @@ Hirochika Asai
 | checkpoint 3 | apmoff   | release/apmoff   |
 | checkpoint 4 | pickbd   | release/pickbd   |
 | checkpoint 5 | pit      | release/pit      |
-| checkpoint X | bootmon  | release/bootmon  |
+| checkpoint 6 | bootmon  | release/bootmon  |
+| checkpoint 7 | kernload | release/kernload  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -67,3 +68,17 @@ implements a crystal oscillator
 and generates a periodic or interval signal output.
 Usually, the signal output is handled by CPU as an interrupt through PIC.
 Here, PIT is used as timer.
+
+## Checkpoint 6
+Boot monitor provides an entry point to the operating system.
+In this checkpoint, the boot monitor waits user's interaction
+to choose the boot option.
+After the boot option is specified,
+the software tries to enter 32/64-bit mode unless the option is power off.
+
+## Checkpoint 7
+In the previous checkpoints, the software use BIOS calls to load data
+from a disk drive using INT 13h.
+In this checkpoint, we try to fly away from the BIOS, and implement
+floppy disk and AHCI (for SATA disks etc) driver
+to load data from these disks.
