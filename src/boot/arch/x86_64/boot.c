@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-typedef unsigned short u16;
+#include "boot.h"
 
 void hlt(void);
 
@@ -57,4 +57,3 @@ centry(void)
  * vim600: sw=4 ts=4 fdm=marker
  * vim<600: sw=4 ts=4
  */
-
