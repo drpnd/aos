@@ -39,9 +39,6 @@ entry64:
 	movl	%eax,%fs
 	movl	%eax,%gs
 
-	movq	$0x12345678,%rax
-	movq	%rax,%dr0
-
 	/* Clear screen */
 	movl	$0xb8000,%edi
 	movw	$0x0f20,%ax
