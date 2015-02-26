@@ -82,3 +82,4 @@ from a disk drive using INT 13h.
 In this checkpoint, we try to fly away from the BIOS, and implement
 floppy disk and AHCI (for SATA disks etc) driver
 to load data from these disks.
+Let me consider departing from BIOS calls here is good idea or not.
