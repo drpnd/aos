@@ -22,7 +22,7 @@ Hirochika Asai
 | checkpoint 4 | pickbd   | release/pickbd   |
 | checkpoint 5 | pit      | release/pit      |
 | checkpoint 6 | bootmon  | release/bootmon  |
-| checkpoint 7 | kernload | release/kernload  |
+| checkpoint 7 | kernload | release/kernload |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
