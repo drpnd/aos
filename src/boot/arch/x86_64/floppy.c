@@ -206,6 +206,39 @@ _prepare_for_write(void)
 }
 
 /*
+ * Seek
+ */
+static int
+_seek(int drive, int cyl, int head)
+{
+    int st0;
+    int rcyl;
+
+    if ( drive < 0 || drive >= 4 ) {
+        /* Invalid drive */
+        return -1;
+    }
+
+    /* Sent the command to seek */
+    _send_command(COMMAND_SEEK);
+    _send_command((head << 2) | drive);
+    _send_command(cyl);
+
+    /* Wait until receive an interrupt */
+    _wait_irq();
+    _sense_interrupt(&st0, &rcyl);
+
+    /* Check the returned cylinder */
+    if ( rcyl == cyl ) {
+        /* Yes */
+        return 0;
+    } else {
+        /* Failed */
+        return -1;
+    }
+}
+
+/*
  * Initialize the floppy controller
  */
 void
@@ -217,7 +250,7 @@ floppy_init(void)
     /* Setup DMA */
     _init_dma(FLOPPY_DMA_ADDRESS);
 
-    /* Setup IRQ handler */
+    /* Setup IRQ handler: FIXME */
 }
 
 /*
@@ -286,39 +319,6 @@ floppy_recalibrate(int drive)
         return 0;
     } else {
         /* Failed to re-calibrate */
-        return -1;
-    }
-}
-
-/*
- * Seek
- */
-static int
-_seek(int drive, int cyl, int head)
-{
-    int st0;
-    int rcyl;
-
-    if ( drive < 0 || drive >= 4 ) {
-        /* Invalid drive */
-        return -1;
-    }
-
-    /* Sent the command to seek */
-    _send_command(COMMAND_SEEK);
-    _send_command((head << 2) | drive);
-    _send_command(cyl);
-
-    /* Wait until receive an interrupt */
-    _wait_irq();
-    _sense_interrupt(&st0, &rcyl);
-
-    /* Check the returned cylinder */
-    if ( rcyl == cyl ) {
-        /* Yes */
-        return 0;
-    } else {
-        /* Failed */
         return -1;
     }
 }
