@@ -20,6 +20,7 @@ diskboot: boot/arch/$(ARCH)/diskboot.o
 
 ## Boot monitor
 bootmon: boot/arch/$(ARCH)/bootmon.o \
+	boot/arch/$(ARCH)/kernload.o \
 	boot/arch/$(ARCH)/entry16.o \
 	boot/arch/$(ARCH)/entry32.o \
 	boot/arch/$(ARCH)/entry64.o \

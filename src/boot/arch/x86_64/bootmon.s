@@ -101,12 +101,12 @@ bootmon:
 	jmp	1b
 2:
 	/* Boot */
+	call	kernload
 	jmp	entry16
 3:
 	/* Power off */
 	call	poweroff	/* Call power off function */
 	jmp	1b		/* If failed, then go back */
-
 
 
 /* Initialize programmable interval timer */
