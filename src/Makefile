@@ -23,6 +23,7 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	boot/arch/$(ARCH)/entry16.o \
 	boot/arch/$(ARCH)/entry32.o \
 	boot/arch/$(ARCH)/entry64.o \
-	boot/arch/$(ARCH)/boot.o
+	boot/arch/$(ARCH)/boot.o \
+	boot/arch/$(ARCH)/floppy.o
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
 

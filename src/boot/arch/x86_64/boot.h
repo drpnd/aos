@@ -26,6 +26,15 @@
 
 #include <aos/const.h>
 
+u8 inb(u16);
+void outb(u16, u8);
+
+/* in floppy.c */
+void floppy_init(void);
+void floppy_reset(void);
+int floppy_recalibrate(int);
+int floppy_read(int, int, int, int, int);
+
 #endif
 
 /*

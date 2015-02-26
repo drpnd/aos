@@ -25,6 +25,57 @@
 
 void hlt(void);
 
+#define IDT_NR 256
+//typedef void (*intr_handler_f)(void);
+//void (*intr_handlers[IDT_NR])(void);
+
+/*
+ * Setup IDT
+ */
+struct idt_gate_desc {
+    u16 target_lo;
+    u16 selector;
+    u8 reserved1;
+    u8 flags;
+    u16 target_mid;
+    u32 target_hi;
+    u32 reserved2;
+} __attribute__ ((packed));
+struct idtr {
+    u16 size;
+    u64 base;
+} __attribute__ ((packed));
+struct idtr idtr;
+void intr_null(void);
+void intr_irq6(void);
+void
+setup_idt(void)
+{
+    int i;
+    struct idt_gate_desc *idt;
+    u64 base;
+
+    for ( i = 0; i < 256; i++ ) {
+        base = (u64)intr_null;
+        if ( i == 0x20 + 6 ) {
+            base = (u64)intr_irq6;
+        }
+        idt = (struct idt_gate_desc *)(0x10000ULL + i * 16);
+        idt->target_lo = (u16)(base & 0xffff);
+        idt->selector = 0x08;
+        idt->reserved1 = 0;
+        idt->flags = 0x8e;
+        idt->target_mid = (u16)((base & 0xffff0000UL) >> 16);
+        idt->target_hi = (u16)((base & 0xffffffff00000000UL) >> 32);
+        idt->reserved2 = 0;
+    }
+    idtr.size = 256 * 16 - 1;
+    idtr.base = 0x10000ULL;
+
+    __asm__ __volatile__ ( "lidt (_idtr)" );
+    __asm__ __volatile__ ( "sti" );
+}
+
 /*
  * Entry point for C code
  */
@@ -35,6 +86,11 @@ centry(void)
     u16 *base;
     char *msg = "Congraturations!  Welcome to the 64-bit world!";
     int offset;
+    int i;
+    unsigned char x;
+    int y;
+
+    setup_idt();
 
     base = (u16 *)0xb8000;
     offset = 0;
@@ -43,10 +99,45 @@ centry(void)
         offset++;
     }
 
+    /* Initialize the floppy disk driver */
+    floppy_init();
+
+    int head = 0;
+    int cyl = 0;
+    int sector = 1;
+    int ret;
+
+    ret = floppy_read(0, cyl, head, sector, 1);
+    if ( ret < 0 ) {
+        *(base + 0) = 0x0700 | 'x';
+    }
+
+    for ( i = 0; i < 16; i++ ) {
+        x = *((u8 *)(0x1000ULL + i));
+        y = (x >> 4) & 0xf;
+        if ( y > 9 ) {
+            *(base + i * 2) = 0x0700 | (y + 'a' - 10);
+        } else {
+            *(base + i * 2) = 0x0700 | (y + '0');
+        }
+        y = x & 0xf;
+        if ( y > 9 ) {
+            *(base + i * 2 + 1) = 0x0700 | (y + 'a' - 10);
+        } else {
+            *(base + i * 2 + 1) = 0x0700 | (y + '0');
+        }
+    }
+
+
     /* Sleep forever */
     for ( ;; ) {
         hlt();
     }
+}
+
+void
+isr(u64 vec)
+{
 }
 
 /*

@@ -115,4 +115,3 @@ pg_setup.2:
 	pushl	$0x08
 	pushl	$entry64
 	lret
-
