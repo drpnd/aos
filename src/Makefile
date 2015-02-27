@@ -12,7 +12,9 @@ diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: CFLAGS=-I./include \
 	-Wall -mno-sse3 -fleading-underscore -nostdlib -m64
-
+kpack: ASFLAGS=-nostdlib -I./kernel/arch/$(ARCH)/
+kpack: CFLAGS=-I./include \
+        -Wall -mno-sse3 -fleading-underscore -nostdlib -O3 -m64
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o
@@ -28,3 +30,6 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	boot/arch/$(ARCH)/floppy.o
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
 
+## Kernel
+kpack: kernel/arch/$(ARCH)/asm.s
+	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^

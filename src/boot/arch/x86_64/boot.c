@@ -128,7 +128,6 @@ centry(void)
         }
     }
 
-
     /* Sleep forever */
     for ( ;; ) {
         hlt();

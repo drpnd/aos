@@ -38,8 +38,7 @@
 	.set	bs_oem_name,3		/* u8 [8] */
 	.set	bpb_bytes_per_sec,11	/* u16 */
 	.set	bpb_sec_per_clus,13	/* u8 */
-	.set	bpb_rsvd_sec_cnt,14	/* u8 */
-	.set	bpb_num_fats,15		/* u8 */
+	.set	bpb_rsvd_sec_cnt,14	/* u16 */
 	.set	bpb_num_fats,16		/* u8 */
 	.set	bpb_root_ent_cnt,17	/* u16 */
 	.set	bpb_total_sec16,19	/* u16 */
@@ -67,8 +66,8 @@
 	.set	bpb_bk_boot_sec,50	/* u16 */
 	.set	bpb_reserved,52		/* u8 [12] */
 	.set	bs32_drv_num,64		/* u8 */
-	.set	bs32_reserved1,65		/* u8 */
-	.set	bs32_boot_sig,66		/* u8 */
+	.set	bs32_reserved1,65	/* u8 */
+	.set	bs32_boot_sig,66	/* u8 */
 	.set	bs32_vol_id,67		/* u32 */
 	.set	bs32_vol_lab,71		/* u8 [11] */
 	.set	bs32_file_sys_type,82	/* u8 [8] */
@@ -106,9 +105,41 @@ kernload:
 	/* Read the first sector in the partition */
 	movl	(lba),%eax
 	call	read_to_buf
-	//movl	%es:(0),%eax
-	//movl	%eax,%dr0
-	//movw	bpb_fat_sz16(%bx),%ax
+	movw	%es:bpb_fat_sz16(%bx),%ax
+	cmpw	$0,%es:bpb_fat_sz16(%bx)
+	je	read_error		/* Not support FAT32 */
+	movw	%es:bpb_rsvd_sec_cnt(%bx),%cx	/* start_sec (=1) */
+	movw	%es:bpb_fat_sz16(%bx),%ax	/* FAT size */
+	movw	%es:bpb_num_fats(%bx),%dx	/* # of FAT regions (=2) */
+	mulw	%dx		/* %dx:%ax = %ax * %dx */
+	shlw	$16,%dx
+	addw	%dx,%ax
+	addw	%ax,%cx		/* root_dir_start_sec */
+
+	movw	%es:bpb_root_ent_cnt(%bx),%ax
+	shll	$5,%eax
+	movw	%es:bpb_bytes_per_sec(%bx),%dx
+	addl	%edx,%eax
+	decl	%eax
+	movl	%eax,%edx
+	shrl	$16,%edx
+	divw	%es:bpb_bytes_per_sec(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
+	addw	%cx,%ax		/* data_start_sec */
+
+	cmpw	$0,%es:bpb_total_sec16(%bx)
+	jne	1f
+	/* The number of sectors is no less than 0x10000 */
+	movl	%es:bpb_total_sec32(%bx),%edx
+	subl	%eax,%edx
+	jmp	2f
+1:
+	/* The number of sectors is less than 0x10000 */
+	movw	%es:bpb_total_sec16(%bx),%dx
+	subw	%ax,%dx
+2:
+	movl	%eax,%dr0
+	movl	%edx,%dr1
+
 
 	/* Restore registers */
 	popw	%ds
