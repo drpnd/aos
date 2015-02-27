@@ -18,7 +18,7 @@ all:
 image:
 	make -C src diskboot  # Compile the initial program loader in MBR
 	make -C src bootmon   # Compile the boot monitor called from diskboot
-	make -C src kpack   # Compile the kernel
+	make -C src kpack     # Compile the kernel
 	cp src/diskboot aos.img
 #	Write partition table (#1: start: cyl=0, hd=2, sec=3)
 #	N.B., # of cyl, hd, and sec in the entry are different from drives
