@@ -119,6 +119,17 @@ kernload:
 	ret
 
 
+/* Display the read error message (%ah = error code) */
+read_error:
+	movw	$msg_error,%si	/* %ds:(%si) -> error message */
+	call	putstr		/* Display error message at %si and then halt */
+
+/* Halt */
+halt:
+	hlt
+	jmp	halt
+
+
 /* Get the drive parameters of drive %dl.  CF is set when an error occurs. */
 get_drive_params:
 	pushw	%ax
@@ -295,7 +306,31 @@ lba2chs:
 	ret
 
 
+/* Display a null-terminated string */
+putstr:
+putstr.load:
+	lodsb			/* Load %al from %ds:(%si), then incl %si */
+	testb	%al,%al		/* Stop at null */
+	jnz	putstr.putc	/* Call the function to output %al */
+	ret			/* Return if null is reached */
+putstr.putc:
+	call	putc		/* Output a character %al */
+	jmp	putstr		/* Go to next character */
+putc:
+	pushw	%bx		/* Save %bx */
+	movw	$0x7,%bx	/* %bh: Page number for text mode */
+				/* %bl: Color code for graphics mode */
+	movb	$0xe,%ah	/* BIOS: Put char in tty mode */
+	int	$0x10		/* Call BIOS, print a character in %al */
+	popw	%bx		/* Restore %bx */
+	ret
+
+
 	.data
+
+/* Messages */
+msg_error:
+	.ascii  "Error occurs\r\n"
 
 /* Partition information */
 lba:
