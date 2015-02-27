@@ -30,22 +30,48 @@ image:
 	printf '\353\076\220AOS  1.0\000\002\010\001\000\002\000\002\300\012\370\010\000\040\000\040\000\000\010\000\000\000\000\000\000\200\000\051\000\000\000\000NO NAME    FAT12   ' | dd of=./aos.img bs=1 seek=65536 conv=notrunc
 	printf '\125\252' | dd of=./aos.img bs=1 seek=66046 conv=notrunc
 	printf '\370\377\377' | dd of=./aos.img bs=1 seek=66048 conv=notrunc
-	@s=2; c=66051; if [ ${KERNEL_CLS_HALF} -gt 0 ]; then \
-		for i in `seq ${KERNEL_CLS_HALF}`; do \
-			b=`expr \( $$s + 1 \) + \( $$s + 2 \) '*' 4096`; \
+	@s=2; c=66051; cls=${KERNEL_CLS}; \
+	if [ $$cls -gt 0 ]; then \
+		i=0; \
+		while [ $$i -lt $$cls ]; do \
+			if [ `expr $$i + 1` -eq $$cls ]; then \
+				b=4095; \
+			elif [ `expr $$i + 2` -eq $$cls ]; then \
+				b=`expr \( $$s + 1 \) + 4095 '*' 4096`; \
+			else \
+				b=`expr \( $$s + 1 \) + \( $$s + 2 \) '*' 4096`; \
+			fi; \
 			printf "0: %.6x" $$b | sed -E 's/0: (..)(..)(..)/0: \3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=$$c conv=notrunc; \
-			echo "$$s $$c"; \
+			i=`expr $$i + 2`; \
 			s=`expr $$s + 2`; \
 			c=`expr $$c + 3`; \
 		done; \
-	fi; \
-	printf "0: %.6x" 4095 | sed -E 's/0: (..)(..)(..)/0: \3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=$$c conv=notrunc;
+	fi
 	printf '\370\377\377' | dd of=./aos.img bs=1 seek=70144 conv=notrunc
-	@c=70147; printf "0: %.6x" 4095 | sed -E 's/0: (..)(..)(..)/0: \3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=$$c conv=notrunc;
-	printf 'NO NAME    \010\000\000\000\000\000\000' | dd of=./aos.img bs=1 seek=74240 conv=notrunc
-	printf 'KERNEL     \001\000\000\000\000\000\000\002\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc
+	@s=2; c=70147; cls=${KERNEL_CLS}; \
+	if [ $$cls -gt 0 ]; then \
+		i=0; \
+		while [ $$i -lt $$cls ]; do \
+			if [ `expr $$i + 1` -eq $$cls ]; then \
+				b=4095; \
+			elif [ `expr $$i + 2` -eq $$cls ]; then \
+				b=`expr \( $$s + 1 \) + 4095 '*' 4096`; \
+			else \
+				b=`expr \( $$s + 1 \) + \( $$s + 2 \) '*' 4096`; \
+			fi; \
+			printf "0: %.6x" $$b | sed -E 's/0: (..)(..)(..)/0: \3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=$$c conv=notrunc; \
+			i=`expr $$i + 2`; \
+			s=`expr $$s + 2`; \
+			c=`expr $$c + 3`; \
+		done; \
+	fi
+	printf 'NO NAME    \010\000\000\000\000\000\000\000\000\000\000\000\000\000\000' | dd of=./aos.img bs=1 seek=74240 conv=notrunc
+	@if [ ${KERNEL_CLS} -eq 0 ]; then \
+		printf 'KERNEL     \001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc; \
+	else \
+		printf 'KERNEL     \001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\002\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc; \
+	fi
 	printf "0: %.8x" ${KERNEL_SIZE} | sed -E 's/0: (..)(..)(..)(..)/0: \4\3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=74300 conv=notrunc
 	dd if=src/kpack of=./aos.img bs=1 seek=90624 conv=notrunc
 #	Use truncate if your system supports: i.e., truncate aos.img 1474560
 	printf '\000' | dd of=./aos.img bs=1 seek=1474559 conv=notrunc
-
