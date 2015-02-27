@@ -25,6 +25,9 @@
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
 
+	.set	KERNEL_BASE,0x10000
+	.set	BUFFER,0x7000
+
 	.text
 
 	.code16
@@ -73,23 +76,50 @@
 /* Load kernel */
 kernload:
 	/* Save registers */
-	pushw	%ax
-	pushw	%bx
-	pushw	%cx
-	pushw	%dx
+	pushl	%eax
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%edx
+	pushw	%ds
 
-	movb	%dl,(drive)	/* Save the drive */
+	/* Zero %ds */
+	xorw	%ax,%ax
+	movw	%ax,%ds
+
+	/* Save the drive number and get the parameter */
+	movb	%dl,(drive)
 	call	get_drive_params
 
+	/* Read the first sector of the drive */
+	movw	$0,%ax
+	call	read_to_buf
+
+	/* Check the partition table in the MBR */
+	movw	$(BUFFER >> 4),%ax
+	movw	%ax,%es
+	movw	$(BUFFER & 0xf),%bx
+	movl	%es:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
+	movl	%es:0x1be+0xc(%bx),%ecx	/* Size in sectors */
+	movl	%eax,(lba)
+	movl	%ecx,(nsec)
+
+	/* Read the first sector in the partition */
+	movl	(lba),%eax
+	call	read_to_buf
+	//movl	%es:(0),%eax
+	//movl	%eax,%dr0
+	//movw	bpb_fat_sz16(%bx),%ax
+
 	/* Restore registers */
-	popw	%dx
-	popw	%cx
-	popw	%bx
-	popw	%ax
+	popw	%ds
+	popl	%edx
+	popl	%ecx
+	popl	%ebx
+	popl	%eax
 	ret
 
 
-/* Get the drive parameters of drive %dl.  %ax returns the status code. */
+/* Get the drive parameters of drive %dl.  CF is set when an error occurs. */
 get_drive_params:
 	pushw	%ax
 	pushw	%cx
@@ -124,43 +154,61 @@ get_drive_params:
 	ret
 
 
-/* Read %cx sectors starting at LBA %ax on drive %dl into %es:[%bx] */
+/* Read 1 sector to the buffer */
+read_to_buf:
+	pushw	%bx
+	pushw	%cx
+	pushw	%es
+	movw	$1,%cx
+	movb	(drive),%dl
+	movw	$(BUFFER >> 4),%bx
+	movw	%bx,%es
+	movw	$(BUFFER & 0xf),%bx
+	call	read
+	popw	%es
+	popw	%cx
+	popw	%bx
+	ret
+
+
+
+/* Read %cx sectors starting at LBA %eax on drive %dl into %es:[%bx] */
 read:
 	pushw	%bp		/* Save the base pointer*/
 	movw	%sp,%bp		/* Copy the stack pointer to the base pointer */
 	/* Save general purpose registers */
-	movw	%ax,-2(%bp)
-	movw	%bx,-4(%bp)
-	movw	%cx,-6(%bp)
-	movw	%dx,-8(%bp)
+	movl	%eax,-2(%bp)
+	movw	%bx,-6(%bp)
+	movw	%cx,-8(%bp)
+	movw	%dx,-10(%bp)
 	/* Prepare space for local variables */
-	/* u16 cx -10(%bp) */
-	/* u16 counter -12(%bp) */
-	subw	$12,%sp
+	/* u16 cx -12(%bp) */
+	/* u16 counter -14(%bp) */
+	subw	$14,%sp
 
 	/* Reset counter */
 	xorw	%ax,%ax
-	movw	%ax,-12(%bp)
+	movw	%ax,-14(%bp)
 
 	/* Set number of sectors to be read */
-	movw	%cx,-10(%bp)
+	movw	%cx,-12(%bp)
 1:
-	movw	-2(%bp),%ax	/* Restore %ax */
-	addw	-12(%bp),%ax	/* Current LBA */
+	movl	-2(%bp),%eax	/* Restore %ax */
+	addw	-14(%bp),%ax	/* Current LBA */
 	call	lba2chs		/* Convert LBA (%ax) to CHS (%cx,%dh) */
 	call	read_sector	/* Read a sector */
 	addw	$SECTOR_SIZE,%bx
-	movw	-12(%bp),%ax	/* Get */
+	movw	-14(%bp),%ax	/* Get */
 	incw	%ax		/*  and increase the current LBA %ax */
-	movw	%ax,-12(%bp)	/*  then write back */
-	cmpw	-10(%bp),%ax
+	movw	%ax,-14(%bp)	/*  then write back */
+	cmpw	-12(%bp),%ax
 	jb	1b		/* Need to read more sectors */
 
 	/* Restore the saved registers */
-	movw	-8(%bp),%dx
-	movw	-6(%bp),%cx
-	movw	-4(%bp),%bx
-	movw	-2(%bp),%ax
+	movw	-10(%bp),%dx
+	movw	-8(%bp),%cx
+	movw	-6(%bp),%bx
+	movl	-2(%bp),%eax
 	movw	%bp,%sp		/* Restore the stack pointer and base pointer */
 	popw	%bp
 	ret
@@ -214,16 +262,17 @@ read_sector:
 	ret
 
 
-/* Calculate CHS (%cx[7:6]%cx[15:8] ,%dh, %cx[5:0]) from LBA (%ax) */
+/* Calculate CHS (%cx[7:6]%cx[15:8] ,%dh, %cx[5:0]) from LBA (%eax) */
 lba2chs:
 	/* Save registers */
-	pushw	%ax
+	pushl	%eax
 	pushw	%bx
-	pushw	%dx
+	pushl	%edx
 	/* Compute sector number */
 	xorw	%bx,%bx
-	movw	%bx,%dx
 	movw	%bx,%cx
+	movl	%eax,%edx	/* Prepare for the following divw */
+	shrl	$16,%edx	/*  by converting %eax to %dx:%ax */
 	movb	sectors,%bl
 	divw	%bx		/* %dx:%ax / %bx; %ax:quotient, %dx:remainder */
 	incb	%dl		/* Sector number is one-based numbering */
@@ -238,11 +287,11 @@ lba2chs:
 	shlb	$6,%bl		/*  from %ah, and copy to %bl[7:6] */
 	orb	%bl,%cl		/* Cylinder[9:8]: %cx[7:6]*/
 	movw	%dx,%bx		/* Save the remainer to %bx */
-	popw	%dx		/* Restore %dx */
+	popl	%edx		/* Restore %dx */
 	movb	%bl,%dh		/* Head */
 	/* Restore registers */
 	popw	%bx
-	popw	%ax
+	popl	%eax
 	ret
 
 
