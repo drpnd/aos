@@ -74,12 +74,21 @@
 
 /* Load kernel */
 kernload:
+	pushw	%bp
+	movw	%sp,%bp
 	/* Save registers */
-	pushl	%eax
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%edx
-	pushw	%ds
+	movl	%eax,-4(%bp)
+	movl	%ebx,-8(%bp)
+	movl	%ecx,-12(%bp)
+	movl	%edx,-16(%bp)
+	movw	%ds,-20(%bp)
+	/* u32 sectors -24(%bp) */
+	/* u32 root_dir_start_sec -28(%bp) */
+	/* u32 root_dir_sectors -32(%bp) */
+	/* u32 data_start_sec -36(%bp) */
+	/* u32 data_sectors -40(%bp) */
+	/* u32 num_clus -44(%bp) */
+	subw	$44,%sp
 
 	/* Zero %ds */
 	xorw	%ax,%ax
@@ -112,9 +121,11 @@ kernload:
 	movw	%es:bpb_fat_sz16(%bx),%ax	/* FAT size */
 	movw	%es:bpb_num_fats(%bx),%dx	/* # of FAT regions (=2) */
 	mulw	%dx		/* %dx:%ax = %ax * %dx */
-	shlw	$16,%dx
-	addw	%dx,%ax
-	addw	%ax,%cx		/* root_dir_start_sec */
+	shll	$16,%edx
+	addl	%edx,%eax
+	movl	%eax,-24(%bp)	/* sectors */
+	addl	%eax,%ecx	/* root_dir_start_sec = start_sec + sectors */
+	movl	%ecx,-28(%bp)	/* root_dir_start_sec */
 
 	movw	%es:bpb_root_ent_cnt(%bx),%ax
 	shll	$5,%eax
@@ -124,7 +135,10 @@ kernload:
 	movl	%eax,%edx
 	shrl	$16,%edx
 	divw	%es:bpb_bytes_per_sec(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
-	addw	%cx,%ax		/* data_start_sec */
+	movl	%eax,-32(%bp)	/* root_dir_sectors */
+	addl	%ecx,%eax	/* data_start_sec */
+				/*  = root_dir_start_sec + root_dir_sectors */
+	movl	%eax,-36(%bp)	/* data_start_sec */
 
 	cmpw	$0,%es:bpb_total_sec16(%bx)
 	jne	1f
@@ -137,16 +151,37 @@ kernload:
 	movw	%es:bpb_total_sec16(%bx),%dx
 	subw	%ax,%dx
 2:
+	movl	%edx,-40(%bp)	/* data_sectors */
+
+	movl	%edx,%eax
+	shrl	$16,%edx
+	divw	%es:bpb_sec_per_clus(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
+	movl	%eax,-44(%bp)	/* num_clus */
+	cmpl	$4085,%eax
+	jle	1f		/* FAT12 */
+	cmpl	$65525,%eax
+	jle	2f		/* FAT16 */
+	jmp	read_error	/* Invalid filesystem */
+1:
+	/* FAT12 */
+
+	jmp	3f
+2:
+	/* FAT16 */
+
+	jmp	3f
+3:
 	movl	%eax,%dr0
 	movl	%edx,%dr1
 
-
 	/* Restore registers */
-	popw	%ds
-	popl	%edx
-	popl	%ecx
-	popl	%ebx
-	popl	%eax
+	movw	-18(%bp),%ds
+	movl	-16(%bp),%edx
+	movl	-12(%bp),%ecx
+	movl	-8(%bp),%ebx
+	movl	-4(%bp),%eax
+	movw	%bp,%sp
+	popw	%bp
 	ret
 
 
@@ -219,7 +254,7 @@ read:
 	pushw	%bp		/* Save the base pointer*/
 	movw	%sp,%bp		/* Copy the stack pointer to the base pointer */
 	/* Save general purpose registers */
-	movl	%eax,-2(%bp)
+	movl	%eax,-4(%bp)
 	movw	%bx,-6(%bp)
 	movw	%cx,-8(%bp)
 	movw	%dx,-10(%bp)
@@ -235,7 +270,7 @@ read:
 	/* Set number of sectors to be read */
 	movw	%cx,-12(%bp)
 1:
-	movl	-2(%bp),%eax	/* Restore %ax */
+	movl	-4(%bp),%eax	/* Restore %ax */
 	addw	-14(%bp),%ax	/* Current LBA */
 	call	lba2chs		/* Convert LBA (%ax) to CHS (%cx,%dh) */
 	call	read_sector	/* Read a sector */
@@ -250,7 +285,7 @@ read:
 	movw	-10(%bp),%dx
 	movw	-8(%bp),%cx
 	movw	-6(%bp),%bx
-	movl	-2(%bp),%eax
+	movl	-4(%bp),%eax
 	movw	%bp,%sp		/* Restore the stack pointer and base pointer */
 	popw	%bp
 	ret
