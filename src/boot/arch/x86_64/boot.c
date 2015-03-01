@@ -24,6 +24,7 @@
 #include "boot.h"
 
 void hlt(void);
+void ljmp(u64, u64);
 
 #define IDT_NR 256
 //typedef void (*intr_handler_f)(void);
@@ -86,11 +87,8 @@ centry(void)
     u16 *base;
     char *msg = "Congraturations!  Welcome to the 64-bit world!";
     int offset;
-    int i;
-    unsigned char x;
-    int y;
 
-    setup_idt();
+    //setup_idt();
 
     base = (u16 *)0xb8000;
     offset = 0;
@@ -99,35 +97,7 @@ centry(void)
         offset++;
     }
 
-    /* Initialize the floppy disk driver */
-    floppy_init();
-
-    int head = 0;
-    int cyl = 0;
-    int sector = 1;
-    int ret;
-
-    ret = floppy_read(0, cyl, head, sector, 1);
-    if ( ret < 0 ) {
-        *(base + 0) = 0x0700 | 'x';
-    }
-
-    for ( i = 0; i < 16; i++ ) {
-        x = *((u8 *)(0x1000ULL + i));
-        y = (x >> 4) & 0xf;
-        if ( y > 9 ) {
-            *(base + i * 2) = 0x0700 | (y + 'a' - 10);
-        } else {
-            *(base + i * 2) = 0x0700 | (y + '0');
-        }
-        y = x & 0xf;
-        if ( y > 9 ) {
-            *(base + i * 2 + 1) = 0x0700 | (y + 'a' - 10);
-        } else {
-            *(base + i * 2 + 1) = 0x0700 | (y + '0');
-        }
-    }
-
+    ljmp(0x8, 0x10000);
     /* Sleep forever */
     for ( ;; ) {
         hlt();

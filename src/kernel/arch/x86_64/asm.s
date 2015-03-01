@@ -28,8 +28,37 @@
 
 /* Entry point to the 64-bit kernel */
 kstart64:
+	movq	$msg,%rsi
+	call	putbstr
 1:
-	sti
+	//sti
 	hlt
 	cli
 	jmp	1b
+
+/*
+ * Display a null-terminated string at the bottom-line
+  */
+putbstr:
+	/* Save registers */
+	pushq	%rax
+	pushq	%rdi
+	movq	$0xb8000,%rdi	/* Memory 0xb8000 */
+	addq	$(80*24*2),%rdi	/* 24th (zero-numbering) line */
+putbstr.load:
+	lodsb			/* Load %al from (%rsi) , then incl %rsi */
+	testb	%al,%al		/* Stop at null */
+	jnz	putbstr.putc	/* Call the function to output %al */
+	/* Restore registers */
+	popq	%rdi
+	popq	%ax
+	ret
+putbstr.putc:
+	movb	$0x7,%ah
+	stosw			/* Write %rax to (%rdi), then add 2 to %di */
+	jmp     putbstr.load
+
+	.data
+
+msg:
+	.asciz	"KERNEL loaded..."
