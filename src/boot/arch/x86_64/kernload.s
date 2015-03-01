@@ -25,8 +25,9 @@
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
 
-	.set	KERNEL_BASE,0x10000
 	.set	BUFFER,0x7000
+
+	.include	"asmconst.h"
 
 	.text
 
@@ -95,7 +96,7 @@ kernload:
 	/* u32 root_dir_start_bytes -56(%bp) */
 	subw	$56,%sp
 
-	/* Zero %ds */
+	/* Zero %ds and %es */
 	xorw	%ax,%ax
 	movw	%ax,%ds
 	movw	%ax,%es
@@ -112,14 +113,18 @@ kernload:
 	movw	$(BUFFER >> 4),%ax
 	movw	%ax,%fs
 	movw	$(BUFFER & 0xf),%bx
+	testb	$0x80,%fs:0x1be+0x0(%bx)	/* Bootable? */
+	jz	read_error	/* No, then print an error message */
 	movl	%fs:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
 	movl	%fs:0x1be+0xc(%bx),%ecx	/* Size in sectors */
-	movl	%eax,(lba)
-	movl	%ecx,(nsec)
+	movl	%eax,(part_lba)	/* Save the starting LBA */
+	movl	%ecx,(part_nsec)	/* Save the number of sectors */
 
 	/* Read the first sector in the partition */
-	movl	(lba),%eax
+	movl	(part_lba),%eax
 	call	read_to_buf
+
+	/* Parse the BIOS Parameter Block (BPB) in the volume boot record */
 	movw	%fs:bpb_fat_sz16(%bx),%ax
 	cmpw	$0,%fs:bpb_fat_sz16(%bx)
 	je	read_error		/* Not support FAT32 */
@@ -186,29 +191,10 @@ kernload:
 	mull	%edx		/* %edx:%eax = %eax * %edx */
 	movl	%eax,-56(%bp)	/* root_dir_start_bytes */
 
-	xorl	%edx,%edx
-	movl	$SECTOR_SIZE,%ecx
-	divl	%ecx		/* %edx:%eax/512 Q=%eax, R=%edx */
-
 	/* Root directory */
-	addl	(lba),%eax
-	call	read_to_buf
-
 	xorl	%ecx,%ecx
-	movl	%fs:0(%bx),%eax
-	movl	%eax,%dr1
-
-	/* Search kernel file */
-	movw	%fs,%ax
-	movw	%ax,%es
-	movw	%bx,%di
-	addw	$0,%di
-	movw	$fname_kernel,%si
-	movl	$11,%ecx
-	call	memcmp
-	jne	read_error
-	xorw	%ax,%ax
-	movw	%ax,%es
+	movw	%fs:bpb_root_ent_cnt(%bx),%cx
+	call	find_kernel
 
 	jmp	3f
 2:
@@ -229,6 +215,72 @@ kernload:
 	movw	%bp,%sp
 	popw	%bp
 	ret
+
+/*
+ * Find the kernel
+ *   %eax: base address
+ *   %ecx: # of etries
+ */
+find_kernel:
+	pushw	%bp
+	movw	%sp,%bp
+	movl	%eax,-4(%bp)
+	movl	%ebx,-8(%bp)
+	movl	%ecx,-12(%bp)
+	movl	%edx,-16(%bp)
+	movw	%ds,-18(%bp)
+	movw	%es,-20(%bp)
+	movw	%fs,-22(%bp)
+	movw	%gs,-24(%bp)
+	/* u32 current base -28(%bp) */
+	/* u32 counter -32(%bp) */
+	subw	$32,%sp
+
+	movl	%ecx,%dr1
+1:
+	movl	%eax,-28(%bp)
+	movl	%ecx,-32(%bp)
+
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	divl	%ecx		/* %edx:%eax/512 Q=%eax, R=%edx */
+	addl	(part_lba),%eax
+	cmpl	(buf_lba),%eax	/* Check the current buffer */
+	je	2f		/* If %eax is not equal to (buf_lba), */
+	call	read_to_buf	/*  then read a sector at LBA %eax */
+2:
+	/* Search kernel file */
+	movw	$(BUFFER >> 4),%bx
+	movw	%bx,%es
+	movw	$(BUFFER & 0xf),%bx
+	movw	%bx,%di		/* Base */
+	addw	%dx,%di		/* Offset */
+	movw	$fname_kernel,%si
+	movl	$11,%ecx	/* Compare 11 bytes */
+	call	memcmp
+	je	3f		/* Found */
+
+	movl	-28(%bp),%eax
+	addl	$32,%eax
+	movl	-32(%bp),%ecx
+	movl	%ecx,%dr0
+	loop	1b
+
+	jmp	read_error
+3:
+	/* Restore registers */
+	movw	-24(%bp),%gs
+	movw	-22(%bp),%fs
+	movw	-20(%bp),%es
+	movw	-18(%bp),%ds
+	movl	-16(%bp),%edx
+	movl	-12(%bp),%ecx
+	movl	-8(%bp),%ebx
+	movl	-4(%bp),%eax
+	movw	%bp,%sp
+	popw	%bp
+	ret
+
 
 /* Compare %ds:%si and %es:%di for %ecx length */
 memcmp:
@@ -287,7 +339,7 @@ get_drive_params:
 	ret
 
 
-/* Read 1 sector to the buffer */
+/* Read one sector starting at LBA %eax to the buffer */
 read_to_buf:
 	pushw	%bx
 	pushw	%cx
@@ -298,6 +350,7 @@ read_to_buf:
 	movw	%bx,%es
 	movw	$(BUFFER & 0xf),%bx
 	call	read
+	movl	%eax,(buf_lba)	/* Save the buffered sector's LBA */
 	popw	%es
 	popw	%cx
 	popw	%bx
@@ -452,12 +505,12 @@ putc:
 
 /* Messages */
 msg_error:
-	.ascii	"Error occurs\r\n"
+	.asciz	"\r\n\nError occurs\r\n"
 
 /* Partition information */
-lba:
+part_lba:
 	.long	0
-nsec:
+part_nsec:
 	.long	0
 
 /* Drive information */
@@ -470,5 +523,10 @@ cylinders:
 sectors:
 	.byte	0
 
+/* Buffer information */
+buf_lba:
+	.long	0
+
+/* The file name of the kernel */
 fname_kernel:
 	.ascii	"KERNEL     "

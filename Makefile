@@ -27,6 +27,7 @@ image:
 	dd if=src/bootmon of=./aos.img bs=1 seek=512 conv=notrunc
 #	Write kernel (FAT12)
 	printf '\353\076\220AOS  1.0\000\002\010\001\000\002\000\002\300\012\370\010\000\040\000\040\000\000\010\000\000\000\000\000\000\200\000\051\000\000\000\000NO NAME    FAT12   ' | dd of=./aos.img bs=1 seek=65536 conv=notrunc
+	printf '\364\353\375' | dd of=./aos.img bs=1 seek=65600 conv=notrunc # 1: hlt; jmp 1b
 	printf '\125\252' | dd of=./aos.img bs=1 seek=66046 conv=notrunc
 	printf '\370\377\377' | dd of=./aos.img bs=1 seek=66048 conv=notrunc
 	@s=2; c=66051; cls=${KERNEL_CLS}; \

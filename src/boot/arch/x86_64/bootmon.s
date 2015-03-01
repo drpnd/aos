@@ -38,6 +38,8 @@
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
 
+	.include	"asmconst.h"
+
 	.text
 
 	.code16
