@@ -81,82 +81,94 @@ kernload:
 	movl	%ebx,-8(%bp)
 	movl	%ecx,-12(%bp)
 	movl	%edx,-16(%bp)
-	movw	%ds,-20(%bp)
-	/* u32 sectors -24(%bp) */
-	/* u32 root_dir_start_sec -28(%bp) */
-	/* u32 root_dir_sectors -32(%bp) */
-	/* u32 data_start_sec -36(%bp) */
-	/* u32 data_sectors -40(%bp) */
-	/* u32 num_clus -44(%bp) */
-	subw	$44,%sp
+	movw	%ds,-18(%bp)
+	movw	%es,-20(%bp)
+	movw	%fs,-22(%bp)
+	movw	%gs,-24(%bp)
+	/* u32 sectors -28(%bp) */
+	/* u32 root_dir_start_sec -32(%bp) */
+	/* u32 root_dir_sectors -36(%bp) */
+	/* u32 data_start_sec -40(%bp) */
+	/* u32 data_sectors -44(%bp) */
+	/* u32 num_clus -48(%bp) */
+	/* u32 root_dir_bytes -52(%bp) */
+	/* u32 root_dir_start_bytes -56(%bp) */
+	subw	$56,%sp
 
 	/* Zero %ds */
 	xorw	%ax,%ax
 	movw	%ax,%ds
+	movw	%ax,%es
 
 	/* Save the drive number and get the parameter */
 	movb	%dl,(drive)
 	call	get_drive_params
 
 	/* Read the first sector of the drive */
-	movw	$0,%ax
+	movl	$0,%eax
 	call	read_to_buf
 
 	/* Check the partition table in the MBR */
 	movw	$(BUFFER >> 4),%ax
-	movw	%ax,%es
+	movw	%ax,%fs
 	movw	$(BUFFER & 0xf),%bx
-	movl	%es:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
-	movl	%es:0x1be+0xc(%bx),%ecx	/* Size in sectors */
+	movl	%fs:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
+	movl	%fs:0x1be+0xc(%bx),%ecx	/* Size in sectors */
 	movl	%eax,(lba)
 	movl	%ecx,(nsec)
 
 	/* Read the first sector in the partition */
 	movl	(lba),%eax
 	call	read_to_buf
-	movw	%es:bpb_fat_sz16(%bx),%ax
-	cmpw	$0,%es:bpb_fat_sz16(%bx)
+	movw	%fs:bpb_fat_sz16(%bx),%ax
+	cmpw	$0,%fs:bpb_fat_sz16(%bx)
 	je	read_error		/* Not support FAT32 */
-	movw	%es:bpb_rsvd_sec_cnt(%bx),%cx	/* start_sec (=1) */
-	movw	%es:bpb_fat_sz16(%bx),%ax	/* FAT size */
-	movw	%es:bpb_num_fats(%bx),%dx	/* # of FAT regions (=2) */
+	movw	%fs:bpb_rsvd_sec_cnt(%bx),%cx	/* start_sec (=1) */
+	movw	%fs:bpb_fat_sz16(%bx),%ax	/* FAT size */
+	movw	%fs:bpb_num_fats(%bx),%dx	/* # of FAT regions (=2) */
 	mulw	%dx		/* %dx:%ax = %ax * %dx */
 	shll	$16,%edx
+	andl	$0xffff,%eax
 	addl	%edx,%eax
-	movl	%eax,-24(%bp)	/* sectors */
+	movl	%eax,-28(%bp)	/* sectors */
 	addl	%eax,%ecx	/* root_dir_start_sec = start_sec + sectors */
-	movl	%ecx,-28(%bp)	/* root_dir_start_sec */
+	movl	%ecx,-32(%bp)	/* root_dir_start_sec */
 
-	movw	%es:bpb_root_ent_cnt(%bx),%ax
+	movw	%fs:bpb_root_ent_cnt(%bx),%ax
+	andl	$0xffff,%eax
 	shll	$5,%eax
-	movw	%es:bpb_bytes_per_sec(%bx),%dx
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	andl	$0xffff,%edx
 	addl	%edx,%eax
 	decl	%eax
 	movl	%eax,%edx
 	shrl	$16,%edx
-	divw	%es:bpb_bytes_per_sec(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
-	movl	%eax,-32(%bp)	/* root_dir_sectors */
+	divw	%fs:bpb_bytes_per_sec(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
+	andl	$0xffff,%eax
+	movl	%eax,-36(%bp)	/* root_dir_sectors */
 	addl	%ecx,%eax	/* data_start_sec */
 				/*  = root_dir_start_sec + root_dir_sectors */
-	movl	%eax,-36(%bp)	/* data_start_sec */
+	movl	%eax,-40(%bp)	/* data_start_sec */
 
-	cmpw	$0,%es:bpb_total_sec16(%bx)
+	cmpw	$0,%fs:bpb_total_sec16(%bx)
 	jne	1f
 	/* The number of sectors is no less than 0x10000 */
-	movl	%es:bpb_total_sec32(%bx),%edx
+	movl	%fs:bpb_total_sec32(%bx),%edx
 	subl	%eax,%edx
 	jmp	2f
 1:
 	/* The number of sectors is less than 0x10000 */
-	movw	%es:bpb_total_sec16(%bx),%dx
-	subw	%ax,%dx
+	movw	%fs:bpb_total_sec16(%bx),%dx
+	andl	$0xffff,%edx
+	subl	%eax,%edx
 2:
-	movl	%edx,-40(%bp)	/* data_sectors */
+	movl	%edx,-44(%bp)	/* data_sectors */
 
 	movl	%edx,%eax
 	shrl	$16,%edx
-	divw	%es:bpb_sec_per_clus(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
-	movl	%eax,-44(%bp)	/* num_clus */
+	divw	%fs:bpb_sec_per_clus(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
+	andl	$0xffff,%eax
+	movl	%eax,-48(%bp)	/* num_clus */
 	cmpl	$4085,%eax
 	jle	1f		/* FAT12 */
 	cmpl	$65525,%eax
@@ -164,6 +176,39 @@ kernload:
 	jmp	read_error	/* Invalid filesystem */
 1:
 	/* FAT12 */
+	movl	-36(%bp),%eax	/* root_dir_sectors */
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	andl	$0xffff,%edx
+	mull	%edx		/* %edx:%eax = %eax * %edx */
+	movl	%eax,-52(%bp)	/* root_dir_bytes */
+	movl	-32(%bp),%eax	/* root_dir_start_sec */
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	mull	%edx		/* %edx:%eax = %eax * %edx */
+	movl	%eax,-56(%bp)	/* root_dir_start_bytes */
+
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	divl	%ecx		/* %edx:%eax/512 Q=%eax, R=%edx */
+
+	/* Root directory */
+	addl	(lba),%eax
+	call	read_to_buf
+
+	xorl	%ecx,%ecx
+	movl	%fs:0(%bx),%eax
+	movl	%eax,%dr1
+
+	/* Search kernel file */
+	movw	%fs,%ax
+	movw	%ax,%es
+	movw	%bx,%di
+	addw	$0,%di
+	movw	$fname_kernel,%si
+	movl	$11,%ecx
+	call	memcmp
+	jne	read_error
+	xorw	%ax,%ax
+	movw	%ax,%es
 
 	jmp	3f
 2:
@@ -171,10 +216,11 @@ kernload:
 
 	jmp	3f
 3:
-	movl	%eax,%dr0
-	movl	%edx,%dr1
 
 	/* Restore registers */
+	movw	-24(%bp),%gs
+	movw	-22(%bp),%fs
+	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
 	movl	-12(%bp),%ecx
@@ -183,6 +229,16 @@ kernload:
 	movw	%bp,%sp
 	popw	%bp
 	ret
+
+/* Compare %ds:%si and %es:%di for %ecx length */
+memcmp:
+1:
+	cmpsb
+	jne	2f	/* Jump if ZF=0 */
+	loop	1b
+2:
+	ret
+
 
 
 /* Display the read error message (%ah = error code) */
@@ -295,7 +351,7 @@ read:
  * %es:[%bx]
  */
 read_sector:
-	pushw	%bp		/* Save the base pointer*/
+	pushw	%bp		/* Save the base pointer */
 	movw	%sp,%bp		/* Copy the stack pointer to the base pointer */
 	/* Save registers */
 	movw	%ax,-2(%bp)
@@ -396,7 +452,7 @@ putc:
 
 /* Messages */
 msg_error:
-	.ascii  "Error occurs\r\n"
+	.ascii	"Error occurs\r\n"
 
 /* Partition information */
 lba:
@@ -413,3 +469,6 @@ cylinders:
 	.word	0
 sectors:
 	.byte	0
+
+fname_kernel:
+	.ascii	"KERNEL     "

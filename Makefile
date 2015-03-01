@@ -8,8 +8,6 @@
 
 KERNEL_SIZE = $(shell stat -f "%z" src/kpack)
 KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
-KERNEL_CLS_HALF = $(shell expr ${KERNEL_CLS} / 2)
-KERNEL_CLS_R = $(shell expr ${KERNEL_CLS} % 2)
 
 
 all:
