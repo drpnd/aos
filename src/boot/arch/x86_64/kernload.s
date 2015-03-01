@@ -218,8 +218,12 @@ kernload:
 
 /*
  * Find the kernel
+ *  Arguments
  *   %eax: base address
  *   %ecx: # of etries
+ *  Return values
+ *   %eax: first cluster of the kernel
+ *   %ecx: kernel size
  */
 find_kernel:
 	pushw	%bp
@@ -263,20 +267,29 @@ find_kernel:
 	movl	-28(%bp),%eax
 	addl	$32,%eax
 	movl	-32(%bp),%ecx
-	movl	%ecx,%dr0
 	loop	1b
 
 	jmp	read_error
 3:
+	/* Found */
+	movw	%bx,%di
+	addw	%dx,%di
+	movw	%es:20(%di),%ax	/* First cluster (hi) */
+	shll	$16,%eax
+	movw	%es:26(%di),%ax	/* First cluster (lo); movw keeps MSW of %eax */
+	movl	%es:28(%di),%ecx	/* File size */
+	movl	%eax,%dr0
+	movl	%ecx,%dr1
+
 	/* Restore registers */
 	movw	-24(%bp),%gs
 	movw	-22(%bp),%fs
 	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
-	movl	-12(%bp),%ecx
+	//movl	-12(%bp),%ecx
 	movl	-8(%bp),%ebx
-	movl	-4(%bp),%eax
+	//movl	-4(%bp),%eax
 	movw	%bp,%sp
 	popw	%bp
 	ret
