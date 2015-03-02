@@ -31,7 +31,7 @@ kstart64:
 	movq	$msg,%rsi
 	call	putbstr
 1:
-	//sti
+	sti
 	hlt
 	cli
 	jmp	1b

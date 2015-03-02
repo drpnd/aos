@@ -26,14 +26,12 @@
 
 #include <aos/const.h>
 
-u8 inb(u16);
-void outb(u16, u8);
+#define CODE_SEL        0x8
+#define KERNEL_BASE     0x10000
 
-/* in floppy.c */
-void floppy_init(void);
-void floppy_reset(void);
-int floppy_recalibrate(int);
-int floppy_read(int, int, int, int, int);
+/* in entry64.s */
+void hlt(void);
+void ljmp(u64, u64);
 
 #endif
 
