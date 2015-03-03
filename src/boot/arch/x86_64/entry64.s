@@ -54,7 +54,7 @@ entry64:
 	outw	%ax,%dx
 
 	/* Get into the C code */
-	call	_centry
+	call	_centry		/* Won't return */
 
 1:
 	hlt

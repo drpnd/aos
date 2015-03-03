@@ -259,16 +259,81 @@ kernload:
 	movl	-28(%bp),%eax
 	call	fat12_next_cluster
 	movl	%ecx,-68(%bp)
-	cmpl	$0x0fff,%ecx
-	jne	2b
+	cmpl	$0x0ff8,%ecx
+	jl	2b
 
-	jmp	4f
+	jmp	5f
 3:
-	/* FAT16: To be implemented */
-	jmp	read_error
-	jmp	4f
-4:
+	/* FAT16 */
+	movl	-36(%bp),%eax	/* root_dir_sectors */
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	andl	$0xffff,%edx
+	mull	%edx		/* %edx:%eax = %eax * %edx */
+	movl	%eax,-52(%bp)	/* root_dir_bytes */
+	movl	-32(%bp),%eax	/* root_dir_start_sec */
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	mull	%edx		/* %edx:%eax = %eax * %edx */
+	movl	%eax,-56(%bp)	/* root_dir_start_bytes */
 
+	movl	-40(%bp),%eax
+	xorl	%edx,%edx
+	movw	%fs:bpb_bytes_per_sec(%bx),%dx
+	mull	%edx
+	movl	%eax,-60(%bp)	/* data_start_bytes */
+
+	xorl	%edx,%edx
+	movl	%edx,%eax
+	movl	%edx,%ecx
+	movw	%fs:bpb_bytes_per_sec(%bx),%ax
+	movb	%fs:bpb_sec_per_clus(%bx),%cl
+	mull	%ecx
+	movl	$SECTOR_SIZE,%ecx
+	divl	%ecx
+	testl	%edx,%edx
+	jnz	read_error
+	movl	%eax,-64(%bp)	/* sec512_per_cluster */
+
+	/* Root directory */
+	movl	-56(%bp),%eax
+	xorl	%ecx,%ecx
+	movw	%fs:bpb_root_ent_cnt(%bx),%cx
+	call	find_kernel
+
+	/* Read file */
+	xorl	%edx,%edx
+	movl	%edx,-76(%bp)	/* Offset */
+	movl	%eax,-68(%bp)	/* First cluster */
+	movl	%ecx,-72(%bp)	/* Kernel size */
+4:
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	movl	-60(%bp),%eax	/* data_start_bytes */
+	divl	%ecx
+	movl	%eax,%ecx
+	movl	-68(%bp),%eax	/* Current cluster */
+	subl	$2,%eax		/* -2 */
+	mull	-64(%bp)
+	addl	%ecx,%eax
+	addl	(part_lba),%eax
+	movl	-64(%bp),%ecx	/* # of sectors to read */
+	movl	-76(%bp),%edx
+	call	read_kernel
+
+	xorl	%edx,%edx
+	movl	-64(%bp),%eax
+	movl	$SECTOR_SIZE,%ecx
+	mull	%ecx
+	addl	-76(%bp),%eax	/* Next offset */
+	movl	%eax,-76(%bp)
+
+	movl	-68(%bp),%ecx	/* Current cluster */
+	movl	-28(%bp),%eax
+	call	fat16_next_cluster
+	movl	%ecx,-68(%bp)
+	cmpl	$0xfff8,%ecx
+	jl	4b
+
+5:
 	/* Restore registers */
 	movw	-24(%bp),%gs
 	movw	-22(%bp),%fs
@@ -352,9 +417,7 @@ find_kernel:
 	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
-	//movl	-12(%bp),%ecx
 	movl	-8(%bp),%ebx
-	//movl	-4(%bp),%eax
 	movw	%bp,%sp
 	popw	%bp
 	ret
@@ -412,7 +475,56 @@ fat12_next_cluster:
 	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
-	//movl	-12(%bp),%ecx
+	movl	-8(%bp),%ebx
+	movl	-4(%bp),%eax
+	movw	%bp,%sp
+	popw	%bp
+	ret
+
+
+/*
+ * Get the next cluster (FAT16)
+ *  Arguments
+ *   %eax: fat region base address
+ *   %ecx: cluster number
+ *  Return values
+ *   %ecx: next cluster
+ */
+fat16_next_cluster:
+	pushw	%bp
+	movw	%sp,%bp
+	/* Save registers */
+	movl	%eax,-4(%bp)
+	movl	%ebx,-8(%bp)
+	movl	%ecx,-12(%bp)
+	movl	%edx,-16(%bp)
+	movw	%ds,-18(%bp)
+	movw	%es,-20(%bp)
+	subw	$20,%sp
+
+	shll	$1,%ecx
+	addl	%ecx,%eax	/* base + cluster * 2 */
+
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	divl	%ecx		/* %edx:%eax/512 Q=%eax, R=%edx */
+	addl	(part_lba),%eax
+	cmpl	(buf_lba),%eax	/* Check the current buffer */
+	je	1f		/* If %eax is not equal to (buf_lba), */
+	call	read_to_buf	/*  then read a sector at LBA %eax */
+1:
+	movw	$(BUFFER >> 4),%bx
+	movw	%bx,%es
+	movw	$(BUFFER & 0xf),%bx
+	movw	%dx,%bx
+	movb	%es:(%bx),%cl
+	incw	%bx
+	movb	%es:(%bx),%ch
+	andl	$0xffff,%ecx
+
+	movw	-20(%bp),%es
+	movw	-18(%bp),%ds
+	movl	-16(%bp),%edx
 	movl	-8(%bp),%ebx
 	movl	-4(%bp),%eax
 	movw	%bp,%sp
