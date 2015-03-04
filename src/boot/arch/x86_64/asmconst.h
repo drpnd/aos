@@ -23,4 +23,12 @@
  */
 
 	.set	KERNEL_BASE,0x10000
+	.set	KERNEL_PGT,0x00079000	/* Page table */
+	.set	P_DATA_SIZE,0x10000	/* Data size for each processor */
+	.set	P_DATA_BASE,0x1000000	/* Data base for each processor */
+	.set	P_STACK_GUARD,0x10
+
+	.set	NUM_RETRIES,3		/* # of retries for disk read */
+	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
+	.set	BUFFER,0x6000		/* Buffer: 6000-61ff */

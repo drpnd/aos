@@ -21,12 +21,6 @@
  * SOFTWARE.
  */
 
-	.set	NUM_RETRIES,3		/* # of retries for disk read */
-	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
-	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
-
-	.set	BUFFER,0x7000
-
 	.include	"asmconst.h"
 
 	.text

@@ -21,10 +21,7 @@
  * SOFTWARE.
  */
 
-	.set	KERNEL_PGT,0x00079000	/* Page table */
-	.set	P_DATA_SIZE,0x10000	/* Data size for each processor */
-	.set	P_DATA_BASE,0x1000000	/* Data base for each processor */
-	.set	P_STACK_GUARD,0x10
+	.include	"asmconst.h"
 
 	.text
 
