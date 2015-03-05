@@ -181,13 +181,7 @@ kernload:
 	divw	%fs:bpb_sec_per_clus(%bx)	/* %dx:%ax/m Q=%ax, R=%dx */
 	andl	$0xffff,%eax
 	movl	%eax,-48(%bp)	/* num_clus */
-	cmpl	$4085,%eax
-	jle	1f		/* FAT12 */
-	cmpl	$65525,%eax
-	jle	3f		/* FAT16 */
-	jmp	read_error	/* Invalid filesystem */
-1:
-	/* FAT12 */
+
 	movl	-36(%bp),%eax	/* root_dir_sectors */
 	movw	%fs:bpb_bytes_per_sec(%bx),%dx
 	andl	$0xffff,%edx
@@ -227,7 +221,16 @@ kernload:
 	movl	%edx,-76(%bp)	/* Offset */
 	movl	%eax,-68(%bp)	/* First cluster */
 	movl	%ecx,-72(%bp)	/* Kernel size */
-2:
+
+	movl	-48(%bp),%eax	/* num_clus */
+	cmpl	$4085,%eax
+	jle	3f		/* FAT12 */
+	cmpl	$65525,%eax
+	jle	4f		/* FAT16 */
+	jmp	read_error	/* Invalid filesystem */
+
+	/* FAT12 */
+3:
 	xorl	%edx,%edx
 	movl	$SECTOR_SIZE,%ecx
 	movl	-60(%bp),%eax	/* data_start_bytes */
@@ -254,51 +257,12 @@ kernload:
 	call	fat12_next_cluster
 	movl	%ecx,-68(%bp)
 	cmpl	$0x0ff8,%ecx
-	jl	2b
+	jl	3b
 
 	jmp	5f
-3:
-	/* FAT16 */
-	movl	-36(%bp),%eax	/* root_dir_sectors */
-	movw	%fs:bpb_bytes_per_sec(%bx),%dx
-	andl	$0xffff,%edx
-	mull	%edx		/* %edx:%eax = %eax * %edx */
-	movl	%eax,-52(%bp)	/* root_dir_bytes */
-	movl	-32(%bp),%eax	/* root_dir_start_sec */
-	movw	%fs:bpb_bytes_per_sec(%bx),%dx
-	mull	%edx		/* %edx:%eax = %eax * %edx */
-	movl	%eax,-56(%bp)	/* root_dir_start_bytes */
 
-	movl	-40(%bp),%eax
-	xorl	%edx,%edx
-	movw	%fs:bpb_bytes_per_sec(%bx),%dx
-	mull	%edx
-	movl	%eax,-60(%bp)	/* data_start_bytes */
-
-	xorl	%edx,%edx
-	movl	%edx,%eax
-	movl	%edx,%ecx
-	movw	%fs:bpb_bytes_per_sec(%bx),%ax
-	movb	%fs:bpb_sec_per_clus(%bx),%cl
-	mull	%ecx
-	movl	$SECTOR_SIZE,%ecx
-	divl	%ecx
-	testl	%edx,%edx
-	jnz	read_error
-	movl	%eax,-64(%bp)	/* sec512_per_cluster */
-
-	/* Root directory */
-	movl	-56(%bp),%eax
-	xorl	%ecx,%ecx
-	movw	%fs:bpb_root_ent_cnt(%bx),%cx
-	call	find_kernel
-
-	/* Read file */
-	xorl	%edx,%edx
-	movl	%edx,-76(%bp)	/* Offset */
-	movl	%eax,-68(%bp)	/* First cluster */
-	movl	%ecx,-72(%bp)	/* Kernel size */
 4:
+	/* FAT16 */
 	xorl	%edx,%edx
 	movl	$SECTOR_SIZE,%ecx
 	movl	-60(%bp),%eax	/* data_start_bytes */
