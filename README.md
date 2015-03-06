@@ -77,6 +77,9 @@ After the boot option is specified,
 the software tries to enter 32/64-bit mode unless the option is power off.
 
 ## Checkpoint 7
-The boot monitor loads kernel from a filesystem (FAT12)
+The boot monitor loads kernel from a filesystem (FAT12/FAT16)
 in the first partition of the disk.
+Along with your design, this part will be related with your own file system
+in the future, and consequently, FAT32 is not supported
+to reduce the code complexity here.
 This procedure is complemeted using BIOS calls, INT 13h.
