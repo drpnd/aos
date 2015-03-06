@@ -113,7 +113,7 @@ kernload:
 	movw	%ax,%fs
 	movw	$(BUFFER & 0xf),%bx
 	testb	$0x80,%fs:0x1be+0x0(%bx)	/* Bootable? */
-	jz	read_error	/* No, then print an error message */
+	jz	kload_error	/* No, then print an error message */
 	movl	%fs:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
 	movl	%fs:0x1be+0xc(%bx),%ecx	/* Size in sectors */
 	movl	%eax,(part_lba)	/* Save the starting LBA */
@@ -126,7 +126,7 @@ kernload:
 	/* Parse the BIOS Parameter Block (BPB) in the volume boot record */
 	movw	%fs:bpb_fat_sz16(%bx),%ax
 	cmpw	$0,%fs:bpb_fat_sz16(%bx)
-	je	read_error		/* Not support FAT32 */
+	je	kload_error		/* Not support FAT32 */
 	xorl	%ecx,%ecx
 	movw	%fs:bpb_rsvd_sec_cnt(%bx),%cx	/* start_sec (=1) */
 	movw	%fs:bpb_fat_sz16(%bx),%ax	/* FAT size */
@@ -207,7 +207,7 @@ kernload:
 	movl	$SECTOR_SIZE,%ecx
 	divl	%ecx
 	testl	%edx,%edx
-	jnz	read_error
+	jnz	kload_error
 	movl	%eax,-64(%bp)	/* sec512_per_cluster */
 
 	/* Root directory */
@@ -227,7 +227,7 @@ kernload:
 	jle	3f		/* FAT12 */
 	cmpl	$65525,%eax
 	jle	4f		/* FAT16 */
-	jmp	read_error	/* Invalid filesystem */
+	jmp	kload_error	/* Invalid filesystem */
 
 	/* FAT12 */
 3:
@@ -357,13 +357,13 @@ find_kernel:
 	movl	-32(%bp),%ecx
 	loop	1b
 
-	jmp	read_error
+	jmp	kload_error
 3:
 	/* Found */
 	movw	%bx,%di
 	addw	%dx,%di
 	testb	$0x10,%es:11(%di)	/* Attributes */
-	jnz	read_error	/* Must not directory */
+	jnz	kload_error	/* Must not directory */
 	movw	%es:20(%di),%ax	/* First cluster (hi) */
 	shll	$16,%eax
 	movw	%es:26(%di),%ax	/* First cluster (lo); movw keeps MSW of %eax */
@@ -490,7 +490,15 @@ fat16_next_cluster:
 	ret
 
 
-/* Compare %ds:%si and %es:%di for %ecx length */
+/*
+ * Compare %ds:%si and %es:%di for %ecx length
+ *  Arguments
+ *   %ds:%si: string 1
+ *   %es:%di: string 2
+ *   %ecx: the length to be compared
+ *  Return values
+ *   ZF: set if two strings are identical
+ */
 memcmp:
 1:
 	cmpsb
@@ -501,8 +509,8 @@ memcmp:
 
 
 
-/* Display the read error message (%ah = error code) */
-read_error:
+/* Display the kernel loader error message */
+kload_error:
 	movw	$msg_error,%si	/* %ds:(%si) -> error message */
 	call	putstr		/* Display error message at %si and then halt */
 
@@ -512,7 +520,12 @@ halt:
 	jmp	halt
 
 
-/* Get the drive parameters of drive %dl.  CF is set when an error occurs. */
+/*
+ * Get the drive parameters of drive %dl and save them to the memory in the
+ * .data section.
+ *  Return values
+ *   CF: set when an error occurs
+ */
 get_drive_params:
 	pushw	%ax
 	pushw	%cx
@@ -553,13 +566,13 @@ read_to_buf:
 	pushw	%cx
 	pushw	%dx
 	pushw	%es
-	movw	$1,%cx
-	movb	(drive),%dl
-	movw	$(BUFFER >> 4),%bx
+	movw	$1,%cx		/* Read 1 sector */
+	movb	(drive),%dl	/*  from the saved drive */
+	movw	$(BUFFER >> 4),%bx	/* to the BUFFER memory */
 	movw	%bx,%es
 	movw	$(BUFFER & 0xf),%bx
 	call	read
-	movl	%eax,(buf_lba)	/* Save the buffered sector's LBA */
+	movl	%eax,(buf_lba)	/* Save the last buffered sector's LBA */
 	popw	%es
 	popw	%dx
 	popw	%cx
@@ -569,18 +582,16 @@ read_to_buf:
 /* Read %cx sector starting at LBA %eax to the kernel location (%dx offset) */
 read_kernel:
 	pushw	%bx
-	pushw	%cx
 	pushw	%dx
 	pushw	%es
-	movw	$(KERNEL_BASE >> 4),%bx
-	movw	%bx,%es
+	movw	$(KERNEL_BASE >> 4),%bx	/* The kernel is loaded to */
+	movw	%bx,%es		/*  KERNEL_BASE + %dx */
 	movw	$(KERNEL_BASE & 0xf),%bx
 	addw	%dx,%bx
-	movb	(drive),%dl
-	call	read
+	movb	(drive),%dl	/*  from the saved drive */
+	call	read		/* Read %cx sectors of the kernel */
 	popw	%es
 	popw	%dx
-	popw	%cx
 	popw	%bx
 	ret
 
@@ -733,13 +744,13 @@ putc:
 
 /* Messages */
 msg_error:
-	.asciz	"\r\n\nError occurs\r\n"
+	.asciz	"\r\n\nError occurs in the kernel loader.\r\n"
 
 /* Partition information */
 part_lba:
-	.long	0
+	.long	0		/* Starting at */
 part_nsec:
-	.long	0
+	.long	0		/* # of sectors in the partition */
 
 /* Drive information */
 drive:
