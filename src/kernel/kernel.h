@@ -26,13 +26,8 @@
 
 #include <aos/const.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifdef __cplusplus
-}
-#endif
+/* in asm.s */
+void halt(void);
 
 #endif /* _KERNEL_H */
 

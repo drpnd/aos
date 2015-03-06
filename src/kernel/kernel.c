@@ -22,7 +22,28 @@
  */
 
 #include <aos/const.h>
+#include "kernel.h"
 
+/*
+ * Entry point to the kernel in C for the boot strap processor, called from
+ * asm.s.
+ */
+void
+kmain(void)
+{
+    for ( ;; ) {
+        halt();
+    }
+}
+
+/*
+ * Entry point to the kernel in C for an application processor, called from
+ * asm.s.
+ */
+void
+kmain_ap(void)
+{
+}
 
 /*
  * Local variables:
