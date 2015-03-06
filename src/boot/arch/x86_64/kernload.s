@@ -356,7 +356,8 @@ find_kernel:
 	movl	-32(%bp),%ecx	/* Get the remaining entries */
 	loop	1b		/* decl. %ecx until %ecx == 0 */
 
-	jmp	kload_error	/* Not found */
+	/* Kernel file is not found in the root directory */
+	jmp	kload_error	/* Raise an error */
 3:
 	/* Found the kernel file, then look at the attributes */
 	movw	%bx,%di
