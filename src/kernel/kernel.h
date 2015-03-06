@@ -21,17 +21,20 @@
  * SOFTWARE.
  */
 
-#include "boot.h"
+#ifndef _KERNEL_H
+#define _KERNEL_H
 
-/*
- * Entry point for C code
- */
-void
-centry(void)
-{
-    /* Jump to the kernel */
-    ljmp(CODE_SEL, KERNEL_BASE);
+#include <aos/const.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef __cplusplus
 }
+#endif
+
+#endif /* _KERNEL_H */
 
 /*
  * Local variables:

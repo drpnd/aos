@@ -30,5 +30,6 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
 
 ## Kernel
-kpack: kernel/arch/$(ARCH)/asm.o
+kpack: kernel/arch/$(ARCH)/asm.o \
+	kernel/kernel.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^

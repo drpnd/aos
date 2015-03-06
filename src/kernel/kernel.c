@@ -21,17 +21,8 @@
  * SOFTWARE.
  */
 
-#include "boot.h"
+#include <aos/const.h>
 
-/*
- * Entry point for C code
- */
-void
-centry(void)
-{
-    /* Jump to the kernel */
-    ljmp(CODE_SEL, KERNEL_BASE);
-}
 
 /*
  * Local variables:
