@@ -106,12 +106,17 @@ bootmon:
 2:
 	/* Boot */
 	/* Load memory map entries */
+	xorl	%eax,%eax
+	movl	%eax,(BOOTINFO_MM_NUM)
+	movl	%eax,(BOOTINFO_MM_NUM+4)
+	movl	%eax,(BOOTINFO_MM_PTR)
+	movl	%eax,(BOOTINFO_MM_PTR+4)
 	movw	%ax,%es
-	movw	$BOOTINFO_BASE+BOOTINFO_SIZE,%ax
-	movw	%ax,(BOOTINFO_BASE+8)
+	movw	$BOOTINFO_MM_TBL,%ax
+	movw	%ax,(BOOTINFO_MM_PTR)
 	movw	%ax,%di
 	call	load_mm		/* Load system address map to %es:%di */
-	movw	%ax,(BOOTINFO_BASE)
+	movw	%ax,(BOOTINFO_MM_NUM)
 	/* Load the kernel */
 	movb	(drive),%dl
 	call	kernload

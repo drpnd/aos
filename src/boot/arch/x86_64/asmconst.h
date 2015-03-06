@@ -30,6 +30,16 @@
 
 	.set	BOOTINFO_BASE,0x8000	/* Boot information base address */
 	.set	BOOTINFO_SIZE,0x100	/* Size of boot info structure */
+	/* struct bootinfo {
+	 * 	u64 mm_num;		// # of entries
+	 * 	u64 mm_ptr;		// pointer to the memory map table
+	 * offset: --0x00ff unused space
+	 * offset: 0x0100-- memory map table
+	 * };
+	 */
+	.set	BOOTINFO_MM_NUM,BOOTINFO_BASE
+	.set	BOOTINFO_MM_PTR,BOOTINFO_BASE+8
+	.set	BOOTINFO_MM_TBL,BOOTINFO_BASE+BOOTINFO_SIZE
 
 	.set	NUM_RETRIES,3		/* # of retries for disk read */
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
