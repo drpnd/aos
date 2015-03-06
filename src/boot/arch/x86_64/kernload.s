@@ -110,8 +110,8 @@ kernload:
 
 	/* Check the partition table in the MBR */
 	movw	$(BUFFER >> 4),%ax
-	movw	%ax,%fs
-	movw	$(BUFFER & 0xf),%bx
+	movw	%ax,%fs		/* %fs = segment for the BUFFER*/
+	movw	$(BUFFER & 0xf),%bx	/* %bx = offset */
 	testb	$0x80,%fs:0x1be+0x0(%bx)	/* Bootable? */
 	jz	kload_error	/* No, then print an error message */
 	movl	%fs:0x1be+0x8(%bx),%eax	/* LBA of first absolute sector */
@@ -328,15 +328,15 @@ find_kernel:
 	/* u32 current base -28(%bp) */
 	/* u32 counter -32(%bp) */
 	subw	$32,%sp
-
 1:
-	movl	%eax,-28(%bp)
-	movl	%ecx,-32(%bp)
+	movl	%eax,-28(%bp)	/* current base address */
+	movl	%ecx,-32(%bp)	/* the remaining entries */
 
 	xorl	%edx,%edx
 	movl	$SECTOR_SIZE,%ecx
 	divl	%ecx		/* %edx:%eax/512 Q=%eax, R=%edx */
-	addl	(part_lba),%eax
+				/*  N.B., expecting R=0 due to the alignment */
+	addl	(part_lba),%eax	/* LBA of the current base address */
 	cmpl	(buf_lba),%eax	/* Check the current buffer */
 	je	2f		/* If %eax is not equal to (buf_lba), */
 	call	read_to_buf	/*  then read a sector at LBA %eax */
@@ -350,19 +350,18 @@ find_kernel:
 	movw	$fname_kernel,%si
 	movl	$11,%ecx	/* Compare 11 bytes */
 	call	memcmp
-	je	3f		/* Found */
+	je	3f		/* Found then resolve the file information */
+	movl	-28(%bp),%eax	/* Calculate the base address */
+	addl	$32,%eax	/*  of the next entry */
+	movl	-32(%bp),%ecx	/* Get the remaining entries */
+	loop	1b		/* decl. %ecx until %ecx == 0 */
 
-	movl	-28(%bp),%eax
-	addl	$32,%eax
-	movl	-32(%bp),%ecx
-	loop	1b
-
-	jmp	kload_error
+	jmp	kload_error	/* Not found */
 3:
-	/* Found */
+	/* Found the kernel file, then look at the attributes */
 	movw	%bx,%di
 	addw	%dx,%di
-	testb	$0x10,%es:11(%di)	/* Attributes */
+	testb	$0x10,%es:11(%di)	/* Attributes: bit 11 = directory */
 	jnz	kload_error	/* Must not directory */
 	movw	%es:20(%di),%ax	/* First cluster (hi) */
 	shll	$16,%eax
