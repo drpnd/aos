@@ -21,34 +21,55 @@
  * SOFTWARE.
  */
 
+#ifndef _KERNEL_DESC_H
+#define _KERNEL_DESC_H
+
 #include <aos/const.h>
-#include "kernel.h"
 
 /*
- * Entry point to the kernel in C for the boot strap processor, called from
- * asm.s.
+ * Interrupt Descriptor
  */
-void
-kmain(void)
-{
-    u16 *video;
-
-    video = (u16 *)0xb8000;
-    *(video + 0) = 0x0700 | '*';
-
-    for ( ;; ) {
-        halt();
-    }
-}
+struct idt_gate_desc {
+    u16 target_lo;
+    u16 selector;
+    u8 reserved1;
+    u8 flags;
+    u16 target_mid;
+    u32 target_hi;
+    u32 reserved2;
+} __attribute__ ((packed));
 
 /*
- * Entry point to the kernel in C for an application processor, called from
- * asm.s.
+ * Interrupt Descriptor Table Register
  */
-void
-kmain_ap(void)
-{
-}
+struct idtr {
+    u16 size;
+    u64 base;   /* (idt_gate_descriptor *) */
+} __attribute__ ((packed));
+
+/*
+ * Global Descriptor
+ */
+struct gdt_desc {
+    u16 w0;
+    u16 w1;
+    u16 w2;
+    u16 w3;
+} __attribute__ ((packed));
+
+/*
+ * Global Descriptor Table Register
+ */
+struct gdtr {
+    u16 size;
+    u64 base;
+} __attribute__ ((packed));
+
+
+void gdt_init(void);
+void gdt_load(void);
+
+#endif /* _KERNEL_DESC_H */
 
 /*
  * Local variables:

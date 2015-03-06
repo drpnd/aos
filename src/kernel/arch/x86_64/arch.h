@@ -21,34 +21,43 @@
  * SOFTWARE.
  */
 
+#ifndef _KERNEL_ARCH_H
+#define _KERNEL_ARCH_H
+
 #include <aos/const.h>
-#include "kernel.h"
 
-/*
- * Entry point to the kernel in C for the boot strap processor, called from
- * asm.s.
- */
-void
-kmain(void)
-{
-    u16 *video;
+#define IDT_NR          256
 
-    video = (u16 *)0xb8000;
-    *(video + 0) = 0x0700 | '*';
+#define BOOTINFO_BASE           (u64)0x8000
+#define TRAMPOLINE_ADDR         (u64)0x70000
+#define TRAMPOLINE_MAX_SIZE     0x4000
+#define GDT_ADDR                (u64)0x74000
+#define GDT_MAX_SIZE            0x2000
+#define IDT_ADDR                (u64)0x76000
+#define IDT_MAX_SIZE            0x2000
 
-    for ( ;; ) {
-        halt();
-    }
-}
+#define GDT_NULL_SEL            (0<<3)
+#define GDT_RING0_CODE_SEL      (1<<3)
+#define GDT_RING0_DATA_SEL      (2<<3)
+#define GDT_RING1_CODE_SEL      (3<<3)
+#define GDT_RING1_DATA_SEL      (4<<3)
+#define GDT_RING2_CODE_SEL      (5<<3)
+#define GDT_RING2_DATA_SEL      (6<<3)
+#define GDT_RING3_CODE_SEL      (7<<3)
+#define GDT_RING3_DATA_SEL      (8<<3)
+#define GDT_TSS_SEL_BASE        (9<<3)
 
-/*
- * Entry point to the kernel in C for an application processor, called from
- * asm.s.
- */
-void
-kmain_ap(void)
-{
-}
+/* Also defined in asmconst.h */
+#define P_DATA_SIZE             0x10000
+#define P_DATA_BASE             (u64)0x01000000
+#define P_TSS_OFFSET            (0x20 + IDT_NR * 8)
+#define P_STACK_GUARD           0x10
+
+/* in asm.s */
+void lidt(void *);
+void lgdt(void *, u64);
+
+#endif /* _KERNEL_ARCH_H */
 
 /*
  * Local variables:

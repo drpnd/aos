@@ -26,14 +26,44 @@
 	.code64
 	.globl	kstart64
 	.globl	_halt
+	.globl	_lgdt
+	.globl	_lidt
+	.globl	_intr_null
+
+	.set	APIC_BASE,0xfee00000
+	.set	APIC_EOI,0x0b0
 
 /* Entry point to the 64-bit kernel */
 kstart64:
 	call	_kmain
 
-/* */
+/* Halt */
 _halt:
 	sti
 	hlt
 	cli
 	ret
+
+/* void lgdt(void *gdtr, u64 selector) */
+_lgdt:
+	lgdt	(%rdi)
+	/* Reload GDT */
+	pushq	%rsi
+	pushq	$1f	/* Just to do ret */
+	lretq
+1:
+	ret
+
+/* void lidt(void *idtr) */
+_lidt:
+	lidt	(%rdi)
+	ret
+
+/* Null function for interrupt handler */
+_intr_null:
+	pushq	%rdx
+	/* APIC EOI */
+	movq	$APIC_BASE,%rdx
+	movq	$0,APIC_EOI(%rdx)
+	popq	%rdx
+	iretq
