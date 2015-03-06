@@ -400,6 +400,7 @@ fat12_next_cluster:
 	movw	%es,-20(%bp)
 	subw	$20,%sp
 
+	/* Get the position of the next cluster value */
 	movl	$3,%eax
 	mull	%ecx		/* %edx:%eax = %eax * %ecx */
 	shrl	$1,%eax
@@ -417,19 +418,18 @@ fat12_next_cluster:
 	movw	%bx,%es
 	movw	$(BUFFER & 0xf),%bx
 	movw	%dx,%bx
-	movb	%es:(%bx),%cl
-	incw	%bx
-	movb	%es:(%bx),%ch
-	andl	$0xffff,%ecx
+	movw	%es:(%bx),%cx	/* Get two bytes */
+	andl	$0xffff,%ecx	/*  (24 bits of them will be retrieved below) */
 
-	testl	$1,-12(%bp)
+	testl	$1,-12(%bp)	/* Check the cluster number is odd or even */
 	jz	2f	/* Jump if even */
-	/* Odd */
+	/* Odd, then use the most significant 24 bits */
 	shrl	$4,%ecx
 2:
-	/* Even */
+	/* Even, then use the least significant 24 bits */
 	andl	$0x0fff,%ecx
 
+	/* Restore registers */
 	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
@@ -460,8 +460,9 @@ fat16_next_cluster:
 	movw	%es,-20(%bp)
 	subw	$20,%sp
 
-	shll	$1,%ecx
-	addl	%ecx,%eax	/* base + cluster * 2 */
+	/* Get the position of the next cluster value */
+	shll	$1,%ecx		/* The next cluster is specified by the value */
+	addl	%ecx,%eax	/*  at base + cluster * 2 */
 
 	xorl	%edx,%edx
 	movl	$SECTOR_SIZE,%ecx
@@ -475,11 +476,10 @@ fat16_next_cluster:
 	movw	%bx,%es
 	movw	$(BUFFER & 0xf),%bx
 	movw	%dx,%bx
-	movb	%es:(%bx),%cl
-	incw	%bx
-	movb	%es:(%bx),%ch
+	movw	%es:(%bx),%cx
 	andl	$0xffff,%ecx
 
+	/* Restore registers */
 	movw	-20(%bp),%es
 	movw	-18(%bp),%ds
 	movl	-16(%bp),%edx
