@@ -105,12 +105,12 @@ bootmon:
 	jmp	1b
 2:
 	/* Boot */
-	/* Load memory map entries */
 	xorl	%eax,%eax
 	movl	%eax,(BOOTINFO_MM_NUM)
 	movl	%eax,(BOOTINFO_MM_NUM+4)
 	movl	%eax,(BOOTINFO_MM_PTR)
 	movl	%eax,(BOOTINFO_MM_PTR+4)
+	/* Load memory map entries */
 	movw	%ax,%es
 	movw	$BOOTINFO_MM_TBL,%ax
 	movw	%ax,(BOOTINFO_MM_PTR)
