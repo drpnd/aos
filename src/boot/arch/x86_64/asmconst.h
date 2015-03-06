@@ -30,8 +30,6 @@
 
 	.set	BOOTINFO_BASE,0x8000	/* Boot information base address */
 	.set	BOOTINFO_SIZE,0x100	/* Size of boot info structure */
-	.set	MME_SIZE,24		/* Memory map entry size */
-	.set	MME_SIGN,0x534d4150	/* MME signature (ascii "SMAP")  */
 
 	.set	NUM_RETRIES,3		/* # of retries for disk read */
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
