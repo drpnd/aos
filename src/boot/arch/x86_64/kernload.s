@@ -67,7 +67,7 @@
 	.set	bs32_vol_lab,71		/* u8 [11] */
 	.set	bs32_file_sys_type,82	/* u8 [8] */
 
-/* Load kernel */
+/* Load kernel from the drive %dl */
 kernload:
 	pushw	%bp
 	movw	%sp,%bp

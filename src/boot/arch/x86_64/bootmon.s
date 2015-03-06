@@ -103,6 +103,7 @@ bootmon:
 	jmp	1b
 2:
 	/* Boot */
+	movb	(drive),%dl
 	call	kernload
 	jmp	entry16
 3:
