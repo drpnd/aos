@@ -23,6 +23,7 @@ Hirochika Asai
 | checkpoint 5 | pit      | release/pit      |
 | checkpoint 6 | bootmon  | release/bootmon  |
 | checkpoint 7 | kernload | release/kernload |
+| checkpoint 8 | memmap   | release/memmap   |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -83,3 +84,10 @@ Along with your design, this part will be related with your own file system
 in the future, and consequently, FAT32 is not supported
 to reduce the code complexity here.
 This procedure is complemeted using BIOS calls, INT 13h.
+
+## Checkpoint 8
+We do a few more things in the real mode before transitioning to the kernel.
+Some memory spaces are used by interrupt vector table, BIOS data, video RAM etc.,
+and cannot be used by the kernel.
+In this checkpoint, we load the memory map using a BIOS call, INT 15h,
+that tells the kernel's memory manager where to be used.

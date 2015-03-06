@@ -103,6 +103,14 @@ bootmon:
 	jmp	1b
 2:
 	/* Boot */
+	/* Load memory map entries */
+	movw	%ax,%es
+	movw	$BOOTINFO_BASE+BOOTINFO_SIZE,%ax
+	movw	%ax,(BOOTINFO_BASE+8)
+	movw	%ax,%di
+	call	load_mm		/* Load system address map to %es:%di */
+	movw	%ax,(BOOTINFO_BASE)
+	/* Load the kernel */
 	movb	(drive),%dl
 	call	kernload
 	jmp	entry16
@@ -269,6 +277,63 @@ disable_pic:
 	movb	$0xff,%al
 	outb	%al,$0x21
 	popw	%ax
+	ret
+
+
+/*
+ * Load memory map entries from BIOS
+ *  Arguments
+ *   %es:%di: destination
+ *  Return values
+ *   %ax: the number of entries
+ *   CF: set if an error occurs
+ */
+load_mm:
+	/* Save registers */
+	pushl	%ebx
+	pushl	%ecx
+	pushw	%di
+	pushw	%bp
+
+	xorl	%ebx,%ebx	/* Continuation value for int 0x15 */
+	xorw	%bp,%bp		/* Counter */
+load_mm.1:
+	movl	$0x1,%ecx	/* Write 1 once */
+	movl	%ecx,%es:20(%di)	/*  to check support ACPI >=3.x? */
+	/* Read the system address map */
+	movl	$0xe820,%eax
+	movl	$MME_SIGN,%edx	/* Set the signature */
+	movl	$MME_SIZE,%ecx	/* Set the buffer size */
+	int	$0x15		/* Query system address map */
+	jc	load_mm.error	/* Error */
+	cmpl	$MME_SIGN,%eax	/* Check the signature SMAP */
+	jne	load_mm.error
+
+	cmpl	$24,%ecx	/* Check the read buffer size */
+	je	load_mm.2	/*  %ecx==24 */
+	cmpl	$20,%ecx
+	je	load_mm.3	/*  %ecx==20 */
+	jmp	load_mm.error	/* Error otherwise */
+load_mm.2:
+	/* 24-byte entry */
+	testl	$0x1,%es:20(%di)	/* 1 must be present in the attribute */
+	jz	load_mm.error	/*  error if it's overwritten */
+load_mm.3:
+	/* 20-byte entry or 24-byte entry coming from above */
+	incw	%bp		/* Increment the number of entries */
+	testl	%ebx,%ebx	/* %ebx=0: No remaining info */
+	jz	load_mm.done	/* jz/je */
+load_mm.4:
+	addw	$MME_SIZE,%di	/* Next entry */
+	jmp	load_mm.1	/* Load remaining entries */
+load_mm.error:
+	stc			/* Set CF */
+load_mm.done:
+	movw	%bp,%ax		/* Return value */
+	popw	%bp
+	popw	%di
+	popl	%ecx
+	popl	%ebx
 	ret
 
 
