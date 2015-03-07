@@ -118,9 +118,9 @@ init_pit:
 	movb	$(0x00|0x30|0x06),%al
 	outb	%al,$0x43
 	movw	$0x2e9b,%ax	/* Frequency=100Hz: 1193181.67/100 */
-	outb	%al,$0x40	/* Counter 0 (least significant 4 bits) */
-	movb	%ah,%al		/* Get most significant 4 bits */
-	outb	%al,$0x40	/* Counter 0 (most significant 4 bits) */
+	outb	%al,$0x40	/* Counter 0 (least significant 8 bits) */
+	movb	%ah,%al		/* Get most significant 8 bits */
+	outb	%al,$0x40	/* Counter 0 (most significant 8 bits) */
 	popw	%ax
 	ret
 
