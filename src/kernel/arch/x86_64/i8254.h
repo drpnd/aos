@@ -21,28 +21,26 @@
  * SOFTWARE.
  */
 
+#ifndef _KERNEL_I8254_H
+#define _KERNEL_I8254_H
+
 #include <aos/const.h>
-#include "arch.h"
-#include "desc.h"
-#include "i8254.h"
 
-/*
- * Initialize the bootstrap processor
- */
-void
-bsp_init(void)
-{
-    /* Ensure the i8254 timer is stopped */
-    i8254_stop_timer();
+/* Counter 0 register */
+#define I8254_REG_CNTR0         0x0040
+/* Control register */
+#define I8254_REG_CTRL          0x0043
+/* i8254 clock */
+#define I8254_HZ                1193182
+/* Square wave */
+#define I8254_CTRL_SQUAREWAVE   0x06
+/* 16bit read/load control register */
+#define I8254_CTRL_RL_16BIT     0x30
 
-    /* Initialize global descriptor table */
-    gdt_init();
-    gdt_load();
+void i8254_start_timer(int);
+void i8254_stop_timer(void);
 
-    /* Initialize interrupt descriptor table */
-    idt_init();
-    idt_load();
-}
+#endif /* _KERNEL_I8254_H */
 
 /*
  * Local variables:

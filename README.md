@@ -24,7 +24,7 @@ Hirochika Asai
 | checkpoint 6 | bootmon  | release/bootmon  |
 | checkpoint 7 | kernload | release/kernload |
 | checkpoint 8 | memmap   | release/memmap   |
-| checkpoint 9 | gdtidt   | release/gdtidt   |
+| checkpoint 9 | bspinit  | release/bspinit  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -95,7 +95,9 @@ that tells the kernel's memory manager where to be used.
 
 ## Checkpoint 9
 Now we have got into the 64-bit long mode kernel in C.
-As the first step of the kernel, we configure the global descriptor table (GDT)
+As the first step of the kernel, we initialize the current processor,
+bootstrap processor (BSP); GDT, IDT, and APIC.
+We configure the global descriptor table (GDT)
 and interrupt descriptor table (IDT).
 GDT was already once configured just before entering 32 bit mode,
 but they are temporary ones and they did not support ring protection of CPUs.

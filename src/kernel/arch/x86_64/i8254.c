@@ -23,25 +23,32 @@
 
 #include <aos/const.h>
 #include "arch.h"
-#include "desc.h"
 #include "i8254.h"
 
 /*
- * Initialize the bootstrap processor
+ * Start i8254 timer
  */
 void
-bsp_init(void)
+i8254_start_timer(int hz)
 {
-    /* Ensure the i8254 timer is stopped */
-    i8254_stop_timer();
+    int counter;
 
-    /* Initialize global descriptor table */
-    gdt_init();
-    gdt_load();
+    counter = I8254_HZ / hz;
+    outb(I8254_REG_CTRL, I8254_CTRL_RL_16BIT | I8254_CTRL_SQUAREWAVE);
+    outb(I8254_REG_CNTR0, counter & 0xff);
+    outb(I8254_REG_CNTR0, counter >> 8);
+}
 
-    /* Initialize interrupt descriptor table */
-    idt_init();
-    idt_load();
+/*
+ * Stop i8254 timer
+ */
+void
+i8254_stop_timer(void)
+{
+    /* Reset to the BIOS default */
+    outb(I8254_REG_CTRL, 0x36);
+    outb(I8254_REG_CNTR0, 0x0);
+    outb(I8254_REG_CNTR0, 0x0);
 }
 
 /*

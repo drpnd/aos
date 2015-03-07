@@ -29,6 +29,12 @@
 	.globl	_lgdt
 	.globl	_lidt
 	.globl	_intr_null
+	.globl	_inb
+	.globl	_inw
+	.globl	_inl
+	.globl	_outb
+	.globl	_outw
+	.globl	_outl
 
 	.set	APIC_BASE,0xfee00000
 	.set	APIC_EOI,0x0b0
@@ -60,6 +66,48 @@ _lgdt:
 /* void lidt(void *idtr) */
 _lidt:
 	lidt	(%rdi)
+	ret
+
+/* u8 inb(u16 port) */
+_inb:
+	movw	%di,%dx
+	xorq	%rax,%rax
+	inb	%dx,%al
+	ret
+
+/* u16 inw(u16 port) */
+_inw:
+	movw	%di,%dx
+	xorq	%rax,%rax
+	inw	%dx,%ax
+	ret
+
+/* u32 inw(u16 port) */
+_inl:
+	movw	%di,%dx
+	xorq	%rax,%rax
+	inl	%dx,%eax
+	ret
+
+/* void outb(u16 port, u8 value) */
+_outb:
+	movw	%di,%dx
+	movw	%di,%ax
+	outb	%al,%dx
+	ret
+
+/* void outw(u16 port, u16 value) */
+_outw:
+	movw	%di,%dx
+	movw	%di,%ax
+	outw	%ax,%dx
+	ret
+
+/* void outl(u16 port, u32 value) */
+_outl:
+	movw	%di,%dx
+	movl	%edi,%eax
+	outl	%eax,%dx
 	ret
 
 /* Null function for interrupt handler */

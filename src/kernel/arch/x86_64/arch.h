@@ -80,6 +80,12 @@ struct bootinfo_sysaddrmap_entry {
 void lidt(void *);
 void lgdt(void *, u64);
 void intr_null(void);
+u8 inb(u16);
+u16 inw(u16);
+u32 inl(u16);
+void outb(u16, u8);
+void outw(u16, u16);
+void outl(u16, u32);
 
 #endif /* _KERNEL_ARCH_H */
 
