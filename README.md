@@ -103,3 +103,7 @@ GDT was already once configured just before entering 32 bit mode,
 but they are temporary ones and they did not support ring protection of CPUs.
 In this checkpoint, we prepare four sets of GDT entries for ring 0 to 3.
 ACPI is (first) used to implement a busy wait timer.
+Note that we implement ACPI parser by ourselves instead of using
+the ACPICA (ACPI Component Architecture) here
+because the ACPICA requires memory allocator etc
+which we have not implemented yet.
