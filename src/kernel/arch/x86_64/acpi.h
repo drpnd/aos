@@ -30,19 +30,25 @@
 #define ACPI_SCI_EN 0x1
 #define ACPI_SLP_EN (1<<13)
 
+/*
+ * Root System Descriptor Pointer (RSDP)
+ */
 struct acpi_rsdp {
     char signature[8];
     u8 checksum;
     char oemid[6];
     u8 revision;
     u32 rsdt_addr;
-    /* since 2.0 */
+    /* the following values are introduced since 2.0 */
     u32 length;
     u64 xsdt_addr;
     u8 extended_checksum;
     char reserved[3];
 } __attribute__ ((packed));
 
+/*
+ * System Description Table (SDT) header
+ */
 struct acpi_sdt_hdr {
     char signature[4];
     u32 length;
@@ -55,16 +61,25 @@ struct acpi_sdt_hdr {
     u32 creatorrevision;
 } __attribute__ ((packed));
 
+/*
+ * APIC
+ */
 struct acpi_sdt_apic {
     u32 local_controller_addr;
     u32 flags;
 } __attribute__ ((packed));
 
+/*
+ * APIC header
+ */
 struct acpi_sdt_apic_hdr {
     u8 type; /* 0 = local APIC, 1 = I/O APIC */
     u8 length;
 } __attribute__ ((packed));
 
+/*
+ * Local APIC
+ */
 struct acpi_sdt_apic_lapic {
     struct acpi_sdt_apic_hdr hdr;
     u8 cpu_id;
@@ -72,6 +87,9 @@ struct acpi_sdt_apic_lapic {
     u32 flags;
 } __attribute__ ((packed));
 
+/*
+ * I/O APIC
+ */
 struct acpi_sdt_apic_ioapic {
     struct acpi_sdt_apic_hdr hdr;
     u8 id;
@@ -80,6 +98,9 @@ struct acpi_sdt_apic_ioapic {
     u32 global_int_base;
 } __attribute__ ((packed));
 
+/*
+ * Interrupt Source Override
+ */
 struct acpi_sdt_apic_int_src {
     struct acpi_sdt_apic_hdr hdr;
     u8 bus;
@@ -88,6 +109,9 @@ struct acpi_sdt_apic_int_src {
     u16 mps_flags;
 } __attribute__ ((packed));
 
+/*
+ * Generic address structure of ACPI
+ */
 struct acpi_generic_addr_struct {
     u8 addr_space;
     u8 bit_width;
@@ -95,6 +119,10 @@ struct acpi_generic_addr_struct {
     u8 access_size;
     u64 addr;
 } __attribute__ ((packed));
+
+/*
+ * FADT
+ */
 struct acpi_sdt_fadt {
     /* acpi_sdt_hdr */
     u32 firmware_ctrl;

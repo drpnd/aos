@@ -30,6 +30,18 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
 
 ## Kernel
+kernel/arch/$(ARCH)/arch.o: include/aos/const.h kernel/kernel.h \
+	kernel/arch/$(ARCH)/arch.h
+kernel/arch/$(ARCH)/desc.o: include/aos/const.h kernel/kernel.h \
+	kernel/arch/$(ARCH)/arch.h \
+	kernel/arch/$(ARCH)/desc.h
+kernel/arch/$(ARCH)/acpi.o: include/aos/const.h kernel/kernel.h \
+	kernel/arch/$(ARCH)/arch.h \
+	kernel/arch/$(ARCH)/acpi.h
+kernel/arch/$(ARCH)/i8254.o: include/aos/const.h kernel/kernel.h \
+	kernel/arch/$(ARCH)/arch.h \
+	kernel/arch/$(ARCH)/i8254.h
+kernel/kernel.o: include/aos/const.h kernel/kernel.h
 kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/arch.o \
 	kernel/arch/$(ARCH)/desc.o \
