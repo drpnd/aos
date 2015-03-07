@@ -96,9 +96,10 @@ that tells the kernel's memory manager where to be used.
 ## Checkpoint 9
 Now we have got into the 64-bit long mode kernel in C.
 As the first step of the kernel, we initialize the current processor,
-bootstrap processor (BSP); GDT, IDT, and APIC.
+bootstrap processor (BSP); GDT, IDT, ACPI, and APIC.
 We configure the global descriptor table (GDT)
 and interrupt descriptor table (IDT).
 GDT was already once configured just before entering 32 bit mode,
 but they are temporary ones and they did not support ring protection of CPUs.
 In this checkpoint, we prepare four sets of GDT entries for ring 0 to 3.
+ACPI is (first) used to implement a busy wait timer.
