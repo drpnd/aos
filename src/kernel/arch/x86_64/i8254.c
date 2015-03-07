@@ -33,6 +33,7 @@ i8254_start_timer(int hz)
 {
     int counter;
 
+    /* Start the timer of counter 0 with the specified rate */
     counter = I8254_HZ / hz;
     outb(I8254_REG_CTRL, I8254_CTRL_RL_16BIT | I8254_CTRL_SQUAREWAVE);
     outb(I8254_REG_CNTR0, counter & 0xff);
