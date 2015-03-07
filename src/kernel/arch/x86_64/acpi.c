@@ -25,6 +25,10 @@
 #include "arch.h"
 #include "acpi.h"
 
+/* BIOS data area (BDA): 0x0400--0x04ff; if extended BDA (EDBA) presents, its
+   address >> 4 (16 bit) is stored in 0x040e. */
+#define BDA_EDBA        0x040e
+
 u64 acpi_ioapic_base;
 u64 acpi_pm_tmr_port;
 u8 acpi_pm_tmr_ext;
@@ -282,7 +286,7 @@ acpi_load(void)
     u64 ebda_addr;
 
     /* Check 1KB of EBDA, first */
-    ebda = *(u16 *)0x040e;
+    ebda = *(u16 *)BDA_EDBA;
     if ( ebda ) {
         ebda_addr = (u64)ebda << 4;
         if ( acpi_rsdp_search_range(ebda_addr, ebda_addr + 0x0400) ) {
