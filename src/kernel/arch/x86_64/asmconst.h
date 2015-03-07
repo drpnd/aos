@@ -1,3 +1,4 @@
+/* -*- Mode: asm -*- */
 /*_
  * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
@@ -21,52 +22,15 @@
  * SOFTWARE.
  */
 
-	.text
+	/* Temporary GDT for application processors */
+	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
+	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
+	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
+	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
 
-	.code64
-	.globl	kstart64
-	.globl	_halt
-	.globl	_lgdt
-	.globl	_lidt
-	.globl	_intr_null
-
-	.set	APIC_BASE,0xfee00000
-	.set	APIC_EOI,0x0b0
-
-/* Entry point to the 64-bit kernel */
-kstart64:
-	/* Initialize the bootstrap processor */
-	call	_bsp_init
-	/* Start the kernel code */
-	call	_kmain
-
-/* void halt(void) */
-_halt:
-	sti
-	hlt
-	cli
-	ret
-
-/* void lgdt(void *gdtr, u64 selector) */
-_lgdt:
-	lgdt	(%rdi)
-	/* Reload GDT */
-	pushq	%rsi
-	pushq	$1f	/* Just to do ret */
-	lretq
-1:
-	ret
-
-/* void lidt(void *idtr) */
-_lidt:
-	lidt	(%rdi)
-	ret
-
-/* Null function for interrupt handler */
-_intr_null:
-	pushq	%rdx
-	/* APIC EOI */
-	movq	$APIC_BASE,%rdx
-	movq	$0,APIC_EOI(%rdx)
-	popq	%rdx
-	iretq
+	/* Kernel page table */
+	.set	KERNEL_PGT	0x00079000
+	/* Per-processor information */
+	.set	P_DATA_BASE	0x01000000
+	.set	P_DATA_SIZE	0x10000
+	.set	P_STACK_GUARD	0x10

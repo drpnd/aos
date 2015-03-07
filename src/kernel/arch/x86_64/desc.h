@@ -26,6 +26,43 @@
 
 #include <aos/const.h>
 
+/* GDT type */
+#define GDT_TYPE_EX     8
+#define GDT_TYPE_DC     4
+#define GDT_TYPE_RW     2
+#define GDT_TYPE_AC     1
+/* IDT flags */
+#define IDT_PRESENT     0x80
+#define IDT_INTGATE     0x0e
+
+/*
+ * Global Descriptor
+ *  base: 32-bit base address of the memory space
+ *  limit: 20-bit size minus 1
+ *  type: (Executable, Direction/Conforming, Readable/Writable, Accessed)
+ *  DPL: Privilege (0: highest, 3: lowest)
+ *  P: Present bit
+ *  G: Granularity; 0 for 1 byte block, 1 for 4 KiB block granularity
+ *  DB: Size; 0 for 16 bit mode, 1 for 32 bit mode
+ *  L: 1 for 64 bit mode
+ *  A: 0
+ *  S: 1
+ */
+struct gdt_desc {
+    u16 w0;     /* limit[0:15] */
+    u16 w1;     /* base[0:15] */
+    u16 w2;     /* base[16:23] type[0:3] S DPL[0:1] P  */
+    u16 w3;     /* limit[16:19] A L DB G base[24:31] */
+} __attribute__ ((packed));
+
+/*
+ * Global Descriptor Table Register
+ */
+struct gdtr {
+    u16 size;
+    u64 base;   /* (struct gdt_desc *) */
+} __attribute__ ((packed));
+
 /*
  * Interrupt Descriptor
  */
@@ -44,30 +81,15 @@ struct idt_gate_desc {
  */
 struct idtr {
     u16 size;
-    u64 base;   /* (idt_gate_descriptor *) */
+    u64 base;   /* (struct idt_gate_desc *) */
 } __attribute__ ((packed));
 
-/*
- * Global Descriptor
- */
-struct gdt_desc {
-    u16 w0;
-    u16 w1;
-    u16 w2;
-    u16 w3;
-} __attribute__ ((packed));
-
-/*
- * Global Descriptor Table Register
- */
-struct gdtr {
-    u16 size;
-    u64 base;
-} __attribute__ ((packed));
-
-
+/* Prototype declarations */
 void gdt_init(void);
 void gdt_load(void);
+void idt_init(void);
+void idt_load(void);
+void idt_setup_intr_gate(int nr, void *target);
 
 #endif /* _KERNEL_DESC_H */
 

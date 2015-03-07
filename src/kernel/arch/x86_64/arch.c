@@ -21,52 +21,30 @@
  * SOFTWARE.
  */
 
-	.text
+#include <aos/const.h>
+#include "arch.h"
+#include "desc.h"
 
-	.code64
-	.globl	kstart64
-	.globl	_halt
-	.globl	_lgdt
-	.globl	_lidt
-	.globl	_intr_null
+/*
+ * Initialize the bootstrap processor
+ */
+void
+bsp_init(void)
+{
+    /* Initialize global descriptor table */
+    gdt_init();
+    gdt_load();
 
-	.set	APIC_BASE,0xfee00000
-	.set	APIC_EOI,0x0b0
+    /* Initialize interrupt descriptor table */
+    idt_init();
+    //idt_load();
+}
 
-/* Entry point to the 64-bit kernel */
-kstart64:
-	/* Initialize the bootstrap processor */
-	call	_bsp_init
-	/* Start the kernel code */
-	call	_kmain
-
-/* void halt(void) */
-_halt:
-	sti
-	hlt
-	cli
-	ret
-
-/* void lgdt(void *gdtr, u64 selector) */
-_lgdt:
-	lgdt	(%rdi)
-	/* Reload GDT */
-	pushq	%rsi
-	pushq	$1f	/* Just to do ret */
-	lretq
-1:
-	ret
-
-/* void lidt(void *idtr) */
-_lidt:
-	lidt	(%rdi)
-	ret
-
-/* Null function for interrupt handler */
-_intr_null:
-	pushq	%rdx
-	/* APIC EOI */
-	movq	$APIC_BASE,%rdx
-	movq	$0,APIC_EOI(%rdx)
-	popq	%rdx
-	iretq
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

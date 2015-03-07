@@ -26,16 +26,20 @@
 
 #include <aos/const.h>
 
-#define IDT_NR          256
-
+/* Boot information from the boot loader */
 #define BOOTINFO_BASE           (u64)0x8000
-#define TRAMPOLINE_ADDR         (u64)0x70000
-#define TRAMPOLINE_MAX_SIZE     0x4000
+
+/* # of IDT entries */
+#define IDT_NR                  256
+
+/* GDT and IDT */
 #define GDT_ADDR                (u64)0x74000
 #define GDT_MAX_SIZE            0x2000
 #define IDT_ADDR                (u64)0x76000
 #define IDT_MAX_SIZE            0x2000
 
+/* GDT selectors */
+#define GDT_NR                  9
 #define GDT_NULL_SEL            (0<<3)
 #define GDT_RING0_CODE_SEL      (1<<3)
 #define GDT_RING0_DATA_SEL      (2<<3)
@@ -45,17 +49,37 @@
 #define GDT_RING2_DATA_SEL      (6<<3)
 #define GDT_RING3_CODE_SEL      (7<<3)
 #define GDT_RING3_DATA_SEL      (8<<3)
-#define GDT_TSS_SEL_BASE        (9<<3)
 
-/* Also defined in asmconst.h */
-#define P_DATA_SIZE             0x10000
+/*********************************************************/
+/* The folloowing values are also defined in asmconst.h */
+/*********************************************************/
+/* Kernel page table */
+#define KERNEL_PGT              (u64)0x00079000
+/* Per-processor information (flags, cpuinfo, stats, tss, task, stack) */
 #define P_DATA_BASE             (u64)0x01000000
-#define P_TSS_OFFSET            (0x20 + IDT_NR * 8)
+#define P_DATA_SIZE             0x10000
 #define P_STACK_GUARD           0x10
+
+/*
+ * Boot information from boot loader
+ */
+struct bootinfo {
+    struct {
+        u64 nr;
+        u64 entries;    /* (struct bootinfo_sysaddrmap_entry *) */
+    } __attribute__ ((packed)) sysaddrmap ;
+} __attribute__ ((packed));
+struct bootinfo_sysaddrmap_entry {
+    u64 base;
+    u64 len;
+    u32 type;
+    u32 attr;
+} __attribute__ ((packed));
 
 /* in asm.s */
 void lidt(void *);
 void lgdt(void *, u64);
+void intr_null(void);
 
 #endif /* _KERNEL_ARCH_H */
 
