@@ -26,6 +26,7 @@
 	.code64
 	.globl	kstart64
 	.globl	_halt
+	.globl	_pause
 	.globl	_lgdt
 	.globl	_lidt
 	.globl	_intr_null
@@ -51,6 +52,11 @@ _halt:
 	sti
 	hlt
 	cli
+	ret
+
+/* void pause(void) */
+_pause:
+	pause
 	ret
 
 /* void lgdt(void *gdtr, u64 selector) */

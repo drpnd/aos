@@ -24,6 +24,7 @@
 #include <aos/const.h>
 #include "arch.h"
 #include "desc.h"
+#include "acpi.h"
 #include "i8254.h"
 
 /*
@@ -35,6 +36,9 @@ bsp_init(void)
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
 
+    /* Load ACPI */
+    acpi_load();
+
     /* Initialize global descriptor table */
     gdt_init();
     gdt_load();
@@ -42,6 +46,8 @@ bsp_init(void)
     /* Initialize interrupt descriptor table */
     idt_init();
     idt_load();
+
+    acpi_busy_usleep(1000000);
 }
 
 /*

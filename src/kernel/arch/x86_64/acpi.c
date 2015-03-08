@@ -43,7 +43,7 @@ u8 acpi_cmos_century;
 /*
  * Compute ACPI checksum
  */
-int
+static int
 acpi_checksum(u8 *ptr, unsigned int len)
 {
     u8 sum = 0;
@@ -71,6 +71,65 @@ _memcmp(const u8 *a, const u8 *b, int len)
     }
 
     return 0;
+}
+
+/*
+ * Get the current ACPI timer
+ */
+u32
+acpi_get_timer(void)
+{
+    return inl(acpi_pm_tmr_port);
+}
+
+/*
+ * Get the timer period
+ */
+u64
+acpi_get_timer_period(void)
+{
+    if ( acpi_pm_tmr_ext ) {
+        return ((u64)1<<32);
+    } else {
+        return (1<<24);
+    }
+}
+/*
+ * Get the frequency of the ACPI timer
+ */
+u64
+acpi_get_timer_hz(void)
+{
+    return ACPI_TMR_HZ;
+}
+
+/*
+ * Wait
+ */
+void
+acpi_busy_usleep(u64 usec)
+{
+    u64 clk;
+    volatile u64 acc;
+    volatile u64 cur;
+    volatile u64 prev;
+
+    /* usec to count */
+    clk = (ACPI_TMR_HZ * usec) / 1000000;
+
+    prev = acpi_get_timer();
+    acc = 0;
+    while ( acc < clk ) {
+        cur = acpi_get_timer();
+        if ( cur < prev ) {
+            /* Overflow */
+            acc += acpi_get_timer_period() + cur - prev;
+        } else {
+            acc += cur - prev;
+        }
+        prev = cur;
+        pause();
+    }
 }
 
 /*

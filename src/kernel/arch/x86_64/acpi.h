@@ -190,10 +190,6 @@ struct acpi_sdt_fadt {
 int acpi_load(void);
 void acpi_busy_usleep(u64);
 
-//volatile u32 acpi_get_timer(void);
-u64 acpi_get_timer_period(void);
-u64 acpi_get_timer_hz(void);
-
 #endif /* _KERNEL_ACPI_H */
 
 /*
