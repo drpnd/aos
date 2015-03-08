@@ -278,14 +278,14 @@ acpi_parse_rsdt(struct acpi_rsdp *rsdp)
         /* ACPI 2.0 or later */
         sz = 8;
         rsdt = (struct acpi_sdt_hdr *)rsdp->xsdt_addr;
-        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"XSDT ", 4) ) {
+        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"XSDT", 4) ) {
             return -1;
         }
     } else {
         /* Parse RSDT (ACPI 1.x) */
         sz = 4;
         rsdt = (struct acpi_sdt_hdr *)(u64)rsdp->rsdt_addr;
-        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"RSDT ", 4) ) {
+        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"RSDT", 4) ) {
             return -1;
         }
     }
