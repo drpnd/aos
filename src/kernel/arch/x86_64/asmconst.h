@@ -21,16 +21,3 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
-	/* Temporary GDT for application processors */
-	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
-	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
-	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
-	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
-
-	/* Kernel page table */
-	.set	KERNEL_PGT	0x00079000
-	/* Per-processor information */
-	.set	P_DATA_BASE	0x01000000
-	.set	P_DATA_SIZE	0x10000
-	.set	P_STACK_GUARD	0x10
