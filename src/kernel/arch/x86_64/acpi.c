@@ -292,7 +292,9 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
             return 0;
         }
     }
+    /* Compute the number of SDTs */
     nr = (rsdt->length - sizeof(struct acpi_sdt_hdr)) / sz;
+    /* Check all SDTs */
     for ( i = 0; i < nr; i++ ) {
         if ( 4 == sz ) {
             addr = *(u32 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
@@ -302,10 +304,14 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
         tmp = (struct acpi_sdt_hdr *)addr;
         if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"APIC", 4) ) {
             /* APIC */
-            _parse_apic(acpi, tmp);
+            if ( !_parse_apic(acpi, tmp) ) {
+                return 0;
+            }
         } else if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
             /* FADT */
-            _parse_fadt(acpi, tmp);
+            if ( !_parse_fadt(acpi, tmp) ) {
+                return 0;
+            }
         }
     }
 
