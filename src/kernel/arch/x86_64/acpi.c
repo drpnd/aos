@@ -29,14 +29,23 @@
    address >> 4 (16 bit) is stored in 0x040e. */
 #define BDA_EDBA        0x040e
 
+/* Prototype declarations */
+static int _checksum(u8 *, int);
+static int _memcmp(const u8 *, const u8 *, int);
+static int _parse_apic(struct acpi *, struct acpi_sdt_hdr *);
+static int _parse_fadt(struct acpi *, struct acpi_sdt_hdr *);
+static int _parse_rsdt(struct acpi *, struct acpi_rsdp *);
+static int _rsdp_search_range(struct acpi *, u64, u64);
+
+
 /*
  * Compute ACPI checksum
  */
 static int
-acpi_checksum(u8 *ptr, unsigned int len)
+_checksum(u8 *ptr, int len)
 {
     u8 sum = 0;
-    unsigned int i;
+    int i;
 
     for ( i = 0; i < len; i++ ) {
         sum += ptr[i];
@@ -72,7 +81,7 @@ acpi_get_timer(struct acpi *acpi)
 }
 
 /*
- * Get the timer period
+ * Get the timer period (wrapping)
  */
 u64
 acpi_get_timer_period(struct acpi *acpi)
@@ -127,8 +136,8 @@ acpi_busy_usleep(struct acpi *acpi, u64 usec)
  *   1: I/O APIC
  *   2: Interrupt Source Override
  */
-int
-acpi_parse_apic(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
+static int
+_parse_apic(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
 {
     u64 addr;
     struct acpi_sdt_apic *apic;
@@ -174,8 +183,11 @@ acpi_parse_apic(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
     return 1;
 }
 
-int
-acpi_parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
+/*
+ * Parse Fixed ACPI Description Table (FADT)
+ */
+static int
+_parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
 {
     u64 addr;
     struct acpi_sdt_fadt *fadt;
@@ -255,8 +267,8 @@ acpi_parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
 /*
  * Parse Root System Description Table (RSDT/XSDT) in RSDP
  */
-int
-acpi_parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
+static int
+_parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
 {
     struct acpi_sdt_hdr *rsdt;
     int i;
@@ -290,10 +302,10 @@ acpi_parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
         tmp = (struct acpi_sdt_hdr *)addr;
         if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"APIC", 4) ) {
             /* APIC */
-            acpi_parse_apic(acpi, tmp);
+            _parse_apic(acpi, tmp);
         } else if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
             /* FADT */
-            acpi_parse_fadt(acpi, tmp);
+            _parse_fadt(acpi, tmp);
         }
     }
 
@@ -303,20 +315,20 @@ acpi_parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
 /*
  * Search Root System Description Pointer (RSDP) in ACPI data structure
  */
-int
-acpi_rsdp_search_range(struct acpi *acpi, u64 start, u64 end)
+static int
+_rsdp_search_range(struct acpi *acpi, u64 start, u64 end)
 {
     u64 addr;
     struct acpi_rsdp *rsdp;
 
     for ( addr = start; addr < end; addr += 0x10 ) {
         /* Check the checksum of the RSDP */
-        if ( 0 == acpi_checksum((u8 *)addr, 20) ) {
+        if ( 0 == _checksum((u8 *)addr, 20) ) {
             /* Checksum is correct, then check the signature. */
             rsdp = (struct acpi_rsdp *)addr;
             if ( 0 == _memcmp((u8 *)rsdp->signature, (u8 *)"RSD PTR ", 8) ) {
                 /* This seems to be a valid RSDP, then parse RSDT. */
-                return acpi_parse_rsdt(acpi, rsdp);
+                return _parse_rsdt(acpi, rsdp);
             }
         }
     }
@@ -337,13 +349,13 @@ acpi_load(struct acpi *acpi)
     ebda = *(u16 *)BDA_EDBA;
     if ( ebda ) {
         ebda_addr = (u64)ebda << 4;
-        if ( acpi_rsdp_search_range(acpi, ebda_addr, ebda_addr + 0x0400) ) {
+        if ( _rsdp_search_range(acpi, ebda_addr, ebda_addr + 0x0400) ) {
             return 1;
         }
     }
 
     /* If not found in the EDBA, check main BIOS area */
-    return acpi_rsdp_search_range(acpi, 0xe0000, 0x100000);
+    return _rsdp_search_range(acpi, 0xe0000, 0x100000);
 }
 
 /*

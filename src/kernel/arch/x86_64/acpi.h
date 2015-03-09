@@ -187,6 +187,9 @@ struct acpi_sdt_fadt {
 
 } __attribute__ ((packed));
 
+/*
+ * ACPI configuration
+ */
 struct acpi {
     u64 acpi_ioapic_base;
     u64 acpi_pm_tmr_port;
@@ -200,6 +203,9 @@ struct acpi {
 
 int acpi_load(struct acpi *);
 void acpi_busy_usleep(struct acpi *, u64);
+u32 acpi_get_timer(struct acpi *);
+u64 acpi_get_timer_period(struct acpi *);
+u64 acpi_get_timer_hz(void);
 
 #endif /* _KERNEL_ACPI_H */
 
