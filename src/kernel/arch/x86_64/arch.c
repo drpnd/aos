@@ -33,6 +33,7 @@
 void
 bsp_init(void)
 {
+    u16 *video;
     struct acpi acpi;
 
     /* Ensure the i8254 timer is stopped */
@@ -53,7 +54,17 @@ bsp_init(void)
     idt_init();
     idt_load();
 
+    /* Display a mark to notify me that this code is properly executed */
+    video = (u16 *)0xb8000;
+    *(video + 0) = 0x0700 | '*';
+
+    /* Testing the busy wait function, sleep 1 second */
     acpi_busy_usleep(&acpi, 1000000);
+
+    /* Display a mark to notify me that this code is properly executed (one
+       second after the previous mark was displayed) */
+    video = (u16 *)0xb8000;
+    *(video + 1) = 0x0700 | '*';
 }
 
 /*

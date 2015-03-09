@@ -31,12 +31,6 @@
 void
 kmain(void)
 {
-    u16 *video;
-
-    /* Display a mark to notify me that this code is properly executed */
-    video = (u16 *)0xb8000;
-    *(video + 0) = 0x0700 | '*';
-
     for ( ;; ) {
         halt();
     }
