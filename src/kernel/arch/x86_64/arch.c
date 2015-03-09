@@ -33,11 +33,17 @@
 void
 bsp_init(void)
 {
+    struct acpi acpi;
+
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
 
-    /* Load ACPI */
-    acpi_load();
+    /* Load ACPI: In this function, we need to get the following values.
+       - I/O APIC base address
+       - Power management timer variables
+       - CMOS century
+    */
+    acpi_load(&acpi);
 
     /* Initialize global descriptor table */
     gdt_init();
@@ -47,7 +53,7 @@ bsp_init(void)
     idt_init();
     idt_load();
 
-    acpi_busy_usleep(1000000);
+    acpi_busy_usleep(&acpi, 1000000);
 }
 
 /*

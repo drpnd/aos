@@ -29,17 +29,6 @@
    address >> 4 (16 bit) is stored in 0x040e. */
 #define BDA_EDBA        0x040e
 
-u64 acpi_ioapic_base;
-u64 acpi_pm_tmr_port;
-u8 acpi_pm_tmr_ext;
-u32 acpi_pm1a_ctrl_block;
-u32 acpi_pm1b_ctrl_block;
-u16 acpi_slp_typa;
-u16 acpi_slp_typb;
-u32 acpi_smi_cmd_port;
-u8 acpi_enable_val;
-u8 acpi_cmos_century;
-
 /*
  * Compute ACPI checksum
  */
@@ -77,18 +66,18 @@ _memcmp(const u8 *a, const u8 *b, int len)
  * Get the current ACPI timer
  */
 u32
-acpi_get_timer(void)
+acpi_get_timer(struct acpi *acpi)
 {
-    return inl(acpi_pm_tmr_port);
+    return inl(acpi->acpi_pm_tmr_port);
 }
 
 /*
  * Get the timer period
  */
 u64
-acpi_get_timer_period(void)
+acpi_get_timer_period(struct acpi *acpi)
 {
-    if ( acpi_pm_tmr_ext ) {
+    if ( acpi->acpi_pm_tmr_ext ) {
         return ((u64)1<<32);
     } else {
         return (1<<24);
@@ -107,7 +96,7 @@ acpi_get_timer_hz(void)
  * Wait
  */
 void
-acpi_busy_usleep(u64 usec)
+acpi_busy_usleep(struct acpi *acpi, u64 usec)
 {
     u64 clk;
     volatile u64 acc;
@@ -117,13 +106,13 @@ acpi_busy_usleep(u64 usec)
     /* usec to count */
     clk = (ACPI_TMR_HZ * usec) / 1000000;
 
-    prev = acpi_get_timer();
+    prev = acpi_get_timer(acpi);
     acc = 0;
     while ( acc < clk ) {
-        cur = acpi_get_timer();
+        cur = acpi_get_timer(acpi);
         if ( cur < prev ) {
             /* Overflow */
-            acc += acpi_get_timer_period() + cur - prev;
+            acc += acpi_get_timer_period(acpi) + cur - prev;
         } else {
             acc += cur - prev;
         }
@@ -139,7 +128,7 @@ acpi_busy_usleep(u64 usec)
  *   2: Interrupt Source Override
  */
 int
-acpi_parse_apic(struct acpi_sdt_hdr *sdt)
+acpi_parse_apic(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
 {
     u64 addr;
     struct acpi_sdt_apic *apic;
@@ -159,7 +148,7 @@ acpi_parse_apic(struct acpi_sdt_hdr *sdt)
         hdr = (struct acpi_sdt_apic_hdr *)(addr + len);
         if ( len + hdr->length > sdt->length ) {
             /* Invalid */
-            return -1;
+            return 0;
         }
         switch  ( hdr->type ) {
         case 0:
@@ -170,7 +159,7 @@ acpi_parse_apic(struct acpi_sdt_hdr *sdt)
         case 1:
             /* I/O APIC */
             ioapic = (struct acpi_sdt_apic_ioapic *)hdr;
-            acpi_ioapic_base = ioapic->addr;
+            acpi->acpi_ioapic_base = ioapic->addr;
             break;
         case 2:
             /* Interrupt Source Override */
@@ -182,11 +171,11 @@ acpi_parse_apic(struct acpi_sdt_hdr *sdt)
         len += hdr->length;
     }
 
-    return 0;
+    return 1;
 }
 
 int
-acpi_parse_fadt(struct acpi_sdt_hdr *sdt)
+acpi_parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
 {
     u64 addr;
     struct acpi_sdt_fadt *fadt;
@@ -202,27 +191,27 @@ acpi_parse_fadt(struct acpi_sdt_hdr *sdt)
         /* FADT revision 2.0 or higher */
         if ( fadt->x_pm_timer_block.addr_space == 1 ) {
             /* Must be 1 (System I/O) */
-            acpi_pm_tmr_port = fadt->x_pm_timer_block.addr;
-            if ( !acpi_pm_tmr_port ) {
-                acpi_pm_tmr_port = fadt->pm_timer_block;
+            acpi->acpi_pm_tmr_port = fadt->x_pm_timer_block.addr;
+            if ( !acpi->acpi_pm_tmr_port ) {
+                acpi->acpi_pm_tmr_port = fadt->pm_timer_block;
             }
         }
 
         /* PM1a control block */
         if ( fadt->x_pm1a_ctrl_block.addr_space == 1 ) {
             /* Must be 1 (System I/O) */
-            acpi_pm1a_ctrl_block = fadt->x_pm1a_ctrl_block.addr;
-            if ( !acpi_pm1a_ctrl_block ) {
-                acpi_pm1a_ctrl_block = fadt->pm1a_ctrl_block;
+            acpi->acpi_pm1a_ctrl_block = fadt->x_pm1a_ctrl_block.addr;
+            if ( !acpi->acpi_pm1a_ctrl_block ) {
+                acpi->acpi_pm1a_ctrl_block = fadt->pm1a_ctrl_block;
             }
         }
 
         /* PM1b control block */
         if ( fadt->x_pm1b_ctrl_block.addr_space == 1 ) {
             /* Must be 1 (System I/O) */
-            acpi_pm1b_ctrl_block = fadt->x_pm1b_ctrl_block.addr;
-            if ( !acpi_pm1b_ctrl_block ) {
-                acpi_pm1b_ctrl_block = fadt->pm1b_ctrl_block;
+            acpi->acpi_pm1b_ctrl_block = fadt->x_pm1b_ctrl_block.addr;
+            if ( !acpi->acpi_pm1b_ctrl_block ) {
+                acpi->acpi_pm1b_ctrl_block = fadt->pm1b_ctrl_block;
             }
         }
 
@@ -233,33 +222,33 @@ acpi_parse_fadt(struct acpi_sdt_hdr *sdt)
         }
     } else {
         /* Revision  */
-        acpi_pm_tmr_port = fadt->pm_timer_block;
+        acpi->acpi_pm_tmr_port = fadt->pm_timer_block;
 
         /* PM1a control block  */
-        acpi_pm1a_ctrl_block = fadt->pm1a_ctrl_block;
+        acpi->acpi_pm1a_ctrl_block = fadt->pm1a_ctrl_block;
 
         /* PM1b control block  */
-        acpi_pm1b_ctrl_block = fadt->pm1b_ctrl_block;
+        acpi->acpi_pm1b_ctrl_block = fadt->pm1b_ctrl_block;
 
         /* DSDT */
         dsdt = fadt->dsdt;
     }
 
     /* Check flags */
-    acpi_pm_tmr_ext = (fadt->flags >> 8) & 0x1;
+    acpi->acpi_pm_tmr_ext = (fadt->flags >> 8) & 0x1;
 
     /* SMI command */
-    acpi_smi_cmd_port = fadt->smi_cmd_port;
+    acpi->acpi_smi_cmd_port = fadt->smi_cmd_port;
 
     /* ACPI enable */
-    acpi_enable_val = fadt->acpi_enable;
+    acpi->acpi_enable_val = fadt->acpi_enable;
 
     /* Century */
-    acpi_cmos_century = fadt->century;
+    acpi->acpi_cmos_century = fadt->century;
 
     /* Ignore DSDT */
 
-    return 0;
+    return 1;
 }
 
 
@@ -267,54 +256,55 @@ acpi_parse_fadt(struct acpi_sdt_hdr *sdt)
  * Parse Root System Description Table (RSDT/XSDT) in RSDP
  */
 int
-acpi_parse_rsdt(struct acpi_rsdp *rsdp)
+acpi_parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
 {
     struct acpi_sdt_hdr *rsdt;
     int i;
     int nr;
     int sz;
+    u64 addr;
+    struct acpi_sdt_hdr *tmp;
 
     if ( rsdp->revision >= 1 ) {
         /* ACPI 2.0 or later */
         sz = 8;
         rsdt = (struct acpi_sdt_hdr *)rsdp->xsdt_addr;
         if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"XSDT", 4) ) {
-            return -1;
+            return 0;
         }
     } else {
         /* Parse RSDT (ACPI 1.x) */
         sz = 4;
         rsdt = (struct acpi_sdt_hdr *)(u64)rsdp->rsdt_addr;
         if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"RSDT", 4) ) {
-            return -1;
+            return 0;
         }
     }
     nr = (rsdt->length - sizeof(struct acpi_sdt_hdr)) / sz;
     for ( i = 0; i < nr; i++ ) {
-        u64 xx;
         if ( 4 == sz ) {
-            xx = *(u32 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
+            addr = *(u32 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
         } else {
-            xx = *(u64 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
+            addr = *(u64 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
         }
-        struct acpi_sdt_hdr *tmp = (struct acpi_sdt_hdr *)xx;
+        tmp = (struct acpi_sdt_hdr *)addr;
         if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"APIC", 4) ) {
             /* APIC */
-            acpi_parse_apic(tmp);
+            acpi_parse_apic(acpi, tmp);
         } else if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
             /* FADT */
-            acpi_parse_fadt(tmp);
+            acpi_parse_fadt(acpi, tmp);
         }
     }
 
-    return 0;
+    return 1;
 }
 
 /*
  * Search Root System Description Pointer (RSDP) in ACPI data structure
  */
 int
-acpi_rsdp_search_range(u64 start, u64 end)
+acpi_rsdp_search_range(struct acpi *acpi, u64 start, u64 end)
 {
     u64 addr;
     struct acpi_rsdp *rsdp;
@@ -326,8 +316,7 @@ acpi_rsdp_search_range(u64 start, u64 end)
             rsdp = (struct acpi_rsdp *)addr;
             if ( 0 == _memcmp((u8 *)rsdp->signature, (u8 *)"RSD PTR ", 8) ) {
                 /* This seems to be a valid RSDP, then parse RSDT. */
-                acpi_parse_rsdt(rsdp);
-                return 1;
+                return acpi_parse_rsdt(acpi, rsdp);
             }
         }
     }
@@ -339,7 +328,7 @@ acpi_rsdp_search_range(u64 start, u64 end)
  * Parse Root System Descriptor Pointer (RSDP) in ACPI data structure
  */
 int
-acpi_load(void)
+acpi_load(struct acpi *acpi)
 {
     u16 ebda;
     u64 ebda_addr;
@@ -348,13 +337,13 @@ acpi_load(void)
     ebda = *(u16 *)BDA_EDBA;
     if ( ebda ) {
         ebda_addr = (u64)ebda << 4;
-        if ( acpi_rsdp_search_range(ebda_addr, ebda_addr + 0x0400) ) {
+        if ( acpi_rsdp_search_range(acpi, ebda_addr, ebda_addr + 0x0400) ) {
             return 1;
         }
     }
 
     /* If not found in the EDBA, check main BIOS area */
-    return acpi_rsdp_search_range(0xe0000, 0x100000);
+    return acpi_rsdp_search_range(acpi, 0xe0000, 0x100000);
 }
 
 /*

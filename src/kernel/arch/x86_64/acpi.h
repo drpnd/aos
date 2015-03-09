@@ -187,8 +187,19 @@ struct acpi_sdt_fadt {
 
 } __attribute__ ((packed));
 
-int acpi_load(void);
-void acpi_busy_usleep(u64);
+struct acpi {
+    u64 acpi_ioapic_base;
+    u64 acpi_pm_tmr_port;
+    u8 acpi_pm_tmr_ext;
+    u32 acpi_pm1a_ctrl_block;
+    u32 acpi_pm1b_ctrl_block;
+    u32 acpi_smi_cmd_port;
+    u8 acpi_enable_val;
+    u8 acpi_cmos_century;
+};
+
+int acpi_load(struct acpi *);
+void acpi_busy_usleep(struct acpi *, u64);
 
 #endif /* _KERNEL_ACPI_H */
 
