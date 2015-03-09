@@ -108,3 +108,6 @@ Note that we implement ACPI parser by ourselves instead of using
 the ACPICA (ACPI Component Architecture) here
 because the ACPICA requires memory allocator etc
 which we have not implemented yet.
+We also note that any other timers such as time stamp counter (TSC)
+and high precision event timer (HPET) may be used instead of ACPI PM timer
+if they are available.
