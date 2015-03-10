@@ -30,7 +30,7 @@
 	.globl	_pause
 	.globl	_lgdt
 	.globl	_lidt
-	.globl	_intr_null
+	.globl	_ltr
 	.globl	_inb
 	.globl	_inw
 	.globl	_inl
@@ -39,6 +39,9 @@
 	.globl	_outl
 	.globl	_mfread32
 	.globl	_mfwrite32
+	.globl	_kmemset
+	.globl	_kmemcmp
+	.globl	_intr_null
 
 	.set	APIC_BASE,0xfee00000
 	.set	APIC_EOI,0x0b0
@@ -53,7 +56,10 @@ kstart64:
 
 /* Entry point for the application processors */
 apstart64:
+	/* Initialize the application processor */
 	call	_ap_init
+	/* Start the kernel code */
+	call	_kmain
 	jmp	_halt
 
 /* void halt(void) */
@@ -71,6 +77,12 @@ _pause:
 /* void lgdt(void *gdtr, u64 selector) */
 _lgdt:
 	lgdt	(%rdi)
+	/* Set data selector */
+	movq	%rsi,%rax
+	addq	$8,%rax
+	movq	%rax,%ds
+	movq	%rax,%es
+	movq	%rax,%ss
 	/* Reload GDT */
 	pushq	%rsi
 	pushq	$1f	/* Just to do ret */
@@ -81,6 +93,11 @@ _lgdt:
 /* void lidt(void *idtr) */
 _lidt:
 	lidt	(%rdi)
+	ret
+
+/* void ltr(u16) */
+_ltr:
+	ltr	%di
 	ret
 
 /* u8 inb(u16 port) */
@@ -125,16 +142,45 @@ _outl:
 	outl	%eax,%dx
 	ret
 
-/* u32 mfread32(u64 addr); */
+/* u32 mfread32(u64 addr) */
 _mfread32:
 	mfence			/* Prevent out-of-order execution */
 	movl	(%rdi),%eax
 	ret
 
-/* void mfwrite32(u64 addr, u32 val); */
+/* void mfwrite32(u64 addr, u32 val) */
 _mfwrite32:
 	mfence			/* Prevent out-of-order execution */
 	movl	%esi,(%rdi)
+	ret
+
+/* void * kmemset(void *b, int c, size_t len) */
+_kmemset:
+	pushq	%rdi
+	pushq	%rsi
+	movl	%esi,%eax	/* c */
+	movq	%rdx,%rcx	/* len */
+	cld			/* Ensure the DF cleared */
+	rep	stosb		/* Set %al to (%rdi)-(%rdi+%rcx) */
+	popq	%rsi
+	popq	%rdi
+	movq	%rdi,%rax	/* Restore for the return value */
+	ret
+
+/* int kmemcmp(void *s1, void *s2, size_t n) */
+_kmemcmp:
+	xorq	%rax,%rax
+	movq	%rdx,%rcx	/* n */
+	cld			/* Ensure the DF cleared */
+	//cmpq	%rcx,%rcx	/* Set ZF; Special case for setz (when n = 0) */
+	repe	cmpsb		/* Compare byte at (%rsi) with byte at (%rdi) */
+	//setnz	%al		/* Set 1 if ZF = 0, otherwise set 0 */
+	jz	1f
+	decq	%rdi		/* rollback one */
+	decq	%rsi		/* rollback one */
+	movb	(%rdi),%al	/* *s1 */
+	subb	(%rsi),%al	/* *s1 - *s2 */
+1:
 	ret
 
 /* Null function for interrupt handler */

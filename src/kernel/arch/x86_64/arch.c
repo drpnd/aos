@@ -22,6 +22,7 @@
  */
 
 #include <aos/const.h>
+#include "../../kernel.h"
 #include "arch.h"
 #include "desc.h"
 #include "acpi.h"
@@ -30,24 +31,20 @@
 
 static int _load_trampoline(void);
 
+struct acpi arch_acpi;
+
 /*
  * Initialize the bootstrap processor
  */
 void
 bsp_init(void)
 {
+    struct p_data *pdata;
     u16 *video;
-    struct acpi acpi;
+    long long i;
 
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
-
-    /* Load ACPI: In this function, we need to get the following values.
-       - I/O APIC base address
-       - Power management timer variables
-       - CMOS century
-    */
-    acpi_load(&acpi);
 
     /* Initialize global descriptor table */
     gdt_init();
@@ -56,6 +53,24 @@ bsp_init(void)
     /* Initialize interrupt descriptor table */
     idt_init();
     idt_load();
+
+    /* Load ACPI */
+    acpi_load(&arch_acpi);
+
+    /* Initialize the local APIC */
+    lapic_init();
+
+    /* Reset all processors */
+    for ( i = 0; i < MAX_PROCESSORS; i++ ) {
+        /* Fill the processor data space with zero excluding stack area */
+        kmemset((u8 *)((u64)P_DATA_BASE + i * P_DATA_SIZE), 0,
+                sizeof(struct p_data));
+    }
+
+    /* Enable this processor*/
+    pdata = this_cpu();
+    pdata->cpu_id = lapic_id();
+    pdata->flags |= 1;
 
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
@@ -68,19 +83,19 @@ bsp_init(void)
     lapic_send_init_ipi();
 
     /* Wait 10 ms */
-    acpi_busy_usleep(&acpi, 10000);
+    acpi_busy_usleep(&arch_acpi, 10000);
 
     /* Send a Start Up IPI */
     lapic_send_startup_ipi(TRAMPOLINE_VEC & 0xff);
 
     /* Wait 200 us */
-    acpi_busy_usleep(&acpi, 200);
+    acpi_busy_usleep(&arch_acpi, 200);
 
     /* Send another Start Up IPI */
     lapic_send_startup_ipi(TRAMPOLINE_VEC & 0xff);
 
     /* Wait 200 us */
-    acpi_busy_usleep(&acpi, 200);
+    acpi_busy_usleep(&arch_acpi, 200);
 }
 
 /*
@@ -89,12 +104,22 @@ bsp_init(void)
 void
 ap_init(void)
 {
+    struct p_data *pdata;
     u16 *video;
 
+    /* Enable this processor */
+    pdata = this_cpu();
+    pdata->cpu_id = lapic_id();
+    pdata->flags |= 1;
+
+    /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
     *(video + lapic_id()) = 0x0700 | '*';
 }
 
+/*
+ * Relocate the trampoline code to a 4 KiB page alined space
+ */
 static int
 _load_trampoline(void)
 {
@@ -113,6 +138,18 @@ _load_trampoline(void)
 
     return 0;
 }
+
+/*
+ * Get the CPU data structure
+ */
+struct p_data *
+this_cpu(void)
+{
+    struct p_data *pdata;
+    pdata = (struct p_data *)(P_DATA_BASE + lapic_id() * P_DATA_SIZE);
+    return pdata;
+}
+
 
 /*
  * Local variables:

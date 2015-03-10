@@ -27,6 +27,18 @@
 #include "../../kernel.h"
 
 /*
+ * Setup a null descriptor
+ */
+static void
+gdt_setup_desc_null(struct gdt_desc *e)
+{
+    e->w0 = 0;
+    e->w1 = 0;
+    e->w2 = 0;
+    e->w3 = 0;
+}
+
+/*
  * Setup global descriptor table entry
  */
 static void
@@ -71,7 +83,7 @@ gdt_init(void)
     data = GDT_TYPE_RW;
 
     /* Null descriptor */
-    gdt_setup_desc(&gdt[0], 0, 0, 0, 0, 0, 0, 0);
+    gdt_setup_desc_null(&gdt[0]);
     /* Code and data descriptor for each ring */
     gdt_setup_desc(&gdt[1], 0, 0xfffff, code, 0, 1, 0, 1); /* Ring 0 code */
     gdt_setup_desc(&gdt[2], 0, 0xfffff, data, 0, 1, 0, 1); /* Ring 0 data */
@@ -159,6 +171,62 @@ idt_load(void)
 
     idtr = (struct idtr *)(IDT_ADDR + sizeof(struct idt_gate_desc) * IDT_NR);
     lidt(idtr);
+}
+
+/*
+ * Initialize all TSS
+ */
+void
+tss_init(void)
+{
+    struct p_data *pdata;
+    struct tss *tss;
+    u64 i;
+
+    for ( i = 0; i < MAX_PROCESSORS; i++ ) {
+        /* Initialize the TSS for each processor (Local APIC) */
+        pdata = (struct p_data *)(P_DATA_BASE + i * P_DATA_SIZE);
+        tss = &pdata->tss;
+        tss->reserved1 = 0;
+        tss->rsp0l = 0;
+        tss->rsp0h = 0;
+        tss->rsp1l = 0;
+        tss->rsp1h = 0;
+        tss->rsp2l = 0;
+        tss->rsp2h = 0;
+        tss->reserved2 = 0;
+        tss->reserved3 = 0;
+        tss->ist1l = 0;
+        tss->ist1h = 0;
+        tss->ist2l = 0;
+        tss->ist2h = 0;
+        tss->ist3l = 0;
+        tss->ist3h = 0;
+        tss->ist4l = 0;
+        tss->ist4h = 0;
+        tss->ist5l = 0;
+        tss->ist5h = 0;
+        tss->ist6l = 0;
+        tss->ist6h = 0;
+        tss->ist7l = 0;
+        tss->ist7h = 0;
+        tss->reserved4 = 0;
+        tss->reserved5 = 0;
+        tss->reserved6 = 0;
+        tss->iomap = 0;
+    }
+}
+
+/*
+ * Load task register for nr-th processor
+ */
+void
+tr_load(int nr)
+{
+    int tr;
+
+    tr = GDT_TSS_SEL_BASE + (nr * 2) * 8;
+    ltr(tr);
 }
 
 /*

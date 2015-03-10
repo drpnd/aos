@@ -29,6 +29,9 @@
 /* Boot information from the boot loader */
 #define BOOTINFO_BASE           (u64)0x8000
 
+/* Maximum number of processors */
+#define MAX_PROCESSORS          256
+
 /* # of IDT entries */
 #define IDT_NR                  256
 
@@ -49,14 +52,15 @@
 #define GDT_RING2_DATA_SEL      (6<<3)
 #define GDT_RING3_CODE_SEL      (7<<3)
 #define GDT_RING3_DATA_SEL      (8<<3)
+#define GDT_TSS_SEL_BASE        (9<<3)
 
 /*********************************************************/
 /* The folloowing values are also defined in asmconst.h */
 /*********************************************************/
 /* Kernel page table */
-#define KERNEL_PGT              (u64)0x00079000
+#define KERNEL_PGT              0x00079000ULL
 /* Per-processor information (flags, cpuinfo, stats, tss, task, stack) */
-#define P_DATA_BASE             (u64)0x01000000
+#define P_DATA_BASE             0x01000000ULL
 #define P_DATA_SIZE             0x10000
 #define P_STACK_GUARD           0x10
 /* Trampoline: 0x70 (0x70000) */
@@ -79,9 +83,119 @@ struct bootinfo_sysaddrmap_entry {
     u32 attr;
 } __attribute__ ((packed));
 
+/*
+ * Stack frame for interrupt handlers
+ */
+struct stackframe64 {
+    /* Segment registers */
+    u16 gs;
+    u16 fs;
+
+    /* Base pointer */
+    u64 bp;
+
+    /* Index registers */
+    u64 di;
+    u64 si;
+
+    /* Generic registers */
+    u64 r15;
+    u64 r14;
+    u64 r13;
+    u64 r12;
+    u64 r11;
+    u64 r10;
+    u64 r9;
+    u64 r8;
+    u64 dx;
+    u64 cx;
+    u64 bx;
+    u64 ax;
+
+    /* Restored by `iretq' instruction */
+    u64 ip;             /* Instruction pointer */
+    u64 cs;             /* Code segment */
+    u64 flags;          /* Flags */
+    u64 sp;             /* Stack pointer */
+    u64 ss;             /* Stack segment */
+} __attribute__ ((packed));
+
+/*
+ * TSS
+ */
+struct tss {
+    u32 reserved1;
+    u32 rsp0l;
+    u32 rsp0h;
+    u32 rsp1l;
+    u32 rsp1h;
+    u32 rsp2l;
+    u32 rsp2h;
+    u32 reserved2;
+    u32 reserved3;
+    u32 ist1l;
+    u32 ist1h;
+    u32 ist2l;
+    u32 ist2h;
+    u32 ist3l;
+    u32 ist3h;
+    u32 ist4l;
+    u32 ist4h;
+    u32 ist5l;
+    u32 ist5h;
+    u32 ist6l;
+    u32 ist6h;
+    u32 ist7l;
+    u32 ist7h;
+    u32 reserved4;
+    u32 reserved5;
+    u16 reserved6;
+    u16 iomap;
+} __attribute__ ((packed));
+
+
+/*
+ * Task (architecture specific structure)
+ */
+struct arch_task {
+    /* Do not change the first two.  These must be on the top.  See asm.s. */
+    /* Restart point */
+    struct stackframe64 *rp;
+    /* SP0 for tss */
+    u64 sp0;
+    /* Stack pointers (kernel and user) */
+    void *kstack;
+    void *ustack;
+    /* Parent structure (architecture-independent generic task structure) */
+    struct ktask *ktask;
+} __attribute__ ((packed));
+
+
+/*
+ * Data space for each processor
+ */
+struct p_data {
+    u32 flags;          /* bit 0: enabled (working); bit 1- reserved */
+    u32 cpu_id;
+    u64 freq;           /* Frequency */
+    u32 reserved[4];
+    u64 stats[IDT_NR];  /* Interrupt counter */
+    /* P_TSS_OFFSET */
+    struct tss tss;
+    /* P_CUR_TASK_OFFSET */
+    u64 cur_task;
+    /* P_NEXT_TASK_OFFSET */
+    u64 next_task;
+    /* Stack and stack guard follow */
+} __attribute__ ((packed));
+
+/* in arch.c */
+struct p_data * this_cpu(void);
+
 /* in asm.s */
 void lidt(void *);
 void lgdt(void *, u64);
+void ltr(u16);
 void intr_null(void);
 void pause(void);
 u8 inb(u16);

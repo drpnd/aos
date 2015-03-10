@@ -25,8 +25,7 @@
 #include "kernel.h"
 
 /*
- * Entry point to the kernel in C for the boot strap processor, called from
- * asm.s.
+ * Entry point to the kernel in C for all processors, called from asm.s.
  */
 void
 kmain(void)
@@ -35,6 +34,26 @@ kmain(void)
         halt();
     }
 }
+
+#if !defined(HAS_KMEMSET) || !HAS_KMEMSET
+/*
+ * kmemset
+ */
+void *
+kmemset(void *b, int c, size_t len)
+{
+    size_t i;
+
+    i = 0;
+    while ( len > 0 ) {
+        ((u8 *)b)[i] = c;
+        i++;
+        len--;
+    }
+
+    return b;
+}
+#endif
 
 /*
  * Local variables:

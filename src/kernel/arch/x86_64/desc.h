@@ -56,6 +56,20 @@ struct gdt_desc {
 } __attribute__ ((packed));
 
 /*
+ * TSS
+ */
+struct gdt_desc_tss {
+    u16 w0;
+    u16 w1;
+    u16 w2;
+    u16 w3;
+    u16 w4;
+    u16 w5;
+    u16 w6;
+    u16 w7;
+} __attribute__ ((packed));
+
+/*
  * Global Descriptor Table Register
  */
 struct gdtr {

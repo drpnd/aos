@@ -22,6 +22,7 @@
  */
 
 #include <aos/const.h>
+#include "../../kernel.h"
 #include "arch.h"
 #include "acpi.h"
 
@@ -31,7 +32,6 @@
 
 /* Prototype declarations */
 static int _checksum(u8 *, int);
-static int _memcmp(const u8 *, const u8 *, int);
 static int _parse_apic(struct acpi *, struct acpi_sdt_hdr *);
 static int _parse_fadt(struct acpi *, struct acpi_sdt_hdr *);
 static int _parse_rsdt(struct acpi *, struct acpi_rsdp *);
@@ -52,23 +52,6 @@ _checksum(u8 *ptr, int len)
     }
 
     return sum;
-}
-
-/*
- * Memcmp
- */
-static int
-_memcmp(const u8 *a, const u8 *b, int len)
-{
-    int i;
-
-    for ( i = 0; i < len; i++ ) {
-        if ( a[i] != b[i] ) {
-            return a[i] - b[i];
-        }
-    }
-
-    return 0;
 }
 
 /*
@@ -281,14 +264,14 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
         /* ACPI 2.0 or later */
         sz = 8;
         rsdt = (struct acpi_sdt_hdr *)rsdp->xsdt_addr;
-        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"XSDT", 4) ) {
+        if ( 0 != kmemcmp((u8 *)rsdt->signature, (u8 *)"XSDT", 4) ) {
             return 0;
         }
     } else {
         /* Parse RSDT (ACPI 1.x) */
         sz = 4;
         rsdt = (struct acpi_sdt_hdr *)(u64)rsdp->rsdt_addr;
-        if ( 0 != _memcmp((u8 *)rsdt->signature, (u8 *)"RSDT", 4) ) {
+        if ( 0 != kmemcmp((u8 *)rsdt->signature, (u8 *)"RSDT", 4) ) {
             return 0;
         }
     }
@@ -302,12 +285,12 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
             addr = *(u64 *)((u64)(rsdt) + sizeof(struct acpi_sdt_hdr) + i * sz);
         }
         tmp = (struct acpi_sdt_hdr *)addr;
-        if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"APIC", 4) ) {
+        if ( 0 == kmemcmp((u8 *)tmp->signature, (u8 *)"APIC", 4) ) {
             /* APIC */
             if ( !_parse_apic(acpi, tmp) ) {
                 return 0;
             }
-        } else if ( 0 == _memcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
+        } else if ( 0 == kmemcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
             /* FADT */
             if ( !_parse_fadt(acpi, tmp) ) {
                 return 0;
@@ -332,7 +315,7 @@ _rsdp_search_range(struct acpi *acpi, u64 start, u64 end)
         if ( 0 == _checksum((u8 *)addr, 20) ) {
             /* Checksum is correct, then check the signature. */
             rsdp = (struct acpi_rsdp *)addr;
-            if ( 0 == _memcmp((u8 *)rsdp->signature, (u8 *)"RSD PTR ", 8) ) {
+            if ( 0 == kmemcmp((u8 *)rsdp->signature, (u8 *)"RSD PTR ", 8) ) {
                 /* This seems to be a valid RSDP, then parse RSDT. */
                 return _parse_rsdt(acpi, rsdp);
             }

@@ -21,26 +21,19 @@
  * SOFTWARE.
  */
 
-#ifndef _KERNEL_H
-#define _KERNEL_H
+#ifndef _AOS_TYPES_H
+#define _AOS_TYPES_H
 
-#include <aos/const.h>
-#include <aos/types.h>
+#if __LP64__
 
-struct ktask {
-    /* Task ID */
-    u64 id;
-    /* Architecture specific structure; i.e., (struct arch_task) */
-    void *arch;
-};
+typedef signed long long ssize_t;
+typedef unsigned long long size_t;
 
-/* in asm.s */
-#define HAS_KMEMSET     1       /* kmemset is implemented in the assembly code */
-void * kmemset(void *, int, size_t);
-int kmemcmp(void *, void *, size_t);
-void halt(void);
+#else
+#error "Must be LP64"
+#endif
 
-#endif /* _KERNEL_H */
+#endif /* _AOS_CONST_H */
 
 /*
  * Local variables:
