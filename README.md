@@ -25,6 +25,7 @@ Hirochika Asai
 | checkpoint 7 | kernload | release/kernload |
 | checkpoint 8 | memmap   | release/memmap   |
 | checkpoint 9 | bspinit  | release/bspinit  |
+| checkpoint a | bspinit  | release/apinit  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -111,3 +112,17 @@ which we have not implemented yet.
 We also note that any other timers such as time stamp counter (TSC)
 and high precision event timer (HPET) may be used instead of ACPI PM timer
 if they are available.
+
+## Checkpoint a
+Multicore/multiprocessor system becomes more common in these days.
+In this checkpoint, we try to boot all cores/processors
+from the bootstrap processor (BSP).
+The processors booted from the BSP are called application processors (APs).
+The simplest procedure to initialize the APs is the following:
+1) The BSP load the program, so-called trampoline code,
+into 4 KiB (aligned) page in the lower 1 MiB of memory.
+2) The BSP broadcasts INIT IPI (inter-processor interrupt) to initialize
+the APs, then waits 10 ms.
+3) The BSP broadcasts the first SIPI (start-up IPI), then wait 200 us.
+4) The BSP broadcasts the second SIPI (start-up IPI), then wait 200 us.
+This procedure is called INIT-SIPI-SIPI IPI sequence.
