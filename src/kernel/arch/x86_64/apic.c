@@ -89,6 +89,19 @@ lapic_send_startup_ipi(u8 vector)
 }
 
 /*
+ * Return this local APIC ID
+ */
+int
+lapic_id(void)
+{
+    u32 reg;
+
+    reg = *(u32 *)(APIC_BASE + APIC_LAPIC_ID);
+
+    return reg >> 24;
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4

@@ -116,16 +116,12 @@ _load_trampoline(void)
 }
 
 /*
- * Return this CPU ID
+ * Return this APIC ID
  */
 int
 this_cpu(void)
 {
-    u32 reg;
-
-    reg = mfread32(APIC_BASE + 0x20);
-
-    return reg >> 24;
+    return lapic_id();
 }
 
 /*

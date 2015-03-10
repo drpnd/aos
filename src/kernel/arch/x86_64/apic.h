@@ -27,6 +27,7 @@
 #include <aos/const.h>
 
 #define APIC_BASE               0xfee00000
+#define APIC_LAPIC_ID           0x020
 #define APIC_SIVR               0x0f0
 #define APIC_ICR_LOW            0x300
 #define APIC_ICR_HIGH           0x310
@@ -53,6 +54,7 @@
 void lapic_init(void);
 void lapic_send_init_ipi(void);
 void lapic_send_startup_ipi(u8);
+int lapic_id(void);
 
 #endif /* _KERNEL_APIC_H */
 
