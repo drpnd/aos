@@ -125,4 +125,5 @@ into 4 KiB (aligned) page in the lower 1 MiB of memory.
 the APs, then waits 10 ms.
 3) The BSP broadcasts the first SIPI (start-up IPI), then wait 200 us.
 4) The BSP broadcasts the second SIPI (start-up IPI), then wait 200 us.
-This procedure is called INIT-SIPI-SIPI IPI sequence.
+This procedure is called INIT-SIPI-SIPI IPI sequence
+(See Section 8.4.4.1 of Intel SDM).
