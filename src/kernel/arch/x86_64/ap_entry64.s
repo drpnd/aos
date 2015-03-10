@@ -1,4 +1,3 @@
-/* -*- Mode: asm -*- */
 /*_
  * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
@@ -22,17 +21,20 @@
  * SOFTWARE.
  */
 
-	/* Temporary GDT for application processors */
-	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
-	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
-	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
-	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
+	.include	"asmconst.h"
 
-	.set	APIC_BASE,0xfee00000
+	.text
 
-	/* Kernel page table */
-	.set	KERNEL_PGT,0x00079000
-	/* Per-processor information */
-	.set	P_DATA_BASE,0x01000000
-	.set	P_DATA_SIZE,0x10000
-	.set	P_STACK_GUARD,0x10
+	.code64
+	.globl	ap_entry64
+
+/* Entry point */
+ap_entry64:
+	cli
+	xorl	%eax,%eax
+	movl	%eax,%ss
+	movl	%eax,%ds
+	movl	%eax,%es
+	movl	%eax,%fs
+	movl	%eax,%gs
+	jmp	apstart64

@@ -1,4 +1,3 @@
-/* -*- Mode: asm -*- */
 /*_
  * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
@@ -22,17 +21,58 @@
  * SOFTWARE.
  */
 
-	/* Temporary GDT for application processors */
-	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
-	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
-	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
-	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
+	.include	"asmconst.h"
 
-	.set	APIC_BASE,0xfee00000
+	.text
 
-	/* Kernel page table */
-	.set	KERNEL_PGT,0x00079000
-	/* Per-processor information */
-	.set	P_DATA_BASE,0x01000000
-	.set	P_DATA_SIZE,0x10000
-	.set	P_STACK_GUARD,0x10
+	.code32
+	.globl	ap_entry32
+
+/* Entry point */
+ap_entry32:
+	cli
+
+	/* %cs is automatically set after the long jump operation */
+	/* Setup other segment registers */
+	movl	$AP_GDT_DATA_SEL,%eax
+	movl	%eax,%ss
+	movl	%eax,%ds
+	movl	%eax,%es
+	movl	%eax,%fs
+	movl	%eax,%gs
+
+	/* Obtain APIC ID */
+	movl	$APIC_BASE,%edx
+	movl	0x20(%edx),%eax
+	shrl	$24,%eax
+
+	/* Setup stack with 16 byte guard */
+	addl	$1,%eax
+	movl	$P_DATA_SIZE,%ebx
+	mull	%ebx		/* [%edx:%eax] = %eax * P_DATA_SIZE */
+	addl	$P_DATA_BASE,%eax
+	subl	$P_STACK_GUARD,%eax
+	movl	%eax,%esp
+
+	/* Enable PAE */
+	movl	$0x20,%eax	/* CR4[bit 5] = PAE */
+	movl	%eax,%cr4
+
+	/* Setup page table register */
+	movl	$KERNEL_PGT,%ebx
+	movl	%ebx,%cr3
+
+	/* Enable long mode */
+	movl	$0xc0000080,%ecx	/* EFER MSR number */
+	rdmsr			/* Read from 64bit-specific register */
+	btsl	$8,%eax		/* LME bit = 1 */
+	wrmsr			/* Write to 64bit-specific register */
+
+	/* Activate page translation and long mode */
+	movl	$0x80000001,%eax
+	movl	%eax,%cr0
+
+	/* Load code64 descriptor */
+	pushl	$AP_GDT_CODE64_SEL
+	pushl	$ap_entry64
+	lret

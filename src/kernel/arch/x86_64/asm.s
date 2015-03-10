@@ -25,6 +25,7 @@
 
 	.code64
 	.globl	kstart64
+	.globl	apstart64
 	.globl	_halt
 	.globl	_pause
 	.globl	_lgdt
@@ -46,6 +47,11 @@ kstart64:
 	call	_bsp_init
 	/* Start the kernel code */
 	call	_kmain
+	jmp	_halt
+
+/* Entry point for the application processors */
+apstart64:
+	jmp	_halt
 
 /* void halt(void) */
 _halt:
