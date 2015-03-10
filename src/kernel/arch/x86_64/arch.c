@@ -42,13 +42,6 @@ bsp_init(void)
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
 
-    /* Load ACPI: In this function, we need to get the following values.
-       - I/O APIC base address
-       - Power management timer variables
-       - CMOS century
-    */
-    acpi_load(&acpi);
-
     /* Initialize global descriptor table */
     gdt_init();
     gdt_load();
@@ -56,6 +49,16 @@ bsp_init(void)
     /* Initialize interrupt descriptor table */
     idt_init();
     idt_load();
+
+    /* Load ACPI: In this function, we need to get the following values.
+       - I/O APIC base address
+       - Power management timer variables
+       - CMOS century
+    */
+    acpi_load(&acpi);
+
+    /* Initialize the local APIC */
+    lapic_init();
 
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
