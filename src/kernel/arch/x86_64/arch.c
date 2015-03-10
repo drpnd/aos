@@ -108,8 +108,7 @@ _load_trampoline(void)
         return -1;
     }
     for ( i = 0; i < tsz; i++ ) {
-        *(volatile u8 *)((u64)(TRAMPOLINE_VEC << 12) + i)
-            = *(volatile u8 *)((u64)trampoline + i);
+        *(u8 *)((u64)(TRAMPOLINE_VEC << 12) + i) = *(u8 *)((u64)trampoline + i);
     }
 
     return 0;
