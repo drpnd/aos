@@ -46,6 +46,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/arch.o \
 	kernel/arch/$(ARCH)/desc.o \
 	kernel/arch/$(ARCH)/acpi.o \
+	kernel/arch/$(ARCH)/apic.o \
 	kernel/arch/$(ARCH)/i8254.o \
 	kernel/arch/$(ARCH)/trampoline.o \
 	kernel/arch/$(ARCH)/ap_entry32.o \

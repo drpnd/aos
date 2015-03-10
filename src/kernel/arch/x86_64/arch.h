@@ -59,6 +59,9 @@
 #define P_DATA_BASE             (u64)0x01000000
 #define P_DATA_SIZE             0x10000
 #define P_STACK_GUARD           0x10
+/* Trampoline: 0x70 (0x70000) */
+#define TRAMPOLINE_VEC          0x70
+#define TRAMPOLINE_MAX_SIZE     0x1000
 
 /*
  * Boot information from boot loader
@@ -87,6 +90,13 @@ u32 inl(u16);
 void outb(u16, u8);
 void outw(u16, u16);
 void outl(u16, u32);
+u32 mfread32(u64);
+void mfwrite32(u64, u32);
+int this_cpu(void);
+
+/* in trampoline.s */
+void trampoline(void);
+void trampoline_end(void);
 
 #endif /* _KERNEL_ARCH_H */
 

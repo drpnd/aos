@@ -1,4 +1,3 @@
-/* -*- Mode: asm -*- */
 /*_
  * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
@@ -22,20 +21,46 @@
  * SOFTWARE.
  */
 
-	/* Temporary GDT for application processors */
-	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
-	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
-	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
-	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
+#ifndef _KERNEL_APIC_H
+#define _KERNEL_APIC_H
 
-	.set	APIC_BASE,0xfee00000
+#include <aos/const.h>
 
-	/* Kernel page table */
-	.set	KERNEL_PGT,0x00079000
-	/* Per-processor information */
-	.set	P_DATA_BASE,0x01000000
-	.set	P_DATA_SIZE,0x10000
-	.set	P_STACK_GUARD,0x10
-	/* Trampoline */
-	.set	TRAMPOLINE_VEC,0x70
+#define APIC_BASE               0xfee00000
+#define APIC_SIVR               0x0f0
+#define APIC_ICR_LOW            0x300
+#define APIC_ICR_HIGH           0x310
+#define APIC_LVT_TMR            0x320
+#define APIC_TMRDIV             0x3e0
+#define APIC_INITTMR            0x380
+#define APIC_CURTMR             0x390
 
+#define APIC_LVT_DISABLE        0x10000
+#define APIC_LVT_ONESHOT        0x00000000
+#define APIC_LVT_PERIODIC       0x00020000
+#define APIC_LVT_TSC_DEADLINE   0x00040000
+
+#define APIC_TMRDIV_X1          0xb
+#define APIC_TMRDIV_X2          0x0
+#define APIC_TMRDIV_X4          0x1
+#define APIC_TMRDIV_X8          0x2
+#define APIC_TMRDIV_X16         0x3
+#define APIC_TMRDIV_X32         0x8
+#define APIC_TMRDIV_X64         0x9
+#define APIC_TMRDIV_X128        0xa
+#define APIC_FREQ_PROBE         100000
+
+void lapic_init(void);
+void lapic_send_init_ipi(void);
+void lapic_send_startup_ipi(u8);
+
+#endif /* _KERNEL_APIC_H */
+
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

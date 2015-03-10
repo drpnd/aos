@@ -37,6 +37,8 @@
 	.globl	_outb
 	.globl	_outw
 	.globl	_outl
+	.globl	_mfread32
+	.globl	_mfwrite32
 
 	.set	APIC_BASE,0xfee00000
 	.set	APIC_EOI,0x0b0
@@ -51,6 +53,7 @@ kstart64:
 
 /* Entry point for the application processors */
 apstart64:
+	call	_ap_init
 	jmp	_halt
 
 /* void halt(void) */
@@ -120,6 +123,18 @@ _outl:
 	movw	%di,%dx
 	movl	%edi,%eax
 	outl	%eax,%dx
+	ret
+
+/* u32 mfread32(u64 addr); */
+_mfread32:
+	mfence			/* Prevent out-of-order execution */
+	movl	(%rdi),%eax
+	ret
+
+/* void mfwrite32(u64 addr, u32 val); */
+_mfwrite32:
+	mfence			/* Prevent out-of-order execution */
+	movl	%esi,(%rdi)
 	ret
 
 /* Null function for interrupt handler */

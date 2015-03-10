@@ -26,6 +26,9 @@
 #include "desc.h"
 #include "acpi.h"
 #include "i8254.h"
+#include "apic.h"
+
+static int _load_trampoline(void);
 
 /*
  * Initialize the bootstrap processor
@@ -58,13 +61,71 @@ bsp_init(void)
     video = (u16 *)0xb8000;
     *(video + 0) = 0x0700 | '*';
 
-    /* Testing the busy wait function, sleep 1 second */
-    acpi_busy_usleep(&acpi, 1000000);
+    /* Load trampoline code */
+    _load_trampoline();
 
-    /* Display a mark to notify me that this code is properly executed (one
-       second after the previous mark was displayed) */
+    /* Send INIT IPI */
+    lapic_send_init_ipi();
+
+    /* Wait 10 ms */
+    acpi_busy_usleep(&acpi, 10000);
+
+    /* Send a Start Up IPI */
+    lapic_send_startup_ipi(TRAMPOLINE_VEC & 0xff);
+
+    /* Wait 200 us */
+    acpi_busy_usleep(&acpi, 200);
+
+    /* Send another Start Up IPI */
+    lapic_send_startup_ipi(TRAMPOLINE_VEC & 0xff);
+
+    /* Wait 200 us */
+    acpi_busy_usleep(&acpi, 200);
+}
+
+/*
+ * Initialize the application processor
+ */
+void
+ap_init(void)
+{
+    u16 *video;
+
     video = (u16 *)0xb8000;
-    *(video + 1) = 0x0700 | '*';
+    *(video + this_cpu()) = 0x0700 | '*';
+}
+
+static int
+_load_trampoline(void)
+{
+    int i;
+    int tsz;
+
+    /* Check and copy trampoline code */
+    tsz = (u64)trampoline_end - (u64)trampoline;
+    if ( tsz > TRAMPOLINE_MAX_SIZE ) {
+        /* Error */
+        return -1;
+    }
+    for ( i = 0; i < tsz; i++ ) {
+        *(volatile u8 *)((u64)(TRAMPOLINE_VEC << 12) + i)
+            = *(volatile u8 *)((u64)trampoline + i);
+    }
+
+    return 0;
+}
+
+/*
+ * Return this CPU ID
+ */
+int
+this_cpu(void)
+{
+    u32 reg;
+
+    reg = mfread32(APIC_BASE + 0x20);
+
+    return reg >> 24;
 }
 
 /*

@@ -33,16 +33,22 @@
 
 	.code16
 
-/* Trampoline code starts */
+/* Trampoline code starts.  Note that the trampoline code is loaded into a
+ * 4 KiB (aligned) page in the lower 1 MiB of memory.  The %cs is automatically
+ * set after the SIPI.  %ip is expected to be zero but not sure.  So, we first
+ * calculate the offsets of idtr and gdtr.
+ */
 _trampoline:
 	cli
 
-	movw	%cs,%ax
-	movw	%ax,%ds		/* Copy the code segment to the data segment */
+	/* Calculate the base address */
+	xorl	%eax,%eax
+	movw	$(TRAMPOLINE_VEC << 8),%ax
+	movw	%ax,%ds
 
 	/* Setup GDT and IDT */
-	lidt	(idtr-_trampoline)
-	lgdt	(gdtr-_trampoline)
+	lidt	%ds:(idtr - _trampoline)	/* N.B., %ds: can be omitted */
+	lgdt	%ds:(gdtr - _trampoline)	/* N.B., %ds: can be omitted */
 
 	/* Turn on protected mode */
 	movl	%cr0,%eax
