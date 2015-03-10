@@ -59,7 +59,7 @@ bsp_init(void)
 
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
-    *(video + 0) = 0x0700 | '*';
+    *(video + lapic_id()) = 0x0700 | '*';
 
     /* Load trampoline code */
     _load_trampoline();
@@ -92,7 +92,7 @@ ap_init(void)
     u16 *video;
 
     video = (u16 *)0xb8000;
-    *(video + this_cpu()) = 0x0700 | '*';
+    *(video + lapic_id()) = 0x0700 | '*';
 }
 
 static int
@@ -113,15 +113,6 @@ _load_trampoline(void)
     }
 
     return 0;
-}
-
-/*
- * Return this APIC ID
- */
-int
-this_cpu(void)
-{
-    return lapic_id();
 }
 
 /*

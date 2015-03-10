@@ -25,10 +25,15 @@
 #include "apic.h"
 #include "arch.h"
 
+/* ICR delivery mode */
 #define ICR_FIXED               0x00000000
 #define ICR_INIT                0x00000500
 #define ICR_STARTUP             0x00000600
+/* ICR status */
+#define ICR_SEND_PENDING        0x00001000
+/* ICR level */
 #define ICR_LEVEL_ASSERT        0x00004000
+/* ICR destination */
 #define ICR_DEST_NOSHORTHAND    0x00000000
 #define ICR_DEST_SELF           0x00040000
 #define ICR_DEST_ALL_INC_SELF   0x00080000
@@ -61,7 +66,7 @@ lapic_send_init_ipi(void)
     icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
 
     icrl = (icrl & ~0x000cdfff) | ICR_INIT | ICR_DEST_ALL_EX_SELF;
-    icrh = (icrh & 0x000fffff) /*| (0xff<<24)*/;
+    icrh = (icrh & 0x000fffff);
 
     mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
     mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
@@ -79,10 +84,11 @@ lapic_send_startup_ipi(u8 vector)
     do {
         icrl = mfread32(APIC_BASE + APIC_ICR_LOW);
         icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
-    } while ( icrl & (1<<12) );
+        /* Wait until it's idle */
+    } while ( icrl & (ICR_SEND_PENDING) );
 
     icrl = (icrl & ~0x000cdfff) | ICR_STARTUP | ICR_DEST_ALL_EX_SELF | vector;
-    icrh = (icrh & 0x000fffff) /*| (0xff<<24)*/;
+    icrh = (icrh & 0x000fffff);
 
     mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
     mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
