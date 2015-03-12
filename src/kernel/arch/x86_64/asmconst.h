@@ -30,12 +30,23 @@
 
 	.set	APIC_BASE,0xfee00000
 
+	/* # of interrupts */
+	.set	IDT_NR,256
 	/* Kernel page table */
 	.set	KERNEL_PGT,0x00079000
-	/* Per-processor information */
+	/* Per-processor information (struct p_data) */
 	.set	P_DATA_BASE,0x01000000
 	.set	P_DATA_SIZE,0x10000
 	.set	P_STACK_GUARD,0x10
+	.set	P_TSS_SIZE,104	/* sizeof(struct tss) */
+	.set	P_TSS_OFFSET,(0x20 + IDT_NR * 8)	/* struct tss */
+	.set	P_CUR_TASK_OFFSET,(P_TSS_OFFSET + P_TSS_SIZE)	/* cur_task */
+        .set	P_NEXT_TASK_OFFSET,(P_CUR_TASK_OFFSET + 8)	/* next_task */
+	/* Task information (struct arch_task) */
+	.set	TASK_RP,0
+	.set	TASK_SP0,8
+	.set	TASK_KTASK,32
+	/* TSS */
+	.set	TSS_SP0,4
 	/* Trampoline */
 	.set	TRAMPOLINE_VEC,0x70
-

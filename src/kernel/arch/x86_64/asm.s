@@ -21,6 +21,7 @@
  * SOFTWARE.
  */
 
+	.include	"asmconst.h"
 	.text
 
 	.code64
@@ -43,7 +44,7 @@
 	.globl	_kmemcmp
 	.globl	_intr_null
 
-	.set	APIC_BASE,0xfee00000
+	.set	APIC_LAPIC_ID,0x020
 	.set	APIC_EOI,0x0b0
 	.set	MSR_APIC_BASE,0x1b
 
@@ -193,6 +194,8 @@ _intr_null:
 	popq	%rdx
 	iretq
 
+
+/* macro to save registers to the stackframe and call the interrupt handler */
 .macro	intr_lapic_isr vec
 	pushq	%rax
 	pushq	%rbx
@@ -212,7 +215,7 @@ _intr_null:
 	pushw	%fs
 	pushw	%gs
 	movq	$\vec,%rdi
-	//call	/* Call the interrupt handler */
+	//call			/* Call the interrupt handler */
 	/* EOI for the local APIC */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
@@ -225,6 +228,7 @@ _intr_null:
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
 .endm
 
+/* macro to restore from the stackframe */
 .macro	intr_lapic_isr_done
 	/* Pop all registers from the stackframe */
 	popw	%gs
@@ -249,4 +253,43 @@ _intr_null:
 
 /* Task restart */
 _task_restart:
+	/* Get the APIC ID */
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
+	xorq	%rax,%rax
+	movl	APIC_LAPIC_ID(%rdx),%eax
+	/* Calculate the processor data space from the APIC ID */
+	movq	$P_DATA_SIZE,%rbx
+	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
+	movq	%rax,%rbp
+	/* If the next task is not scheduled, immediately restart this task */
+	cmpq	$0,P_NEXT_TASK_OFFSET(%rbp)
+	jz	2f
+	/* If the current task is null, then do not need to save anything */
+	cmpq	$0,P_CUR_TASK_OFFSET(%rbp)
+	jz	1f
+	/* Save the stack pointer (restart point) */
+	movq	P_CUR_TASK_OFFSET(%rbp),%rax
+	movq	%rsp,TASK_RP(%rax)
+1:
+	/* Notify that the current task is switched (to the kernel) */
+	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
+	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
+	//callq
+	/* Task switch (set the stack frame of the new task) */
+	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
+	movq	%rax,P_CUR_TASK_OFFSET(%rbp)
+	movq	TASK_RP(%rax),%rsp
+	movq	$0,P_NEXT_TASK_OFFSET(%rbp)
+	/* ToDo: Load LDT if necessary */
+	/* Setup sp0 in TSS */
+	movq	P_CUR_TASK_OFFSET(%rbp),%rax
+	movq	TASK_SP0(%rax),%rdx
+	leaq	P_TSS_OFFSET(%rbp),%rax
+	movq	%rdx,TSS_SP0(%rax)
+2:
+	intr_lapic_isr_done
 	iretq

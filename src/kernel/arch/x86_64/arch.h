@@ -32,9 +32,6 @@
 /* Maximum number of processors */
 #define MAX_PROCESSORS          256
 
-/* # of IDT entries */
-#define IDT_NR                  256
-
 /* GDT and IDT */
 #define GDT_ADDR                (u64)0x74000
 #define GDT_MAX_SIZE            0x2000
@@ -57,6 +54,8 @@
 /*********************************************************/
 /* The folloowing values are also defined in asmconst.h */
 /*********************************************************/
+/* # of IDT entries */
+#define IDT_NR                  256
 /* Kernel page table */
 #define KERNEL_PGT              0x00079000ULL
 /* Per-processor information (flags, cpuinfo, stats, tss, task, stack) */
