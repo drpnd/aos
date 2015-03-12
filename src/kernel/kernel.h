@@ -36,6 +36,7 @@ struct ktask {
 
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in the assembly code */
+#define HAS_KMEMCMP     1       /* kmemcmp is implemented in the assembly code */
 void * kmemset(void *, int, size_t);
 int kmemcmp(void *, void *, size_t);
 void halt(void);

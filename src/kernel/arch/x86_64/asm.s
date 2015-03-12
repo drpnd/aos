@@ -45,6 +45,7 @@
 
 	.set	APIC_BASE,0xfee00000
 	.set	APIC_EOI,0x0b0
+	.set	MSR_APIC_BASE,0x1b
 
 /* Entry point to the 64-bit kernel */
 kstart64:
@@ -190,4 +191,62 @@ _intr_null:
 	movq	$APIC_BASE,%rdx
 	movq	$0,APIC_EOI(%rdx)
 	popq	%rdx
+	iretq
+
+.macro	intr_lapic_isr vec
+	pushq	%rax
+	pushq	%rbx
+	pushq	%rcx
+	pushq	%rdx
+	pushq	%r8
+	pushq	%r9
+	pushq	%r10
+	pushq	%r11
+	pushq	%r12
+	pushq	%r13
+	pushq	%r14
+	pushq	%r15
+	pushq	%rsi
+	pushq	%rdi
+	pushq	%rbp
+	pushw	%fs
+	pushw	%gs
+	movq	$\vec,%rdi
+	//call	/* Call the interrupt handler */
+	/* EOI for the local APIC */
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
+				/*  32 bits of %rax and %rdx are cleared */
+				/*  bit [35:12]: APIC Base, [11]: EN */
+				/*  [10]: EXTD, and [8]:BSP*/
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
+	movl	$0,APIC_EOI(%rdx)	/* EOI */
+.endm
+
+.macro	intr_lapic_isr_done
+	/* Pop all registers from the stackframe */
+	popw	%gs
+	popw	%fs
+	popq	%rbp
+	popq	%rdi
+	popq	%rsi
+	popq	%r15
+	popq	%r14
+	popq	%r13
+	popq	%r12
+	popq	%r11
+	popq	%r10
+	popq	%r9
+	popq	%r8
+	popq	%rdx
+	popq	%rcx
+	popq	%rbx
+	popq	%rax
+.endm
+
+
+/* Task restart */
+_task_restart:
 	iretq

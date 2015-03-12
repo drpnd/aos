@@ -55,6 +55,30 @@ kmemset(void *b, int c, size_t len)
 }
 #endif
 
+#if !defined(HAS_KMEMCMP) || !HAS_KMEMCMP
+/*
+ * kmemcmp
+ */
+int
+kmemcmp(void *s1, void *s2, size_t n)
+{
+    size_t i;
+    int diff;
+
+    i = 0;
+    while ( n > 0 ) {
+        diff = (u8)((u8 *)s1)[i] - ((u8 *)s2)[i];
+        if ( diff ) {
+            return diff;
+        }
+        i++;
+        n--;
+    }
+
+    return 0;
+}
+#endif
+
 /*
  * Local variables:
  * tab-width: 4
