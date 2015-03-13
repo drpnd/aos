@@ -62,18 +62,44 @@ gdt_setup_desc(struct gdt_desc *e, u32 base, u32 limit, u8 type, u8 dpl, u8 l,
 }
 
 /*
+ * Setup global descriptor table for TSS
+ */
+static void
+gdt_setup_desc_tss(struct gdt_desc_tss *e, u64 base, u32 limit, u8 type, u8 dpl,
+                   u8 g)
+{
+    limit &= 0xfffff;
+    type &= 0xf;
+
+    /* g => *4KiB */
+    e->w0 = limit & 0xffff;
+    e->w1 = base & 0xffff;
+    e->w2 = ((base >> 16) & 0xff) | ((u64)type << 8) | ((u64)dpl << 13)
+        | ((u64)1 << 15);
+    e->w3 = ((limit >> 16) & 0xf) | ((u64)g << 7)
+        | (((base >> 24) & 0xff) << 8);
+    e->w4 = base >> 32;
+    e->w5 = base >> 40;
+    e->w6 = 0;
+    e->w7 = 0;
+}
+
+/*
  * Initialize global descriptor table
  */
 void
 gdt_init(void)
 {
+    int i;
     u64 sz;
     struct gdt_desc *gdt;
+    struct gdt_desc_tss *tss;
     struct gdtr *gdtr;
     u8 code;
     u8 data;
 
-    sz = GDT_NR * sizeof(struct gdt_desc);
+    sz = GDT_NR * sizeof(struct gdt_desc)
+        + MAX_PROCESSORS * sizeof(struct gdt_desc_tss);
     /* GDT register */
     gdtr = (struct gdtr *)(GDT_ADDR + sz);
     /* Global descriptors */
@@ -94,6 +120,14 @@ gdt_init(void)
     gdt_setup_desc(&gdt[7], 0, 0xfffff, code, 3, 1, 0, 1); /* Ring 3 code */
     gdt_setup_desc(&gdt[8], 0, 0xfffff, data, 3, 1, 0, 1); /* Ring 3 data */
 
+    /* TSS */
+    tss = (struct gdt_desc_tss *)(GDT_ADDR + GDT_TSS_SEL_BASE);
+    for ( i = 0; i < MAX_PROCESSORS; i++ ) {
+        gdt_setup_desc_tss(&tss[i],
+                           P_DATA_BASE + i * P_DATA_SIZE + P_TSS_OFFSET,
+                           sizeof(struct tss) - 1, TSS_INACTIVE, 0, 0);
+    }
+
     /* Set the GDT base address and the table size */
     gdtr->base = (u64)gdt;
     gdtr->size = sz - 1;
@@ -107,7 +141,8 @@ gdt_load(void)
 {
     struct gdtr *gdtr;
 
-    gdtr = (struct gdtr *)(GDT_ADDR + GDT_NR * sizeof(struct gdt_desc));
+    gdtr = (struct gdtr *)(GDT_ADDR + GDT_NR * sizeof(struct gdt_desc)
+                           + MAX_PROCESSORS * sizeof(struct gdt_desc_tss));
     lgdt(gdtr, GDT_RING0_CODE_SEL);
 }
 
@@ -225,7 +260,7 @@ tr_load(int nr)
 {
     int tr;
 
-    tr = GDT_TSS_SEL_BASE + (nr * 2) * 8;
+    tr = GDT_TSS_SEL_BASE + nr * sizeof(struct gdt_desc_tss);
     ltr(tr);
 }
 

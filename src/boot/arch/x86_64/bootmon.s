@@ -120,6 +120,8 @@ bootmon:
 	/* Load the kernel */
 	movb	(drive),%dl
 	call	kernload
+	/* Disable PIC */
+	call	disable_pic
 	jmp	entry16
 3:
 	/* Power off */

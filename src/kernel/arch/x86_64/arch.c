@@ -46,6 +46,13 @@ bsp_init(void)
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
 
+    /* Reset all processors */
+    for ( i = 0; i < MAX_PROCESSORS; i++ ) {
+        /* Fill the processor data space with zero excluding stack area */
+        kmemset((u8 *)((u64)P_DATA_BASE + i * P_DATA_SIZE), 0,
+                sizeof(struct p_data));
+    }
+
     /* Initialize global descriptor table */
     gdt_init();
     gdt_load();
@@ -57,20 +64,34 @@ bsp_init(void)
     /* Load ACPI */
     acpi_load(&arch_acpi);
 
+    /* Set up interrupt vector */
+    idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
+
+    /* Initialize I/O APIC */
+    ioapic_init();
+
+    /* Setup interrupt service routine then initialize I/O APIC */
+    for ( i = 0; i < 32; i++ ) {
+        ioapic_map_intr(IV_IRQ(i), i, arch_acpi.acpi_ioapic_base); /* IRQn */
+    }
+
+    /* Load LDT */
+    lldt(0);
+
+    /* Initialize TSS */
+    tss_init();
+    tr_load(lapic_id());
+
     /* Initialize the local APIC */
     lapic_init();
 
-    /* Reset all processors */
-    for ( i = 0; i < MAX_PROCESSORS; i++ ) {
-        /* Fill the processor data space with zero excluding stack area */
-        kmemset((u8 *)((u64)P_DATA_BASE + i * P_DATA_SIZE), 0,
-                sizeof(struct p_data));
-    }
-
-    /* Enable this processor*/
+    /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
     pdata->flags |= 1;
+
+    /* Estimate the frequency */
+    pdata->freq = lapic_estimate_freq();
 
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
@@ -96,6 +117,9 @@ bsp_init(void)
 
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
+
+    /* Initialize local APIC counter */
+    lapic_start_timer(HZ, IV_LOC_TMR);
 }
 
 /*
@@ -146,10 +170,11 @@ struct p_data *
 this_cpu(void)
 {
     struct p_data *pdata;
+
     pdata = (struct p_data *)(P_DATA_BASE + lapic_id() * P_DATA_SIZE);
+
     return pdata;
 }
-
 
 /*
  * Local variables:

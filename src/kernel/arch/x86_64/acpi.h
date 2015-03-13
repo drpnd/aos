@@ -207,6 +207,8 @@ u32 acpi_get_timer(struct acpi *);
 u64 acpi_get_timer_period(struct acpi *);
 u64 acpi_get_timer_hz(void);
 
+extern struct acpi arch_acpi;
+
 #endif /* _KERNEL_ACPI_H */
 
 /*

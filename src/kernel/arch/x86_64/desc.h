@@ -35,6 +35,9 @@
 #define IDT_PRESENT     0x80
 #define IDT_INTGATE     0x0e
 
+#define TSS_INACTIVE    0x9
+#define TSS_BUSY        0xb
+
 /*
  * Global Descriptor
  *  base: 32-bit base address of the memory space
@@ -103,7 +106,9 @@ void gdt_init(void);
 void gdt_load(void);
 void idt_init(void);
 void idt_load(void);
-void idt_setup_intr_gate(int nr, void *target);
+void idt_setup_intr_gate(int, void *);
+void tss_init(void);
+void tr_load(int);
 
 #endif /* _KERNEL_DESC_H */
 

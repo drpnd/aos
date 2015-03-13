@@ -31,6 +31,7 @@
 	.globl	_pause
 	.globl	_lgdt
 	.globl	_lidt
+	.globl	_lldt
 	.globl	_ltr
 	.globl	_inb
 	.globl	_inw
@@ -42,7 +43,9 @@
 	.globl	_mfwrite32
 	.globl	_kmemset
 	.globl	_kmemcmp
+	.globl	_asm_ioapic_map_intr
 	.globl	_intr_null
+	.globl	_intr_apic_loc_tmr
 
 	.set	APIC_LAPIC_ID,0x020
 	.set	APIC_EOI,0x0b0
@@ -66,9 +69,7 @@ apstart64:
 
 /* void halt(void) */
 _halt:
-	sti
 	hlt
-	cli
 	ret
 
 /* void pause(void) */
@@ -79,22 +80,27 @@ _pause:
 /* void lgdt(void *gdtr, u64 selector) */
 _lgdt:
 	lgdt	(%rdi)
+	/* Reload GDT */
+	pushq	%rsi
+	pushq	$1f	/* Just to do ret */
+	lretq
+1:
 	/* Set data selector */
 	movq	%rsi,%rax
 	addq	$8,%rax
 	movq	%rax,%ds
 	movq	%rax,%es
 	movq	%rax,%ss
-	/* Reload GDT */
-	pushq	%rsi
-	pushq	$1f	/* Just to do ret */
-	lretq
-1:
 	ret
 
 /* void lidt(void *idtr) */
 _lidt:
 	lidt	(%rdi)
+	ret
+
+/* void lldt(u16) */
+_lldt:
+	lldt	%di
 	ret
 
 /* void ltr(u16) */
@@ -185,13 +191,45 @@ _kmemcmp:
 1:
 	ret
 
+
+/* void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base) */
+_asm_ioapic_map_intr:
+	/* Copy arguments */
+	movq	%rdi,%rax       /* src */
+	movq	%rsi,%rcx       /* tbldst */
+	/* rdx = ioapic_base */
+
+	/* *(u32 *)(ioapic_base + 0x00) = tbldst * 2 + 0x10 */
+	shlq	$1,%rcx         /* tbldst * 2 */
+	addq	$0x10,%rcx      /* tbldst * 2 + 0x10 */
+	sfence
+	movl	%ecx,0x00(%rdx) /* IOREGSEL (0x00) */
+	/* *(u32 *)(ioapic_base + 0x10) = (u32)src */
+	sfence
+	movl	%eax,0x10(%rdx) /* IOWIN (0x10) */
+	shrq	$32,%rax
+	/* *(u32 *)(ioapic_base + 0x00) = tbldst * 2 + 0x10 + 1 */
+	addq	$1,%rcx         /* tbldst * 2 + 0x10 + 1 */
+	sfence
+	movl	%ecx,0x00(%rdx)
+	/* *(u32 *)(ioapic_base + 0x10) = (u32)(src >> 32) */
+	sfence
+	movl	%eax,0x10(%rdx)
+	ret
+
+
 /* Null function for interrupt handler */
 _intr_null:
-	pushq	%rdx
 	/* APIC EOI */
-	movq	$APIC_BASE,%rdx
-	movq	$0,APIC_EOI(%rdx)
-	popq	%rdx
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
+				/*  32 bits of %rax and %rdx are cleared */
+				/*  bit [35:12]: APIC Base, [11]: EN */
+				/*  [10]: EXTD, and [8]:BSP*/
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
+	movl	$0,APIC_EOI(%rdx)	/* EOI */
 	iretq
 
 
@@ -250,6 +288,13 @@ _intr_null:
 	popq	%rax
 .endm
 
+/* Interrupt handler for local APIC timer */
+_intr_apic_loc_tmr:
+	intr_lapic_isr 0x50
+	//jmp     _task_restart
+	movq	%rdx,%dr0
+	intr_lapic_isr_done
+	iretq
 
 /* Task restart */
 _task_restart:

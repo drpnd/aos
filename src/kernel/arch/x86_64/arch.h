@@ -33,9 +33,9 @@
 #define MAX_PROCESSORS          256
 
 /* GDT and IDT */
-#define GDT_ADDR                (u64)0x74000
+#define GDT_ADDR                0x74000ULL
 #define GDT_MAX_SIZE            0x2000
-#define IDT_ADDR                (u64)0x76000
+#define IDT_ADDR                0x76000ULL
 #define IDT_MAX_SIZE            0x2000
 
 /* GDT selectors */
@@ -51,6 +51,11 @@
 #define GDT_RING3_DATA_SEL      (8<<3)
 #define GDT_TSS_SEL_BASE        (9<<3)
 
+/* Tick */
+#define HZ                      100
+#define IV_LOC_TMR              0x50
+#define IV_IRQ(n)       (0x20 + (n))
+
 /*********************************************************/
 /* The folloowing values are also defined in asmconst.h */
 /*********************************************************/
@@ -62,6 +67,7 @@
 #define P_DATA_BASE             0x01000000ULL
 #define P_DATA_SIZE             0x10000
 #define P_STACK_GUARD           0x10
+#define P_TSS_OFFSET            (0x20 + IDT_NR * 8)
 /* Trampoline: 0x70 (0x70000) */
 #define TRAMPOLINE_VEC          0x70
 #define TRAMPOLINE_MAX_SIZE     0x1000
@@ -194,8 +200,10 @@ struct p_data * this_cpu(void);
 /* in asm.s */
 void lidt(void *);
 void lgdt(void *, u64);
+void lldt(u16);
 void ltr(u16);
 void intr_null(void);
+void intr_apic_loc_tmr(void);
 void pause(void);
 u8 inb(u16);
 u16 inw(u16);

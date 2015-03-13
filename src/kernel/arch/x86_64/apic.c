@@ -23,6 +23,7 @@
 
 #include <aos/const.h>
 #include "apic.h"
+#include "acpi.h"
 #include "arch.h"
 
 /* ICR delivery mode */
@@ -105,6 +106,123 @@ lapic_id(void)
     reg = *(u32 *)(APIC_BASE + APIC_LAPIC_ID);
 
     return reg >> 24;
+}
+
+/*
+ * Estimate bus frequency using busy usleep
+ */
+u64
+lapic_estimate_freq(void)
+{
+    u32 t0;
+    u32 t1;
+    u32 probe;
+    u64 ret;
+
+    /* Set probe timer */
+    probe = APIC_FREQ_PROBE;
+
+    /* Disable timer */
+    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+
+    /* Set divide configuration */
+    mfwrite32(APIC_BASE + APIC_TMRDIV, APIC_TMRDIV_X16);
+
+    /* Vector: lvt[18:17] = 00 : oneshot */
+    mfwrite32(APIC_BASE + APIC_LVT_TMR, 0x0);
+
+    /* Set initial counter */
+    t0 = 0xffffffff;
+    mfwrite32(APIC_BASE + APIC_INITTMR, t0);
+
+    /* Sleep probing time */
+    acpi_busy_usleep(&arch_acpi, probe);
+
+    /* Disable current timer */
+    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+
+    /* Read current timer */
+    t1 = mfread32(APIC_BASE + APIC_CURTMR);
+
+    /* Calculate the APIC bus frequency */
+    ret = (u64)(t0 - t1) << 4;
+    ret = ret * 1000000 / probe;
+
+    return ret;
+}
+
+/*
+ * Start local APIC timer
+ */
+void
+lapic_start_timer(u64 freq, u8 vec)
+{
+    /* Estimate frequency first */
+    u64 busfreq;
+    struct p_data *pdata;
+
+    /* Get CPU frequency to this CPU data area */
+    pdata = this_cpu();
+    busfreq = pdata->freq;
+
+    /* Set counter */
+    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_PERIODIC | (u32)vec);
+    mfwrite32(APIC_BASE + APIC_TMRDIV, APIC_TMRDIV_X16);
+    mfwrite32(APIC_BASE + APIC_INITTMR, (busfreq >> 4) / freq);
+}
+
+/*
+ * Stop APIC timer
+ */
+void
+lapic_stop_timer(void)
+{
+    /* Disable timer */
+    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+}
+
+/*
+ * Initialize I/O APIC
+ */
+void
+ioapic_init(void)
+{
+    /* Ensure to disable i8259 PIC */
+    outb(0xa1, 0xff);
+    outb(0x21, 0xff);
+}
+
+/*
+ * Set a map entry of interrupt vector
+ */
+void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base);
+void
+ioapic_map_intr(u64 intvec, u64 tbldst, u64 ioapic_base)
+{
+    u64 val;
+
+    /*
+     * 63:56    destination field
+     * 16       interrupt mask (1: masked for edge sensitive)
+     * 15       trigger mode (1=level sensitive, 0=edge sensitive)
+     * 14       remote IRR (R/O) (1 if local APICs accept the level interrupts)
+     * 13       interrupt input pin polarity (0=high active, 1=low active)
+     * 12       delivery status (R/O)
+     * 11       destination mode (0=physical, 1=logical)
+     * 10:8     delivery mode
+     *          000 fixed, 001 lowest priority, 010 SMI, 011 reserved
+     *          100 NMI, 101 INIT, 110 reserved, 111 ExtINT
+     * 7:0      interrupt vector
+     */
+    val = intvec;
+
+    /* FIXME */
+    if ( val == 0x30 || val == 0x31 ) {
+        val |= (1ULL<<56);
+    }
+
+    /* To avoid compiler optimization, call assembler function */
+    asm_ioapic_map_intr(val, tbldst, ioapic_base);
 }
 
 /*
