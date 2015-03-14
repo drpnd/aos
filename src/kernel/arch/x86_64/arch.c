@@ -33,6 +33,9 @@ static int _load_trampoline(void);
 
 struct acpi arch_acpi;
 
+void intr_gpf(void);
+void intr_pf(void);
+
 /*
  * Initialize the bootstrap processor
  */
@@ -66,6 +69,10 @@ bsp_init(void)
 
     /* Set up interrupt vector */
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
+    /* Set general protection fault handler */
+    idt_setup_intr_gate(13, &intr_gpf);
+    /* Set page fault handler */
+    //idt_setup_intr_gate(14, &intr_pf);
 
     /* Initialize I/O APIC */
     ioapic_init();
@@ -119,6 +126,7 @@ bsp_init(void)
     acpi_busy_usleep(&arch_acpi, 200);
 
     /* Initialize local APIC counter */
+    __asm__ ("sti");
     lapic_start_timer(HZ, IV_LOC_TMR);
 }
 
@@ -131,10 +139,28 @@ ap_init(void)
     struct p_data *pdata;
     u16 *video;
 
+    /* Load global descriptor table */
+    gdt_load();
+
+    /* Load interrupt descriptor table */
+    idt_load();
+
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
     pdata->flags |= 1;
+
+    /* Estimate the frequency */
+    pdata->freq = lapic_estimate_freq();
+
+    /* Load LDT */
+    lldt(0);
+
+    /* Load TSS */
+    tr_load(lapic_id());
+
+    /* Initialize the local APIC */
+    lapic_init();
 
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;

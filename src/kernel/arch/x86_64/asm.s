@@ -45,6 +45,8 @@
 	.globl	_kmemcmp
 	.globl	_asm_ioapic_map_intr
 	.globl	_intr_null
+	.globl	_intr_gpf
+	.globl	_intr_pf
 	.globl	_intr_apic_loc_tmr
 
 	.set	APIC_LAPIC_ID,0x020
@@ -233,6 +235,38 @@ _intr_null:
 	iretq
 
 
+/* Interrupt handler for general protection fault
+ * Error code, EIP, CS, EFLAGS, (ESP, SS) */
+_intr_gpf:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rbx
+	movq	16(%rbp),%rbx
+	movq	%rbx,%dr0	/* 0x1001f */
+	movq	8(%rbp),%rbx
+	movq	%rbx,%dr1	/* 0x4b */
+	movq	0(%rbp),%rbx
+	movq	%rbx,%dr2	/* 0x100ffe0 */
+	//movq	(gpf_reentry),%rbx
+	//cmpq	$0,%rbx
+	//jz	1f
+	//movq	%rbx,16(%rbp)   /* Overwrite the reentry point (%rip) */
+1:	popq	%rbx
+	popq	%rbp
+	addq	$0x8,%rsp
+	iretq
+
+
+/* Interrupt handler for page fault */
+_intr_pf:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	//movq	%rsp,%dr0
+	popq	%rbp
+	addq	$0x8,%rsp
+	iretq
+
+
 /* macro to save registers to the stackframe and call the interrupt handler */
 .macro	intr_lapic_isr vec
 	pushq	%rax
@@ -292,7 +326,7 @@ _intr_null:
 _intr_apic_loc_tmr:
 	intr_lapic_isr 0x50
 	//jmp     _task_restart
-	movq	%rdx,%dr0
+	//movq	%rdx,%dr0
 	intr_lapic_isr_done
 	iretq
 
