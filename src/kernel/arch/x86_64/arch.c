@@ -126,7 +126,7 @@ bsp_init(void)
     acpi_busy_usleep(&arch_acpi, 200);
 
     /* Initialize local APIC counter */
-    __asm__ ("sti");
+    sti();
     lapic_start_timer(HZ, IV_LOC_TMR);
 }
 

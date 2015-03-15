@@ -202,6 +202,8 @@ void lidt(void *);
 void lgdt(void *, u64);
 void lldt(u16);
 void ltr(u16);
+void cli(void);
+void sti(void);
 void intr_null(void);
 void intr_apic_loc_tmr(void);
 void pause(void);

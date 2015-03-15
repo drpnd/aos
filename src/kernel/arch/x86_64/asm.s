@@ -33,6 +33,8 @@
 	.globl	_lidt
 	.globl	_lldt
 	.globl	_ltr
+	.globl	_sti
+	.globl	_cli
 	.globl	_inb
 	.globl	_inw
 	.globl	_inl
@@ -108,6 +110,16 @@ _lldt:
 /* void ltr(u16) */
 _ltr:
 	ltr	%di
+	ret
+
+/* void sti(void) */
+_sti:
+	sti
+	ret
+
+/* void cli(void) */
+_cli:
+	cli
 	ret
 
 /* u8 inb(u16 port) */
