@@ -73,7 +73,10 @@ apstart64:
 
 /* void halt(void) */
 _halt:
+	nop
 	hlt
+	nop
+	nop
 	ret
 
 /* void pause(void) */
@@ -234,6 +237,7 @@ _asm_ioapic_map_intr:
 
 /* Null function for interrupt handler */
 _intr_null:
+	movw	$0x0723,(0xb8000+2*80)
 	/* APIC EOI */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
@@ -248,15 +252,15 @@ _intr_null:
 
 
 /* Interrupt handler for general protection fault
- * Error code, EIP, CS, EFLAGS, (ESP, SS) */
+ * Error code, RIP, CS, RFLAGS, (RSP, SS) */
 _intr_gpf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rbx
 	movq	16(%rbp),%rbx
-	movq	%rbx,%dr0	/* 0x1001f */
+	movq	%rbx,%dr0	/* 0x1001f rip */
 	movq	8(%rbp),%rbx
-	movq	%rbx,%dr1	/* 0x4b */
+	movq	%rbx,%dr1	/* 0x4b error code */
 	movq	0(%rbp),%rbx
 	movq	%rbx,%dr2	/* 0x100ffe0 */
 	//movq	(gpf_reentry),%rbx

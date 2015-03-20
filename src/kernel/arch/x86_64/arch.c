@@ -127,7 +127,7 @@ bsp_init(void)
 
     /* Initialize local APIC counter */
     sti();
-    lapic_start_timer(HZ, IV_LOC_TMR);
+    //lapic_start_timer(HZ, IV_LOC_TMR);
 }
 
 /*

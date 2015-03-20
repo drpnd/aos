@@ -150,20 +150,14 @@ gdt_load(void)
  * Setup gate descriptor
  */
 static void
-idt_setup_gate_desc(int nr, u64 base, u16 selector, u8 flags)
+idt_setup_gate_desc(struct idt_gate_desc *idt, u64 base, u16 selector, u8 flags)
 {
-    struct idtr *idtr;
-    struct idt_gate_desc *idt;
-
-    idtr = (struct idtr *)(IDT_ADDR + sizeof(struct idt_gate_desc) * IDT_NR);
-    idt = (struct idt_gate_desc *)(idtr->base
-                                   + nr * sizeof(struct idt_gate_desc));
-    idt->target_lo = (u16)(base & 0xffff);
+    idt->target_lo = (u16)(base & 0xffffULL);
     idt->selector = (u16)selector;
     idt->reserved1 = 0;
     idt->flags = flags;
-    idt->target_mid = (u16)((base & 0xffff0000UL) >> 16);
-    idt->target_hi = (u16)((base & 0xffffffff00000000UL) >> 32);
+    idt->target_mid = (u16)((base & 0xffff0000ULL) >> 16);
+    idt->target_hi = (u16)((base & 0xffffffff00000000ULL) >> 32);
     idt->reserved2 = 0;
 }
 
@@ -173,7 +167,11 @@ idt_setup_gate_desc(int nr, u64 base, u16 selector, u8 flags)
 void
 idt_setup_intr_gate(int nr, void *target)
 {
-    idt_setup_gate_desc(nr, (u64)target, GDT_RING0_CODE_SEL,
+    struct idt_gate_desc *idt;
+
+    idt = (struct idt_gate_desc *)(IDT_ADDR
+                                   + nr * sizeof(struct idt_gate_desc));
+    idt_setup_gate_desc(idt, (u64)target, GDT_RING0_CODE_SEL,
                         IDT_PRESENT | IDT_INTGATE);
 }
 
