@@ -25,7 +25,8 @@ Hirochika Asai
 | checkpoint 7 | kernload | release/kernload |
 | checkpoint 8 | memmap   | release/memmap   |
 | checkpoint 9 | bspinit  | release/bspinit  |
-| checkpoint a | bspinit  | release/apinit  |
+| checkpoint a | bspinit  | release/apinit   |
+| checkpoint b | lapictmr | release/lapictmr |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -127,3 +128,7 @@ the APs, then waits 10 ms.
 4) The BSP broadcasts the second SIPI (start-up IPI), then wait 200 us.
 This procedure is called INIT-SIPI-SIPI IPI sequence
 (See Section 8.4.4.1 of Intel SDM).
+
+## Checkpoint b
+Towards the multitasking operating system, we setup the local APIC timer
+to generate periodic timer interrupts that will be used for the context switch.
