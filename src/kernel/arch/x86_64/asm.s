@@ -197,9 +197,7 @@ _kmemcmp:
 	xorq	%rax,%rax
 	movq	%rdx,%rcx	/* n */
 	cld			/* Ensure the DF cleared */
-	//cmpq	%rcx,%rcx	/* Set ZF; Special case for setz (when n = 0) */
 	repe	cmpsb		/* Compare byte at (%rsi) with byte at (%rdi) */
-	//setnz	%al		/* Set 1 if ZF = 0, otherwise set 0 */
 	jz	1f
 	decq	%rdi		/* rollback one */
 	decq	%rsi		/* rollback one */
@@ -268,8 +266,6 @@ _intr_null:
 	pushq	%rbp
 	pushw	%fs
 	pushw	%gs
-	movq	$\vec,%rdi
-	//call			/* Call the interrupt handler */
 	/* EOI for the local APIC */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
@@ -349,5 +345,6 @@ _intr_apic_loc_tmr:
 	intr_lapic_isr_done
 	iretq
 
+/* Counter */
 counter:
 	.word	0
