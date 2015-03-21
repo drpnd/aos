@@ -237,7 +237,6 @@ _asm_ioapic_map_intr:
 
 /* Null function for interrupt handler */
 _intr_null:
-	movw	$0x0723,(0xb8000+2*80)
 	/* APIC EOI */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
@@ -249,39 +248,6 @@ _intr_null:
 	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
 	iretq
-
-
-/* Interrupt handler for general protection fault
- * Error code, RIP, CS, RFLAGS, (RSP, SS) */
-_intr_gpf:
-	pushq	%rbp
-	movq	%rsp,%rbp
-	pushq	%rbx
-	movq	16(%rbp),%rbx
-	movq	%rbx,%dr0	/* 0x1001f rip */
-	movq	8(%rbp),%rbx
-	movq	%rbx,%dr1	/* 0x4b error code */
-	movq	0(%rbp),%rbx
-	movq	%rbx,%dr2	/* 0x100ffe0 */
-	//movq	(gpf_reentry),%rbx
-	//cmpq	$0,%rbx
-	//jz	1f
-	//movq	%rbx,16(%rbp)   /* Overwrite the reentry point (%rip) */
-1:	popq	%rbx
-	popq	%rbp
-	addq	$0x8,%rsp
-	iretq
-
-
-/* Interrupt handler for page fault */
-_intr_pf:
-	pushq	%rbp
-	movq	%rsp,%rbp
-	//movq	%rsp,%dr0
-	popq	%rbp
-	addq	$0x8,%rsp
-	iretq
-
 
 /* macro to save registers to the stackframe and call the interrupt handler */
 .macro	intr_lapic_isr vec
@@ -341,50 +307,47 @@ _intr_pf:
 /* Interrupt handler for local APIC timer */
 _intr_apic_loc_tmr:
 	intr_lapic_isr 0x50
-	//jmp     _task_restart
-	//movq	%rdx,%dr0
+	/* Increment the counter and write it back */
+	movw	(counter),%ax
+	incw	%ax
+	movw	%ax,(counter)
+	/* Unit digit */
+	xorw	%dx,%dx
+	movw	$10,%cx
+	divw	%cx
+	movb	$0x07,%dh
+	addb	$'0',%dl
+	movw	%dx,(0xb8000+80*2+8)
+	/* Tens digit */
+	xorw	%dx,%dx
+	movw	$10,%cx
+	divw	%cx
+	movb	$0x07,%dh
+	addb	$'0',%dl
+	movw	%dx,(0xb8000+80*2+6)
+	/* Hundreds digit */
+	xorw	%dx,%dx
+	movw	$10,%cx
+	divw	%cx
+	movb	$0x07,%dh
+	addb	$'0',%dl
+	movw	%dx,(0xb8000+80*2+4)
+	/* Thousands digit */
+	xorw	%dx,%dx
+	movw	$10,%cx
+	divw	%cx
+	movb	$0x07,%dh
+	addb	$'0',%dl
+	movw	%dx,(0xb8000+80*2+2)
+	/* Ten-thousands digit */
+	xorw	%dx,%dx
+	movw	$10,%cx
+	divw	%cx
+	movb	$0x07,%dh
+	addb	$'0',%dl
+	movw	%dx,(0xb8000+80*2)
 	intr_lapic_isr_done
 	iretq
 
-/* Task restart */
-_task_restart:
-	/* Get the APIC ID */
-	movq	$MSR_APIC_BASE,%rcx
-	rdmsr
-	shlq	$32,%rdx
-	addq	%rax,%rdx
-	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
-	xorq	%rax,%rax
-	movl	APIC_LAPIC_ID(%rdx),%eax
-	/* Calculate the processor data space from the APIC ID */
-	movq	$P_DATA_SIZE,%rbx
-	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
-	movq	%rax,%rbp
-	/* If the next task is not scheduled, immediately restart this task */
-	cmpq	$0,P_NEXT_TASK_OFFSET(%rbp)
-	jz	2f
-	/* If the current task is null, then do not need to save anything */
-	cmpq	$0,P_CUR_TASK_OFFSET(%rbp)
-	jz	1f
-	/* Save the stack pointer (restart point) */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rax
-	movq	%rsp,TASK_RP(%rax)
-1:
-	/* Notify that the current task is switched (to the kernel) */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
-	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
-	//callq
-	/* Task switch (set the stack frame of the new task) */
-	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
-	movq	%rax,P_CUR_TASK_OFFSET(%rbp)
-	movq	TASK_RP(%rax),%rsp
-	movq	$0,P_NEXT_TASK_OFFSET(%rbp)
-	/* ToDo: Load LDT if necessary */
-	/* Setup sp0 in TSS */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rax
-	movq	TASK_SP0(%rax),%rdx
-	leaq	P_TSS_OFFSET(%rbp),%rax
-	movq	%rdx,TSS_SP0(%rax)
-2:
-	intr_lapic_isr_done
-	iretq
+counter:
+	.word	0

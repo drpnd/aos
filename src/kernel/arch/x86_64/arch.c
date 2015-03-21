@@ -33,9 +33,6 @@ static int _load_trampoline(void);
 
 struct acpi arch_acpi;
 
-void intr_gpf(void);
-void intr_pf(void);
-
 /*
  * Initialize the bootstrap processor
  */
@@ -69,10 +66,6 @@ bsp_init(void)
 
     /* Set up interrupt vector */
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
-    /* Set general protection fault handler */
-    idt_setup_intr_gate(13, &intr_gpf);
-    /* Set page fault handler */
-    //idt_setup_intr_gate(14, &intr_pf);
 
     /* Initialize I/O APIC */
     ioapic_init();
@@ -127,7 +120,7 @@ bsp_init(void)
 
     /* Initialize local APIC counter */
     sti();
-    //lapic_start_timer(HZ, IV_LOC_TMR);
+    lapic_start_timer(HZ, IV_LOC_TMR);
 }
 
 /*
