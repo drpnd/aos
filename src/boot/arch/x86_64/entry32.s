@@ -61,8 +61,8 @@ entry32:
 	subl	$P_STACK_GUARD,%eax
 	movl	%eax,%esp
 
-	/* Enable PAE */
-	movl	$0x20,%eax		/* CR4[bit 5] = PAE */
+	/* Enable PAE and SSE */
+	movl	$0x40620,%eax		/* CR4[bit 5] = PAE */
 	movl	%eax,%cr4
 
 /* Create 64bit page table */

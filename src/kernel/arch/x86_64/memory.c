@@ -182,6 +182,8 @@ phys_mem_init(struct bootinfo *bi)
     u64 b;
     u64 i;
     u64 j;
+    int k;
+    int flag;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
@@ -278,37 +280,51 @@ phys_mem_init(struct bootinfo *bi)
     }
 
     /* Mark self (used by phys_mem and phys_mem->pages) */
-    for ( i = addr / PAGESIZE; i <= CEIL(addr + sz, PAGESIZE) / PAGESIZE; i++ ) {
+    for ( i = addr / PAGESIZE; i <= CEIL(addr + sz, PAGESIZE) / PAGESIZE;
+          i++ ) {
         phys_mem->pages[i].flags |= PHYS_MEM_WIRED;
     }
 
+    __asm__ __volatile__ ("nop; nop; nop;");
     /* Initialize buddy system */
     for ( i = 0; i < PHYS_MEM_MAX_BUDDY_ORDER; i++ ) {
         phys_mem->buddy.heads[i] = NULL;
     }
+    __asm__ __volatile__ ("nop; nop; nop;");
 
     /* Add all pages to the buddy system */
-    for ( i = 0; i < phys_mem->nr; i++ ) {
-        /* Do it from the highest pages so that the initial buddies in the list
-           becomes ascending order because the following code tries to `prepend'
-           a page to the list */
-        j = phys_mem->nr - i - 1;
-        /* Check whether this page is free */
-        if ( !PHYS_MEM_IS_FREE(&phys_mem->pages[j]) ) {
-            continue;
-        }
-        /* Prepend this page to the order 0 in the buddy system */
-        list = (struct phys_mem_buddy_list *)(j * PAGESIZE);
-        list->prev = NULL;
-        list->next = phys_mem->buddy.heads[0];
-        if ( NULL != phys_mem->buddy.heads[0] ) {
-            phys_mem->buddy.heads[0]->prev = list;
-        }
-        phys_mem->buddy.heads[0] = list;
-        /* Try to merge contiguous pages in the buddy system */
-        _merge(&phys_mem->buddy, list, 0);
+    for ( k = PHYS_MEM_MAX_BUDDY_ORDER - 1; k >= 0; k-- ) {
+        for ( i = 0; i < phys_mem->nr; i += (1 << k) ) {
+            /* Check whether all pages are free */
+            flag = 0;
+            for ( j = 0; j < (1 << k); j++ ) {
+                if ( i + j >= phys_mem->nr ) {
+                    /* Exceeds the upper limit */
+                    flag = 1;
+                    break;
+                }
+                if ( !PHYS_MEM_IS_FREE(&phys_mem->pages[i + j]) ) {
+                    /* Used page */
+                    flag = 1;
+                    break;
+                }
+            }
+            if ( !flag ) {
+                /* Prepend this page to the order k in the buddy system */
+                list = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
+                list->prev = NULL;
+                list->next = phys_mem->buddy.heads[k];
+                if ( NULL != phys_mem->buddy.heads[k] ) {
+                    phys_mem->buddy.heads[k]->prev = list;
+                }
+                phys_mem->buddy.heads[k] = list;
 
-        __asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(i) );
+                /* Mark these pages as used (by the buddy system) */
+                for ( j = 0; j < (1 << k); j++ ) {
+                    phys_mem->pages[i + j].flags |= PHYS_MEM_USED;
+                }
+            }
+        }
     }
 
     return 0;

@@ -212,6 +212,8 @@ void ltr(u16);
 void cli(void);
 void sti(void);
 void intr_null(void);
+void intr_iof(void);
+void intr_gpf(void);
 void intr_apic_loc_tmr(void);
 void pause(void);
 u8 inb(u16);

@@ -28,14 +28,14 @@
 #include "arch.h"
 
 /* Maximum order of buddy system */
-#define PHYS_MEM_MAX_BUDDY_ORDER        20
+#define PHYS_MEM_MAX_BUDDY_ORDER        18
 
 /*
  * Buddy system
  */
 struct phys_mem_buddy {
     struct phys_mem_buddy_list *heads[PHYS_MEM_MAX_BUDDY_ORDER];
-} __attribute__ ((packed));
+};
 
 /*
  * Physical memory page
@@ -62,7 +62,7 @@ struct phys_mem {
     struct phys_mem_page *pages;
     /* Buddy structure */
     struct phys_mem_buddy buddy;
-} __attribute__ ((packed));
+};
 
 
 int phys_mem_init(struct bootinfo *);
