@@ -27,7 +27,14 @@
 #include <aos/const.h>
 
 /* Boot information from the boot loader */
-#define BOOTINFO_BASE           (u64)0x8000
+#define BOOTINFO_BASE           0x8000ULL
+
+/* Lowest memory address managed by memory allocator
+ * Note that ISA memory hole (0x00f00000-0x00ffffff) are detected as available
+ * in the system memory map obtained from the BIOS, so be carefull if we use
+ * the address below 0x01000000 for PHYS_MEM_FREE_ADDR.
+ */
+#define PHYS_MEM_FREE_ADDR      0x02000000ULL
 
 /* Maximum number of processors */
 #define MAX_PROCESSORS          256
@@ -78,8 +85,8 @@
 struct bootinfo {
     struct {
         u64 nr;
-        u64 entries;    /* (struct bootinfo_sysaddrmap_entry *) */
-    } __attribute__ ((packed)) sysaddrmap ;
+        struct bootinfo_sysaddrmap_entry *entries;      /* u64 */
+    } __attribute__ ((packed)) sysaddrmap;
 } __attribute__ ((packed));
 struct bootinfo_sysaddrmap_entry {
     u64 base;

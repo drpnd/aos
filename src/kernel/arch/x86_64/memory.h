@@ -21,30 +21,55 @@
  * SOFTWARE.
  */
 
-#ifndef _KERNEL_H
-#define _KERNEL_H
+#ifndef _KERNEL_MEMORY_H
+#define _KERNEL_MEMORY_H
 
 #include <aos/const.h>
-#include <aos/types.h>
+#include "arch.h"
 
-/* Page size */
-#define PAGESIZE                4096
+/* Maximum order of buddy system */
+#define PHYS_MEM_MAX_BUDDY_ORDER        20
 
-struct ktask {
-    /* Task ID */
-    u64 id;
-    /* Architecture specific structure; i.e., (struct arch_task) */
-    void *arch;
-};
+/*
+ * Buddy system
+ */
+struct phys_mem_buddy {
+    struct phys_mem_buddy_list *heads[PHYS_MEM_MAX_BUDDY_ORDER];
+} __attribute__ ((packed));
 
-/* in asm.s */
-#define HAS_KMEMSET     1       /* kmemset is implemented in the assembly code */
-#define HAS_KMEMCMP     1       /* kmemcmp is implemented in the assembly code */
-void * kmemset(void *, int, size_t);
-int kmemcmp(void *, void *, size_t);
-void halt(void);
+/*
+ * Physical memory page
+ */
+struct phys_mem_page {
+    u64 flags;
+} __attribute__ ((packed));
 
-#endif /* _KERNEL_H */
+/*
+ * List structure in unused page for the buddy system
+ */
+struct phys_mem_buddy_list {
+    struct phys_mem_buddy_list *prev;
+    struct phys_mem_buddy_list *next;
+} __attribute__ ((packed));
+
+/*
+ * Physical memory
+ */
+struct phys_mem {
+    /* The number of pages */
+    u64 nr;
+    /* Pages (flags etc.) */
+    struct phys_mem_page *pages;
+    /* Buddy structure */
+    struct phys_mem_buddy buddy;
+} __attribute__ ((packed));
+
+
+int phys_mem_init(struct bootinfo *);
+void * phys_mem_alloc_pages(int);
+void phys_mem_free_pages(void *, int);
+
+#endif /* _KERNEL_MEMORY_H */
 
 /*
  * Local variables:

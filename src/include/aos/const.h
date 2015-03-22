@@ -37,7 +37,7 @@ typedef unsigned long u64;
 typedef u64 reg_t;
 
 #if !defined(NULL)
-#define NULL 0UL
+#define NULL    ((void *)0)
 #endif
 
 #else

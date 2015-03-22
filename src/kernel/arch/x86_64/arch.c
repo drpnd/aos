@@ -28,6 +28,7 @@
 #include "acpi.h"
 #include "i8254.h"
 #include "apic.h"
+#include "memory.h"
 
 static int _load_trampoline(void);
 
@@ -39,12 +40,16 @@ struct acpi arch_acpi;
 void
 bsp_init(void)
 {
+    struct bootinfo *bi;
     struct p_data *pdata;
     u16 *video;
     long long i;
 
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
+
+    /* Boot information from the boot monitor */
+    bi = (struct bootinfo *)BOOTINFO_BASE;
 
     /* Reset all processors */
     for ( i = 0; i < MAX_PROCESSORS; i++ ) {
@@ -60,6 +65,9 @@ bsp_init(void)
     /* Initialize interrupt descriptor table */
     idt_init();
     idt_load();
+
+    /* Initialize memory manager */
+    (void)phys_mem_init(bi);
 
     /* Load ACPI */
     acpi_load(&arch_acpi);
