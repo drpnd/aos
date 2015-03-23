@@ -273,6 +273,7 @@ phys_mem_init(struct bootinfo *bi)
     for ( i = 0; i < phys_mem->nr; i++ ) {
         /* Mark as unavailable */
         phys_mem->pages[i].flags = PHYS_MEM_UNAVAIL;
+        phys_mem->pages[i].order = -1;
     }
 
     /* Check system address map obitaned from BIOS */
@@ -425,6 +426,9 @@ phys_mem_alloc_pages(int order)
         phys_mem->pages[i].flags |= PHYS_MEM_ALLOC;
     }
 
+    /* Save the order */
+    phys_mem->pages[i].order = order;
+
     /* Clear the memory for security */
     kmemset(a, 0, 1 << order);
 
@@ -439,21 +443,21 @@ phys_mem_alloc_pages(int order)
  *
  * SYNOPSIS
  *      void
- *      phys_mem_free_pages(void *a, int order);
+ *      phys_mem_free_pages(void *a);
  *
  * DESCRIPTION
- *      The phys_mem_free_pages() function deallocates 2^order pages pointed by
- *      a.
+ *      The phys_mem_free_pages() function deallocates pages pointed by a.
  *
  * RETURN VALUES
  *      The phys_mem_free_pages() function does not return a value.
  */
 void
-phys_mem_free_pages(void *a, int order)
+phys_mem_free_pages(void *a)
 {
     size_t i;
     u64 p;
     struct phys_mem_buddy_list *list;
+    int order;
 
     /* Get the index of the page */
     p = (u64)a / PAGESIZE;
@@ -464,8 +468,11 @@ phys_mem_free_pages(void *a, int order)
     /* Ensure to be aligned */
     a = (void *)(p * PAGESIZE);
 
+    /* Get the order */
+    order = phys_mem->pages[p].order;
+
     /* If the order exceeds its maximum, that's something wrong. */
-    if ( order >= PHYS_MEM_MAX_BUDDY_ORDER ) {
+    if ( order >= PHYS_MEM_MAX_BUDDY_ORDER || order < 0 ) {
         /* Something is wrong... */
         return;
     }
@@ -473,8 +480,11 @@ phys_mem_free_pages(void *a, int order)
     /* Lock */
     spin_lock(&phys_mem_lock);
 
+    /* Reset the order */
+    phys_mem->pages[p].order = -1;
+
     /* Unmark pages ``allocated'' */
-    for ( i = (u64)a / PAGESIZE; i < (1 << order); i++ ) {
+    for ( i = p; i < (1 << order); i++ ) {
         phys_mem->pages[i].flags &= ~PHYS_MEM_ALLOC;
     }
 
@@ -676,7 +686,8 @@ kfree(void *ptr)
     spin_lock(&phys_mem_slab_lock);
 
     if ( 0 == (u64)ptr % PAGESIZE ) {
-        phys_mem_free_pages(ptr, 1);
+        /* Free pages */
+        phys_mem_free_pages(ptr);
     } else {
 
         /* Search for each order */

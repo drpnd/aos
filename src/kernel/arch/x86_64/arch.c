@@ -150,23 +150,6 @@ bsp_init(void)
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
 
-
-    void *a;
-    void *b;
-    a = kmalloc(1020);
-    b = kmalloc(10);
-    __asm__ __volatile__ ("movq %%rax,%%dr0" :: "a"(a));
-    __asm__ __volatile__ ("movq %%rax,%%dr1" :: "a"(b));
-    kfree(a);
-    kfree(b);
-
-    a = kmalloc(31);
-    b = kmalloc(4096);
-
-    __asm__ __volatile__ ("movq %%rax,%%dr2" :: "a"(a));
-    __asm__ __volatile__ ("movq %%rax,%%dr3" :: "a"(b));
-
-
     /* Initialize local APIC counter */
     sti();
     lapic_start_timer(HZ, IV_LOC_TMR);

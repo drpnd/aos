@@ -48,6 +48,7 @@ struct phys_mem_buddy {
  */
 struct phys_mem_page {
     u64 flags;
+    int order;
 } __attribute__ ((packed));
 
 /*
@@ -117,7 +118,7 @@ struct phys_mem_slab_root {
 /* in memory.c */
 int phys_mem_init(struct bootinfo *);
 void * phys_mem_alloc_pages(int);
-void phys_mem_free_pages(void *, int);
+void phys_mem_free_pages(void *);
 
 #endif /* _KERNEL_MEMORY_H */
 
