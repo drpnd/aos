@@ -30,9 +30,33 @@
 #include "apic.h"
 #include "memory.h"
 
+/* Prototype declarations */
 static int _load_trampoline(void);
 
+/* ACPI structure */
 struct acpi arch_acpi;
+
+/*
+ * Relocate the trampoline code to a 4 KiB page alined space
+ */
+static int
+_load_trampoline(void)
+{
+    int i;
+    int tsz;
+
+    /* Check and copy trampoline code */
+    tsz = (u64)trampoline_end - (u64)trampoline;
+    if ( tsz > TRAMPOLINE_MAX_SIZE ) {
+        /* Error */
+        return -1;
+    }
+    for ( i = 0; i < tsz; i++ ) {
+        *(u8 *)((u64)(TRAMPOLINE_VEC << 12) + i) = *(u8 *)((u64)trampoline + i);
+    }
+
+    return 0;
+}
 
 /*
  * Initialize the bootstrap processor
@@ -126,6 +150,23 @@ bsp_init(void)
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
 
+
+    void *a;
+    void *b;
+    a = kmalloc(1020);
+    b = kmalloc(10);
+    __asm__ __volatile__ ("movq %%rax,%%dr0" :: "a"(a));
+    __asm__ __volatile__ ("movq %%rax,%%dr1" :: "a"(b));
+    kfree(a);
+    kfree(b);
+
+    a = kmalloc(31);
+    b = kmalloc(4096);
+
+    __asm__ __volatile__ ("movq %%rax,%%dr2" :: "a"(a));
+    __asm__ __volatile__ ("movq %%rax,%%dr3" :: "a"(b));
+
+
     /* Initialize local APIC counter */
     sti();
     lapic_start_timer(HZ, IV_LOC_TMR);
@@ -166,28 +207,6 @@ ap_init(void)
     /* Display a mark to notify me that this code is properly executed */
     video = (u16 *)0xb8000;
     *(video + lapic_id()) = 0x0700 | '*';
-}
-
-/*
- * Relocate the trampoline code to a 4 KiB page alined space
- */
-static int
-_load_trampoline(void)
-{
-    int i;
-    int tsz;
-
-    /* Check and copy trampoline code */
-    tsz = (u64)trampoline_end - (u64)trampoline;
-    if ( tsz > TRAMPOLINE_MAX_SIZE ) {
-        /* Error */
-        return -1;
-    }
-    for ( i = 0; i < tsz; i++ ) {
-        *(u8 *)((u64)(TRAMPOLINE_VEC << 12) + i) = *(u8 *)((u64)trampoline + i);
-    }
-
-    return 0;
 }
 
 /*

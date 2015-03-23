@@ -29,6 +29,12 @@
 
 /* Maximum order of buddy system */
 #define PHYS_MEM_MAX_BUDDY_ORDER        18
+/* 32 (2^5) byte is the minimum object size of a slab object */
+#define PHYS_MEM_SLAB_BASE_ORDER        5
+/* 1024 (2^(5 + 6 - 1)) byte is the maximum object size of a slab object */
+#define PHYS_MEM_SLAB_ORDER             6
+/* 2^16 objects in a cache */
+#define PHYS_MEM_SLAB_NR_OBJ_ORDER      4
 
 /*
  * Buddy system
@@ -63,6 +69,49 @@ struct phys_mem {
     /* Buddy structure */
     struct phys_mem_buddy buddy;
 };
+
+/*
+ * A slab object
+ */
+struct phys_mem_slab_obj {
+    void *addr;
+} __attribute__ ((packed));
+
+/*
+ * Slab objects
+ *  slab_hdr
+ *    object 0
+ *    object 1
+ *    ...
+ */
+struct phys_mem_slab {
+    /* slab_hdr */
+    struct phys_mem_slab *next;
+    int nr;
+    int nused;
+    int free;
+    void *obj_head;
+    /* Free marks follows (nr byte) */
+    u8 marks[1];
+    /* Objects follows */
+} __attribute__ ((packed));
+
+/*
+ * Free list of slab objects
+ */
+struct phys_mem_slab_free_list {
+    struct phys_mem_slab *partial;
+    struct phys_mem_slab *full;
+    struct phys_mem_slab *free;
+} __attribute__ ((packed));
+
+/*
+ * Root data structure of slab objects
+ */
+struct phys_mem_slab_root {
+    /* Generic slabs */
+    struct phys_mem_slab_free_list gslabs[PHYS_MEM_SLAB_ORDER];
+} __attribute__ ((packed));
 
 
 /* in memory.c */

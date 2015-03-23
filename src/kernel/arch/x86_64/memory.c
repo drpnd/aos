@@ -27,18 +27,21 @@
 #include "../../kernel.h"
 
 /* Flags */
-#define PHYS_MEM_USED           (u64)1
-#define PHYS_MEM_WIRED          (u64)(1<<1)
-#define PHYS_MEM_HEAD           (u64)(1<<2)
-#define PHYS_MEM_UNAVAIL        (u64)(1<<16)
+#define PHYS_MEM_USED           1ULL            /* Managed by buddy system */
+#define PHYS_MEM_WIRED          (1ULL<<1)       /* Wired (kernel use) */
+#define PHYS_MEM_ALLOC          (1ULL<<2)       /* Allocated */
+#define PHYS_MEM_SLAB           (1ULL<<3)       /* For slab */
+#define PHYS_MEM_UNAVAIL        (1ULL<<16)      /* Unavailable space */
 
 #define PHYS_MEM_IS_FREE(x)     (0 == (x)->flags ? 1 : 0)
 
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
-static u32 memory_lock;
+static u32 phys_mem_lock;
+static u32 phys_mem_slab_lock;
 static struct phys_mem *phys_mem;
+struct phys_mem_slab_root *phys_mem_slab_head;
 
 /*
  * Split the buddies so that we get at least one buddy at the order o
@@ -203,7 +206,8 @@ phys_mem_init(struct bootinfo *bi)
     }
 
     /* Initialize the lock variable */
-    memory_lock = 0;
+    phys_mem_lock = 0;
+    phys_mem_slab_lock = 0;
 
     /* Obtain usable memory size */
     addr = 0;
@@ -349,6 +353,19 @@ phys_mem_init(struct bootinfo *bi)
         }
     }
 
+    /* Initialize slab */
+    nr = (sizeof(struct phys_mem_slab_root) - 1) / PAGESIZE + 1;
+    phys_mem_slab_head = phys_mem_alloc_pages(binorder(nr));
+    if ( NULL == phys_mem_slab_head ) {
+        /* Cannot allocate pages for the slab allocator */
+        return -1;
+    }
+    for ( i = 0; i < PHYS_MEM_SLAB_ORDER; i++ ) {
+        phys_mem_slab_head->gslabs[i].partial = NULL;
+        phys_mem_slab_head->gslabs[i].full = NULL;
+        phys_mem_slab_head->gslabs[i].free = NULL;
+    }
+
     return 0;
 }
 
@@ -369,6 +386,7 @@ phys_mem_init(struct bootinfo *bi)
 void *
 phys_mem_alloc_pages(int order)
 {
+    size_t i;
     int ret;
     struct phys_mem_buddy_list *a;
 
@@ -385,13 +403,13 @@ phys_mem_alloc_pages(int order)
     }
 
     /* Lock */
-    spin_lock(&memory_lock);
+    spin_lock(&phys_mem_lock);
 
     /* Split first if needed */
     ret = _split(&phys_mem->buddy, order);
     if ( ret < 0 ) {
         /* No memory available */
-        spin_unlock(&memory_lock);
+        spin_unlock(&phys_mem_lock);
         return NULL;
     }
 
@@ -402,11 +420,16 @@ phys_mem_alloc_pages(int order)
         phys_mem->buddy.heads[order]->prev = NULL;
     }
 
+    /* Mark pages ``allocated'' */
+    for ( i = (u64)a / PAGESIZE; i < (1 << order); i++ ) {
+        phys_mem->pages[i].flags |= PHYS_MEM_ALLOC;
+    }
+
     /* Clear the memory for security */
     kmemset(a, 0, 1 << order);
 
     /* Unlock */
-    spin_unlock(&memory_lock);
+    spin_unlock(&phys_mem_lock);
 
     return a;
 }
@@ -428,6 +451,7 @@ phys_mem_alloc_pages(int order)
 void
 phys_mem_free_pages(void *a, int order)
 {
+    size_t i;
     u64 p;
     struct phys_mem_buddy_list *list;
 
@@ -447,7 +471,12 @@ phys_mem_free_pages(void *a, int order)
     }
 
     /* Lock */
-    spin_lock(&memory_lock);
+    spin_lock(&phys_mem_lock);
+
+    /* Unmark pages ``allocated'' */
+    for ( i = (u64)a / PAGESIZE; i < (1 << order); i++ ) {
+        phys_mem->pages[i].flags &= ~PHYS_MEM_ALLOC;
+    }
 
     /* Return it to the buddy system */
     list = phys_mem->buddy.heads[order];
@@ -459,10 +488,272 @@ phys_mem_free_pages(void *a, int order)
         list->prev = a;
     }
 
+    /* Merge buddies if possible */
     _merge(&phys_mem->buddy, a, 0);
 
     /* Unlock */
-    spin_unlock(&memory_lock);
+    spin_unlock(&phys_mem_lock);
+}
+
+/*
+ * Allocate memory space
+ * Note that the current implementation does not protect the slab header, so
+ * the allocated memory must be carefully used.
+ *
+ * SYNOPSIS
+ *      void *
+ *      kmalloc(size_t size);
+ *
+ * DESCRIPTION
+ *      The kmalloc() function allocates size bytes of contiguous memory.
+ *
+ * RETURN VALUES
+ *      The kmalloc() function returns a pointer to allocated memory.  If there
+ *      is an error, it returns NULL.
+ */
+void *
+kmalloc(size_t size)
+{
+    size_t o;
+    void *ptr;
+    int nr;
+    int i;
+    struct phys_mem_slab *hdr;
+
+    /* Get the binary order */
+    o = binorder(size);
+
+    /* Align the order */
+    if ( o < PHYS_MEM_SLAB_BASE_ORDER ) {
+        o = 0;
+    } else {
+        o -= PHYS_MEM_SLAB_BASE_ORDER;
+    }
+
+    /* Lock */
+    spin_lock(&phys_mem_slab_lock);
+
+    if ( o < PHYS_MEM_SLAB_ORDER ) {
+        /* Small object: Slab allocator */
+        if ( NULL != phys_mem_slab_head->gslabs[o].partial ) {
+            /* Partial list is available. */
+            hdr = phys_mem_slab_head->gslabs[o].partial;
+            ptr = (void *)((u64)hdr->obj_head + hdr->free
+                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
+            hdr->marks[hdr->free] = 1;
+            hdr->nused++;
+            if ( hdr->nr <= hdr->nused ) {
+                /* Becomes full */
+                hdr->free = -1;
+                phys_mem_slab_head->gslabs[o].partial = hdr->next;
+                /* Prepend to the full list */
+                hdr->next = phys_mem_slab_head->gslabs[o].full;
+                phys_mem_slab_head->gslabs[o].full = hdr;
+            } else {
+                /* Search free space for the next allocation */
+                for ( i = 0; i < hdr->nr; i++ ) {
+                    if ( 0 == hdr->marks[i] ) {
+                        hdr->free = i;
+                        break;
+                    }
+                }
+            }
+        } else if ( NULL != phys_mem_slab_head->gslabs[o].free ) {
+            /* Partial list is empty, but free list is available. */
+            hdr = phys_mem_slab_head->gslabs[o].free;
+            ptr = (void *)((u64)hdr->obj_head + hdr->free
+                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
+            hdr->marks[hdr->free] = 1;
+            hdr->nused++;
+            if ( hdr->nr <= hdr->nused ) {
+                /* Becomes full */
+                hdr->free = -1;
+                phys_mem_slab_head->gslabs[o].partial = hdr->next;
+                /* Prepend to the full list */
+                hdr->next = phys_mem_slab_head->gslabs[o].full;
+                phys_mem_slab_head->gslabs[o].full = hdr;
+            } else {
+                /* Prepend to the partial list */
+                hdr->next = phys_mem_slab_head->gslabs[o].partial;
+                phys_mem_slab_head->gslabs[o].partial = hdr;
+                /* Search free space for the next allocation */
+                for ( i = 0; i < hdr->nr; i++ ) {
+                    if ( 0 == hdr->marks[i] ) {
+                        hdr->free = i;
+                        break;
+                    }
+                }
+            }
+        } else {
+            /* No free space, then allocate new page for slab objects */
+            nr = CEIL(1 << (o + PHYS_MEM_SLAB_BASE_ORDER
+                            + PHYS_MEM_SLAB_NR_OBJ_ORDER), PAGESIZE) / PAGESIZE;
+            /* Align the page to fit to the buddy system, and get the order */
+            nr = binorder(nr);
+            /* Allocate pages */
+            hdr = phys_mem_alloc_pages(nr);
+            if ( NULL == hdr ) {
+                /* Unlock before return */
+                spin_unlock(&phys_mem_slab_lock);
+                return NULL;
+            }
+            /* Calculate the number of slab objects in this block; N.B., + 1 in
+               the denominator is the `marks' for each objects. */
+            hdr->nr = ((1 << nr) * PAGESIZE - sizeof(struct phys_mem_slab))
+                / ((1 << (o + PHYS_MEM_SLAB_BASE_ORDER)) + 1);
+            /* Reset counters */
+            hdr->nused = 0;
+            hdr->free = 0;
+            /* Set the address of the first slab object */
+            hdr->obj_head = (void *)((u64)hdr + ((1 << nr) * PAGESIZE)
+                                     - ((1 << (o + PHYS_MEM_SLAB_BASE_ORDER))
+                                        * hdr->nr));
+            /* Reset marks and next cache */
+            kmemset(hdr->marks, 0, hdr->nr);
+            hdr->next = NULL;
+
+            /* Retrieve a slab */
+            ptr = (void *)((u64)hdr->obj_head + hdr->free
+                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
+            hdr->marks[hdr->free] = 1;
+            hdr->nused++;
+
+            if ( hdr->nr <= hdr->nused ) {
+                /* Becomes full */
+                hdr->free = -1;
+                phys_mem_slab_head->gslabs[o].partial = hdr->next;
+                /* Prepend to the full list */
+                hdr->next = phys_mem_slab_head->gslabs[o].full;
+                phys_mem_slab_head->gslabs[o].full = hdr;
+            } else {
+                /* Prepend to the partial list */
+                hdr->next = phys_mem_slab_head->gslabs[o].partial;
+                phys_mem_slab_head->gslabs[o].partial = hdr;
+                /* Search free space for the next allocation */
+                for ( i = 0; i < hdr->nr; i++ ) {
+                    if ( 0 == hdr->marks[i] ) {
+                        hdr->free = i;
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        /* Large object: Page allocator */
+        ptr = phys_mem_alloc_pages(binorder(CEIL(size, PAGESIZE) / PAGESIZE));
+    }
+
+    /* Unlock */
+    spin_unlock(&phys_mem_slab_lock);
+
+    return ptr;
+}
+
+/*
+ * Deallocate memory space pointed by ptr
+ *
+ * SYNOPSIS
+ *      void
+ *      kfree(void *ptr);
+ *
+ * DESCRIPTION
+ *      The kfree() function deallocates the memory allocation pointed by ptr.
+ *
+ * RETURN VALUES
+ *      The kfree() function does not return a value.
+ */
+void
+kfree(void *ptr)
+{
+    int i;
+    int j;
+    int found;
+    u64 asz;
+    struct phys_mem_slab *hdr;
+    struct phys_mem_slab **hdrp;
+
+    /* Lock */
+    spin_lock(&phys_mem_slab_lock);
+
+    if ( 0 == (u64)ptr % PAGESIZE ) {
+        phys_mem_free_pages(ptr, 1);
+    } else {
+
+        /* Search for each order */
+        for ( i = 0; i < PHYS_MEM_SLAB_BASE_ORDER; i++ ) {
+            asz = (1 << (i + PHYS_MEM_SLAB_BASE_ORDER));
+
+            /* Search from partial */
+            hdrp = &phys_mem_slab_head->gslabs[i].partial;
+
+            /* Continue until the corresponding object found */
+            while ( NULL != *hdrp ) {
+                hdr = *hdrp;
+
+                found = -1;
+                for ( j = 0; j < hdr->nr; j++ ) {
+                    if ( ptr == (void *)((u64)hdr->obj_head + j * asz) ) {
+                        /* Found */
+                        found = j;
+                        break;
+                    }
+                }
+                if ( found >= 0 ) {
+                    hdr->nused--;
+                    hdr->marks[found] = 0;
+                    hdr->free = found;
+                    if ( hdr->nused <= 0 ) {
+                        /* To free list */
+                        *hdrp = hdr->next;
+                        hdr->next = phys_mem_slab_head->gslabs[i].free;
+                        phys_mem_slab_head->gslabs[i].free = hdr;
+                    }
+                    spin_unlock(&phys_mem_slab_lock);
+                    return;
+                }
+                hdrp = &hdr->next;
+            }
+
+            /* Search from full */
+            hdrp = &phys_mem_slab_head->gslabs[i].full;
+
+            /* Continue until the corresponding object found */
+            while ( NULL != *hdrp ) {
+                hdr = *hdrp;
+
+                found = -1;
+                for ( j = 0; j < hdr->nr; j++ ) {
+                    if ( ptr == (void *)((u64)hdr->obj_head + j * asz) ) {
+                        /* Found */
+                        found = j;
+                        break;
+                    }
+                }
+                if ( found >= 0 ) {
+                    hdr->nused--;
+                    hdr->marks[found] = 0;
+                    hdr->free = found;
+                    if ( hdr->nused <= 0 ) {
+                        /* To free list */
+                        *hdrp = hdr->next;
+                        hdr->next = phys_mem_slab_head->gslabs[i].free;
+                        phys_mem_slab_head->gslabs[i].free = hdr;
+                    } else {
+                        /* To partial list */
+                        *hdrp = hdr->next;
+                        hdr->next = phys_mem_slab_head->gslabs[i].partial;
+                        phys_mem_slab_head->gslabs[i].partial = hdr;
+                    }
+                    spin_unlock(&phys_mem_slab_lock);
+                    return;
+                }
+                hdrp = &hdr->next;
+            }
+        }
+    }
+
+    /* Unlock */
+    spin_unlock(&phys_mem_slab_lock);
 }
 
 /*

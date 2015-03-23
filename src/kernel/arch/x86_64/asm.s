@@ -45,6 +45,7 @@
 	.globl	_mfwrite32
 	.globl	_kmemset
 	.globl	_kmemcmp
+	.globl	_binorder
 	.globl	_spin_lock_intr
 	.globl	_spin_unlock_intr
 	.globl	_spin_lock
@@ -208,6 +209,16 @@ _kmemcmp:
 1:
 	ret
 
+/* u64 binorder(u64) */
+_binorder:
+	decq	%rdi
+	xorq	%rax,%rax
+	testq	%rdi,%rdi
+	jz	1f
+	bsrq	%rdi,%rax
+1:
+	incq	%rax
+	ret
 
 /* void spin_lock_intr(u32 *) */
 _spin_lock_intr:

@@ -222,7 +222,7 @@ void outw(u16, u16);
 void outl(u16, u32);
 u32 mfread32(u64);
 void mfwrite32(u64, u32);
-
+u64 binorder(u64);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
