@@ -169,6 +169,18 @@ _merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
 
 /*
  * Initialize physical memory
+ *
+ * SYNOPSIS
+ *      int
+ *      phys_mem_init(struct bootinfo *bi);
+ *
+ * DESCRIPTION
+ *      The phys_mem_init() function initializes the page allocator with the
+ *      memory map information inherited from the boot monitor.
+ *
+ * RETURN VALUES
+ *      If successful, the phys_mem_init() function returns 0.  It returns -1 on
+ *      failure.
  */
 int
 phys_mem_init(struct bootinfo *bi)
