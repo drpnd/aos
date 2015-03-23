@@ -27,6 +27,7 @@ Hirochika Asai
 | checkpoint 9 | bspinit  | release/bspinit  |
 | checkpoint a | bspinit  | release/apinit   |
 | checkpoint b | lapictmr | release/lapictmr |
+| checkpoint c | memory   | release/memory   |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
@@ -132,3 +133,7 @@ This procedure is called INIT-SIPI-SIPI IPI sequence
 ## Checkpoint b
 Towards the multitasking operating system, we setup the local APIC timer
 to generate periodic timer interrupts that will be used for the context switch.
+
+## Checkpoint c
+This checkpoint implements a simple memory allocator; buddy system for the page
+alloator and slab-like allocator for the allocator of smaller objects.
