@@ -72,17 +72,6 @@ bsp_init(void)
     /* Set up interrupt vector */
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
 
-    //CPUID.01H:EDX.SSE2[bit 26]
-    //CPUID.01H:ECX.AVX[bit 28]
-    __asm__ __volatile__ (" movq $0x01,%rax;cpuid;movq %rdx,%dr0" );
-    __asm__ __volatile__ (" movq $0x0d,%rax;movq $0,%rcx;cpuid;movq %rax,%dr0" );
-
-    idt_setup_intr_gate(6, &intr_iof);
-    /* Set general protection fault handler */
-    idt_setup_intr_gate(13, &intr_gpf);
-    /* Set page fault handler */
-    //idt_setup_intr_gate(14, &intr_pf);
-
     /* Initialize memory manager */
     (void)phys_mem_init(bi);
 

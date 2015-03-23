@@ -285,12 +285,10 @@ phys_mem_init(struct bootinfo *bi)
         phys_mem->pages[i].flags |= PHYS_MEM_WIRED;
     }
 
-    __asm__ __volatile__ ("nop; nop; nop;");
     /* Initialize buddy system */
     for ( i = 0; i < PHYS_MEM_MAX_BUDDY_ORDER; i++ ) {
         phys_mem->buddy.heads[i] = NULL;
     }
-    __asm__ __volatile__ ("nop; nop; nop;");
 
     /* Add all pages to the buddy system */
     for ( k = PHYS_MEM_MAX_BUDDY_ORDER - 1; k >= 0; k-- ) {

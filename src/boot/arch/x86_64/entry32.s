@@ -62,8 +62,8 @@ entry32:
 	movl	%eax,%esp
 
 	/* Enable PAE and SSE */
-	movl	$0x40620,%eax		/* CR4[bit 5] = PAE */
-	movl	%eax,%cr4
+	movl	$0x00000220,%eax	/* CR4[bit 5] = PAE */
+	movl	%eax,%cr4		/* CR4[bit 9] = OSFXSR */
 
 /* Create 64bit page table */
 pg_setup:
