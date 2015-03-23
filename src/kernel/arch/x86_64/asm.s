@@ -45,6 +45,10 @@
 	.globl	_mfwrite32
 	.globl	_kmemset
 	.globl	_kmemcmp
+	.globl	_spin_lock_intr
+	.globl	_spin_unlock_intr
+	.globl	_spin_lock
+	.globl	_spin_unlock
 	.globl	_asm_ioapic_map_intr
 	.globl	_intr_null
 	.globl	_intr_apic_loc_tmr
@@ -202,6 +206,33 @@ _kmemcmp:
 	movb	(%rdi),%al	/* *s1 */
 	subb	(%rsi),%al	/* *s1 - *s2 */
 1:
+	ret
+
+
+/* void spin_lock_intr(u32 *) */
+_spin_lock_intr:
+	cli
+/* void spin_lock(u32 *) */
+_spin_lock:
+	xorl	%ecx,%ecx
+	incl	%ecx
+1:
+	xorl	%eax,%eax
+	lock cmpxchgl	%ecx,(%rdi)
+	jnz	1b
+	ret
+
+/* void spin_unlock(u32 *) */
+_spin_unlock:
+	xorl	%eax,%eax
+	lock xchgl	(%rdi),%eax
+	ret
+
+/* void spin_unlock_intr(u32 *) */
+_spin_unlock_intr:
+	xorl	%eax,%eax
+	lock xchgl	(%rdi),%eax
+	sti
 	ret
 
 

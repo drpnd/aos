@@ -37,6 +37,7 @@
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
+static u32 memory_lock;
 static struct phys_mem *phys_mem;
 
 /*
@@ -189,6 +190,9 @@ phys_mem_init(struct bootinfo *bi)
     if ( bi->sysaddrmap.nr <= 0 ) {
         return -1;
     }
+
+    /* Initialize the lock variable */
+    memory_lock = 0;
 
     /* Obtain usable memory size */
     addr = 0;
@@ -349,10 +353,14 @@ phys_mem_alloc_pages(int order)
         return NULL;
     }
 
+    /* Lock */
+    spin_lock(&memory_lock);
+
     /* Split first if needed */
     ret = _split(&phys_mem->buddy, order);
     if ( ret < 0 ) {
         /* No memory available */
+        spin_unlock(&memory_lock);
         return NULL;
     }
 
@@ -365,6 +373,9 @@ phys_mem_alloc_pages(int order)
 
     /* Clear the memory for security */
     kmemset(a, 0, 1 << order);
+
+    /* Unlock */
+    spin_unlock(&memory_lock);
 
     return a;
 }
@@ -393,6 +404,9 @@ phys_mem_free_pages(void *a, int order)
         return;
     }
 
+    /* Lock */
+    spin_lock(&memory_lock);
+
     /* Return it to the buddy system */
     list = phys_mem->buddy.heads[order];
     /* Prepend the returned pages */
@@ -404,6 +418,9 @@ phys_mem_free_pages(void *a, int order)
     }
 
     _merge(&phys_mem->buddy, a, 0);
+
+    /* Unlock */
+    spin_unlock(&memory_lock);
 }
 
 

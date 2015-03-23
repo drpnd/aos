@@ -223,6 +223,11 @@ void outl(u16, u32);
 u32 mfread32(u64);
 void mfwrite32(u64, u32);
 
+void spin_lock_intr(u32 *);
+void spin_lock(u32 *);
+void spin_unlock(u32 *);
+void spin_unlock_intr(u32 *);
+
 /* in trampoline.s */
 void trampoline(void);
 void trampoline_end(void);
