@@ -341,7 +341,18 @@ phys_mem_init(struct bootinfo *bi)
 }
 
 /*
- * Allocate 2**order physical pages
+ * Allocate 2^order physical pages
+ *
+ * SYNOPSIS
+ *      void *
+ *      phys_mem_alloc_pages(int order);
+ *
+ * DESCRIPTION
+ *      The phys_mem_alloc_pages() function allocates 2^order pages.
+ *
+ * RETURN VALUES
+ *      The phys_mem_alloc_pages() function returns a pointer to allocated page.
+ *      If there is an error, it returns a NULL pointer.
  */
 void *
 phys_mem_alloc_pages(int order)
@@ -389,7 +400,18 @@ phys_mem_alloc_pages(int order)
 }
 
 /*
- * Free allocated 2**order pages
+ * Free allocated 2^order pages
+ *
+ * SYNOPSIS
+ *      void
+ *      phys_mem_free_pages(void *a, int order);
+ *
+ * DESCRIPTION
+ *      The phys_mem_free_pages() function deallocates 2^order pages pointed by
+ *      a.
+ *
+ * RETURN VALUES
+ *      The phys_mem_free_pages() function does not return a value.
  */
 void
 phys_mem_free_pages(void *a, int order)
