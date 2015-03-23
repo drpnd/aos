@@ -65,6 +65,7 @@ struct phys_mem {
 };
 
 
+/* in memory.c */
 int phys_mem_init(struct bootinfo *);
 void * phys_mem_alloc_pages(int);
 void phys_mem_free_pages(void *, int);

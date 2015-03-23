@@ -169,7 +169,6 @@ _merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
 
 /*
  * Initialize physical memory
- *    This is not thread safe.  Call this from BSP.
  */
 int
 phys_mem_init(struct bootinfo *bi)
@@ -234,6 +233,7 @@ phys_mem_init(struct bootinfo *bi)
                 }
             } else {
                 if ( b - a >= sz ) {
+                    /* Found */
                     addr = a;
                     break;
                 } else {
@@ -312,15 +312,23 @@ phys_mem_init(struct bootinfo *bi)
                 }
             }
             if ( !flag ) {
-                /* Prepend this page to the order k in the buddy system */
-                list = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
-                list->prev = NULL;
-                list->next = phys_mem->buddy.heads[k];
-                if ( NULL != phys_mem->buddy.heads[k] ) {
-                    phys_mem->buddy.heads[k]->prev = list;
+                /* Append this page to the order k in the buddy system */
+                if ( NULL == phys_mem->buddy.heads[k] ) {
+                    /* Empty list */
+                    phys_mem->buddy.heads[k]
+                        = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
+                    phys_mem->buddy.heads[k]->prev = NULL;
+                    phys_mem->buddy.heads[k]->next = NULL;
+                } else {
+                    list = phys_mem->buddy.heads[k];
+                    while ( NULL != list->next ) {
+                        list = list->next;
+                    }
+                    list->next
+                        = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
+                    list->next->prev = list;
+                    list->next->next = NULL;
                 }
-                phys_mem->buddy.heads[k] = list;
-
                 /* Mark these pages as used (by the buddy system) */
                 for ( j = 0; j < (1 << k); j++ ) {
                     phys_mem->pages[i + j].flags |= PHYS_MEM_USED;
@@ -422,7 +430,6 @@ phys_mem_free_pages(void *a, int order)
     /* Unlock */
     spin_unlock(&memory_lock);
 }
-
 
 /*
  * Local variables:
