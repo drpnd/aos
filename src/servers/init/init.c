@@ -24,6 +24,15 @@
 #include <aos/const.h>
 
 /*
+ * Entry point for the init program
+ */
+int
+main(int argc, char *argv[])
+{
+    return 0;
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4

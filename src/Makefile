@@ -8,13 +8,14 @@
 
 ARCH=x86_64
 
+## Global flags
+ASFLAGS=-nostdlib -I./kernel/arch/$(ARCH)/
+CFLAGS=-I./include \
+	-Wall -fleading-underscore -nostdlib -O3 -m64
+
+## Override the flags
 diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
-bootmon: CFLAGS=-I./include \
-	-Wall -fleading-underscore -nostdlib -O3 -m64
-kpack: ASFLAGS=-nostdlib -I./kernel/arch/$(ARCH)/
-kpack: CFLAGS=-I./include \
-        -Wall -fleading-underscore -nostdlib -O3 -m64
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o
@@ -54,3 +55,14 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/ap_entry64.o \
 	kernel/kernel.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
+
+## init server
+init: servers/init/init.o
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+
+## Clean
+clean:
+	find . -name "*.o" | xargs rm -f
+	rm -f src/kpack
+	rm -f src/bootmon
+	rm -f src/diskboot
