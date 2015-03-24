@@ -6,6 +6,9 @@
 #      Hirochika Asai  <asai@jar.jp>
 #
 
+DISKBOOT_SIZE = $(shell stat -f "%z" src/diskboot)
+BOOTMON_SIZE = $(shell stat -f "%z" src/bootmon)
+
 KERNEL_SIZE = $(shell stat -f "%z" src/kpack)
 KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
 
@@ -36,6 +39,11 @@ kernel:
 
 ## Create FAT12/16 image
 image: bootloader kernel initramfs
+# Check the file size first
+	@if [ ${DISKBOOT_SIZE} -ge 446 ]; then echo "Error: src/diskboot is too large"; exit 1; fi
+	@if [ ${BOOTMON_SIZE} -ge 28672 ]; then echo "Error: src/bootmon is too large"; exit 1; fi
+	@if [ ${KERNEL_SIZE} -ge 65536 ]; then echo "Error: src/kpack is too large"; exit 1; fi
+	@if [ ${INITRAMFS_SIZE} -ge 327680 ]; then echo "Error: src/kpack is too large"; exit 1; fi
 	@cp src/diskboot aos.img
 #	Write partition table (#1: start: cyl=0, hd=2, sec=3)
 #	N.B., # of cyl, hd, and sec in the entry are different from drives
