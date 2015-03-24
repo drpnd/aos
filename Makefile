@@ -12,8 +12,6 @@ KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
 INITRAMFS_SIZE = $(shell stat -f "%z" initramfs)
 INITRAMFS_CLS = $(shell expr \( ${INITRAMFS_SIZE} + 4095 \) / 4096)
 
-NEXT_ORG = $(shell expr \( ${INITRAMFS_SIZE} / 16 + 1 \) \* 16 + 0x10000)
-
 all:
 	@echo "make all is not currently supported."
 
@@ -31,7 +29,6 @@ bootloader:
 	make -C src diskboot
 #	Compile the boot monitor called from diskboot
 	make -C src bootmon
-
 
 ## Compile kernel
 kernel:

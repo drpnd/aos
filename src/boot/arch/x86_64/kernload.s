@@ -210,88 +210,66 @@ kernload:
 	jnz	kload_error
 	movl	%eax,-64(%bp)	/* sec512_per_cluster */
 
-	/* Root directory */
+	/* In root directory */
 	movl	-56(%bp),%eax
 	xorl	%ecx,%ecx
 	movw	%fs:bpb_root_ent_cnt(%bx),%cx
-	call	find_kernel
-
-	/* Read file */
-	xorl	%edx,%edx
-	movl	%edx,-76(%bp)	/* Offset */
-	movl	%eax,-68(%bp)	/* First cluster */
-	movl	%ecx,-72(%bp)	/* Kernel size */
-
+	/* Find the kernel */
+	movw	$fname_kernel,%si
+	call	find_file
+	/* Read the file */
+	movl	%eax,%esi
+	movl	-28(%bp),%ebx	/* fat_start_bytes */
+	movl	-60(%bp),%edx	/* data_start_bytes */
+	movl	$KERNEL_BASE,%edi
+	/* Check the FAT type */
 	movl	-48(%bp),%eax	/* num_clus */
 	cmpl	$4085,%eax
 	jle	3f		/* FAT12 */
 	cmpl	$65525,%eax
 	jle	4f		/* FAT16 */
 	jmp	kload_error	/* Invalid filesystem */
-
-	/* FAT12 */
 3:
-	xorl	%edx,%edx
-	movl	$SECTOR_SIZE,%ecx
-	movl	-60(%bp),%eax	/* data_start_bytes */
-	divl	%ecx
-	movl	%eax,%ecx
-	movl	-68(%bp),%eax	/* Current cluster */
-	subl	$2,%eax		/* -2 */
-	mull	-64(%bp)
-	addl	%ecx,%eax
-	addl	(part_lba),%eax
-	movl	-64(%bp),%ecx	/* # of sectors to read */
-	movl	-76(%bp),%edx
-	call	read_kernel
-
-	xorl	%edx,%edx
-	movl	-64(%bp),%eax
-	movl	$SECTOR_SIZE,%ecx
-	mull	%ecx
-	addl	-76(%bp),%eax	/* Next offset */
-	movl	%eax,-76(%bp)
-
-	movl	-68(%bp),%ecx	/* Current cluster */
-	movl	-28(%bp),%eax
-	call	fat12_next_cluster
-	movl	%ecx,-68(%bp)
-	cmpl	$0x0ff8,%ecx
-	jl	3b
-
+	/* FAT12 */
+	movl	-64(%bp),%eax	/* sec512_per_cluster */
+	call	read_file_fat12
 	jmp	5f
-
 4:
 	/* FAT16 */
-	xorl	%edx,%edx
-	movl	$SECTOR_SIZE,%ecx
-	movl	-60(%bp),%eax	/* data_start_bytes */
-	divl	%ecx
-	movl	%eax,%ecx
-	movl	-68(%bp),%eax	/* Current cluster */
-	subl	$2,%eax		/* -2 */
-	mull	-64(%bp)
-	addl	%ecx,%eax
-	addl	(part_lba),%eax
-	movl	-64(%bp),%ecx	/* # of sectors to read */
-	movl	-76(%bp),%edx
-	call	read_kernel
-
-	xorl	%edx,%edx
-	movl	-64(%bp),%eax
-	movl	$SECTOR_SIZE,%ecx
-	mull	%ecx
-	addl	-76(%bp),%eax	/* Next offset */
-	movl	%eax,-76(%bp)
-
-	movl	-68(%bp),%ecx	/* Current cluster */
-	movl	-28(%bp),%eax
-	call	fat16_next_cluster
-	movl	%ecx,-68(%bp)
-	cmpl	$0xfff8,%ecx
-	jl	4b
-
+	movl	-64(%bp),%eax	/* sec512_per_cluster */
+	call	read_file_fat16
 5:
+
+	/* In root directory */
+	movl	-56(%bp),%eax
+	xorl	%ecx,%ecx
+	movw	%fs:bpb_root_ent_cnt(%bx),%cx
+	/* Find the initramfs */
+	movw	$fname_initramfs,%si
+	call	find_file
+	/* Read the file */
+	movl	%eax,%esi
+	movl	-28(%bp),%ebx	/* fat_start_bytes */
+	movl	-60(%bp),%edx	/* data_start_bytes */
+	movl	$INITRAMFS_BASE,%edi
+	/* Check the FAT type */
+	movl	-48(%bp),%eax	/* num_clus */
+	cmpl	$4085,%eax
+	jle	6f		/* FAT12 */
+	cmpl	$65525,%eax
+	jle	7f		/* FAT16 */
+	jmp	kload_error	/* Invalid filesystem */
+6:
+	/* FAT12 */
+	movl	-64(%bp),%eax	/* sec512_per_cluster */
+	call	read_file_fat12
+	jmp	8f
+7:
+	/* FAT16 */
+	movl	-64(%bp),%eax	/* sec512_per_cluster */
+	call	read_file_fat16
+8:
+
 	/* Restore registers */
 	movw	-24(%bp),%gs
 	movw	-22(%bp),%fs
@@ -305,16 +283,18 @@ kernload:
 	popw	%bp
 	ret
 
+
 /*
- * Find the kernel
+ * Find a file
  *  Arguments
  *   %eax: base address
  *   %ecx: # of etries
+ *   %si: pointer to the file name
  *  Return values
  *   %eax: first cluster of the kernel
  *   %ecx: kernel size
  */
-find_kernel:
+find_file:
 	pushw	%bp
 	movw	%sp,%bp
 	movl	%eax,-4(%bp)
@@ -325,12 +305,13 @@ find_kernel:
 	movw	%es,-20(%bp)
 	movw	%fs,-22(%bp)
 	movw	%gs,-24(%bp)
-	/* u32 current base -28(%bp) */
-	/* u32 counter -32(%bp) */
+	movw	%si,-26(%bp)
+	/* u32 current base -32(%bp) */
+	/* u32 counter -36(%bp) */
 	subw	$32,%sp
 1:
-	movl	%eax,-28(%bp)	/* current base address */
-	movl	%ecx,-32(%bp)	/* the remaining entries */
+	movl	%eax,-32(%bp)	/* current base address */
+	movl	%ecx,-36(%bp)	/* the remaining entries */
 
 	xorl	%edx,%edx
 	movl	$SECTOR_SIZE,%ecx
@@ -347,13 +328,13 @@ find_kernel:
 	movw	$(BUFFER & 0xf),%bx
 	movw	%bx,%di		/* Base */
 	addw	%dx,%di		/* Offset */
-	movw	$fname_kernel,%si
+	movw	-26(%bp),%si
 	movl	$11,%ecx	/* Compare 11 bytes */
 	call	memcmp
 	je	3f		/* Found then resolve the file information */
-	movl	-28(%bp),%eax	/* Calculate the base address */
+	movl	-32(%bp),%eax	/* Calculate the base address */
 	addl	$32,%eax	/*  of the next entry */
-	movl	-32(%bp),%ecx	/* Get the remaining entries */
+	movl	-36(%bp),%ecx	/* Get the remaining entries */
 	loop	1b		/* decl. %ecx until %ecx == 0 */
 
 	/* Kernel file is not found in the root directory */
@@ -370,6 +351,7 @@ find_kernel:
 	movl	%es:28(%di),%ecx	/* File size */
 
 	/* Restore registers */
+	movw	-26(%bp),%si
 	movw	-24(%bp),%gs
 	movw	-22(%bp),%fs
 	movw	-20(%bp),%es
@@ -379,6 +361,145 @@ find_kernel:
 	movw	%bp,%sp
 	popw	%bp
 	ret
+
+/*
+ * Read a file (FAT12)
+ *  Arguments
+ *   %eax: # of sectors per cluster
+ *   %ebx: fat region base address
+ *   %esi: first cluster of the file
+ *   %ecx: file size (not used...)
+ *   %edx: data start bytes
+ *   %edi: destination address
+ */
+read_file_fat12:
+	pushw	%bp
+	movw	%sp,%bp
+	/* Save registers */
+	movl	%eax,-4(%bp)
+	movl	%ebx,-8(%bp)
+	movl	%ecx,-12(%bp)
+	movl	%edx,-16(%bp)
+	movl	%edi,-20(%bp)
+	movl	%esi,-24(%bp)
+	movw	%ds,-26(%bp)
+	movw	%es,-28(%bp)
+	/* u32 current cluster -32(%bp) */
+	/* u32 current offset -36(%bp) */
+	subw	$36,%sp
+
+	movl	%esi,-32(%bp)	/* First cluster */
+	movl	%edi,-36(%bp)	/* Offset */
+1:
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	movl	-16(%bp),%eax	/* data_start_bytes */
+	divl	%ecx
+	movl	%eax,%ecx
+	movl	-32(%bp),%eax	/* Current cluster */
+	subl	$2,%eax		/* -2 */
+	mull	-4(%bp)
+	addl	%ecx,%eax
+	addl	(part_lba),%eax
+	movl	-4(%bp),%ecx	/* # of sectors to read */
+	movl	-36(%bp),%edx
+	call	read_file
+
+	xorl	%edx,%edx
+	movl	-4(%bp),%eax
+	movl	$SECTOR_SIZE,%ecx
+	mull	%ecx
+	addl	-36(%bp),%eax	/* Next offset */
+	movl	%eax,-36(%bp)
+
+	movl	-32(%bp),%ecx	/* Current cluster */
+	movl	-8(%bp),%eax
+	call	fat12_next_cluster
+	movl	%ecx,-32(%bp)
+	cmpl	$0x0ff8,%ecx
+	jl	1b
+
+	/* Restore registers */
+	movl	-4(%bp),%eax
+	movl	-8(%bp),%ebx
+	movl	-12(%bp),%ecx
+	movl	-16(%bp),%edx
+	movl	-20(%bp),%edi
+	movl	-24(%bp),%esi
+	movw	-26(%bp),%ds
+	movw	-28(%bp),%es
+	movw	%bp,%sp
+	popw	%bp
+	ret
+
+
+/*
+ * Read a file (FAT16)
+ *  Arguments
+ *   %eax: # of sectors per cluster
+ *   %ebx: fat region base address
+ *   %esi: first cluster of the kernel
+ *   %ecx: kernel size
+ *   %edx: data start bytes
+ *   %edi: destination address
+ */
+read_file_fat16:
+	pushw	%bp
+	movw	%sp,%bp
+	/* Save registers */
+	movl	%eax,-4(%bp)
+	movl	%ebx,-8(%bp)
+	movl	%ecx,-12(%bp)
+	movl	%edx,-16(%bp)
+	movl	%edi,-20(%bp)
+	movl	%esi,-24(%bp)
+	movw	%ds,-26(%bp)
+	movw	%es,-28(%bp)
+	/* u32 current cluster -32(%bp) */
+	/* u32 current offset -36(%bp) */
+	subw	$36,%sp
+
+	movl	%esi,-32(%bp)	/* First cluster */
+	movl	%edi,-36(%bp)	/* Offset */
+1:
+	xorl	%edx,%edx
+	movl	$SECTOR_SIZE,%ecx
+	movl	-16(%bp),%eax	/* data_start_bytes */
+	divl	%ecx
+	movl	%eax,%ecx
+	movl	-32(%bp),%eax	/* Current cluster */
+	subl	$2,%eax		/* -2 */
+	mull	-4(%bp)
+	addl	%ecx,%eax
+	addl	(part_lba),%eax
+	movl	-4(%bp),%ecx	/* # of sectors to read */
+	movl	-36(%bp),%edx
+	call	read_file
+
+	xorl	%edx,%edx
+	movl	-4(%bp),%eax
+	movl	$SECTOR_SIZE,%ecx
+	mull	%ecx
+	addl	-36(%bp),%eax	/* Next offset */
+	movl	%eax,-36(%bp)
+
+	movl	-32(%bp),%ecx	/* Current cluster */
+	movl	-8(%bp),%eax
+	call	fat16_next_cluster
+	movl	%ecx,-32(%bp)
+	cmpl	$0xfff8,%ecx
+	jl	1b
+
+	/* Restore registers */
+	movl	-4(%bp),%eax
+	movl	-8(%bp),%ebx
+	movl	-12(%bp),%ecx
+	movl	-16(%bp),%edx
+	movl	-20(%bp),%edi
+	movw	%bp,%sp
+	popw	%bp
+	ret
+
 
 /*
  * Get the next cluster (FAT12)
@@ -579,22 +700,22 @@ read_to_buf:
 	popw	%bx
 	ret
 
-/* Read %cx sector starting at LBA %eax to the kernel location (%dx offset) */
-read_kernel:
-	pushw	%bx
-	pushw	%dx
+/* Read %cx sector starting at LBA %eax to the kernel location (%edx offset) */
+read_file:
+	pushl	%ebx
+	pushl	%edx
 	pushw	%es
-	movw	$(KERNEL_BASE >> 4),%bx	/* The kernel is loaded to */
-	movw	%bx,%es		/*  KERNEL_BASE + %dx */
-	movw	$(KERNEL_BASE & 0xf),%bx
-	addw	%dx,%bx
+	movl	%edx,%ebx
+	shrl	$4,%ebx
+	movw	%bx,%es		/* The kernel is loaded to */
+	movw	%dx,%bx	
+	andw	$0xf,%bx	/*  (%edx>>4):[%edx&0xf] */
 	movb	(drive),%dl	/*  from the saved drive */
 	call	read		/* Read %cx sectors of the kernel */
 	popw	%es
-	popw	%dx
-	popw	%bx
+	popl	%edx
+	popl	%ebx
 	ret
-
 
 
 /* Read %cx sectors starting at LBA %eax on drive %dl into %es:[%bx] */
@@ -769,3 +890,7 @@ buf_lba:
 /* The file name of the kernel */
 fname_kernel:
 	.ascii	"KERNEL     "
+
+/* The file name of the initramfs */
+fname_initramfs:
+	.ascii	"INITRD     "
