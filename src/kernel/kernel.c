@@ -80,6 +80,27 @@ kmemcmp(void *s1, void *s2, size_t n)
 #endif
 
 /*
+ * kstrcmp
+ */
+int
+kstrcmp(const char *s1, const char *s2)
+{
+    size_t i;
+    int diff;
+
+    i = 0;
+    while ( s1[i] != '\0' || s2[i] != '\0' ) {
+        diff = s1[i] - s2[i];
+        if ( diff ) {
+            return diff;
+        }
+        i++;
+    }
+
+    return 0;
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4

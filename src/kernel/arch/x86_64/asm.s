@@ -51,6 +51,7 @@
 	.globl	_spin_lock
 	.globl	_spin_unlock
 	.globl	_asm_ioapic_map_intr
+	.globl	_task_restart
 	.globl	_intr_null
 	.globl	_intr_apic_loc_tmr
 
@@ -359,10 +360,12 @@ _task_restart:
 	/* Calculate the processor data space from the APIC ID */
 	movq	$P_DATA_SIZE,%rbx
 	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
+	addq	$P_DATA_BASE,%rax
 	movq	%rax,%rbp
 	/* If the next task is not scheduled, immediately restart this task */
 	cmpq	$0,P_NEXT_TASK_OFFSET(%rbp)
 	jz	2f
+	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
 	/* If the current task is null, then do not need to save anything */
 	cmpq	$0,P_CUR_TASK_OFFSET(%rbp)
 	jz	1f

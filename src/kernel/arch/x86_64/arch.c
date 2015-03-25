@@ -33,6 +33,10 @@
 /* Prototype declarations */
 static int _load_trampoline(void);
 
+void intr_gpf(void);
+struct arch_task t;
+struct stackframe64 s;
+
 /* ACPI structure */
 struct acpi arch_acpi;
 
@@ -150,9 +154,38 @@ bsp_init(void)
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
 
+    /* Find init server from the initramfs */
+    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 offset = 0;
+    u64 size;
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, "init") ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find init */
+        return;
+    }
+
+    kmemset(&s, 0, sizeof(struct stackframe64));
+    s.ss = 0x10;
+    s.cs = 0x08;
+    s.ip = 0x20000ULL + offset;
+    s.sp = kmalloc(4096);
+    s.flags = 0x0200;
+    t.rp = &s;
+    t.sp0 = kmalloc(4096);
+    this_cpu()->next_task = &t;
+    this_cpu()->tss.rsp0l = kmalloc(4096);
+
     /* Initialize local APIC counter */
     sti();
     lapic_start_timer(HZ, IV_LOC_TMR);
+    //task_restart();
 }
 
 /*

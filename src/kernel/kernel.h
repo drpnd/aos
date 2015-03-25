@@ -42,6 +42,7 @@ struct ktask {
 #define HAS_KMEMCMP     1       /* kmemcmp is implemented in asm.s. */
 void * kmemset(void *, int, size_t);
 int kmemcmp(void *, void *, size_t);
+int kstrcmp(const char *, const char *);
 void halt(void);
 
 /* in memory.c */

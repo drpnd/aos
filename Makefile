@@ -19,10 +19,16 @@ all:
 	@echo "make all is not currently supported."
 
 ## Compile initramfs (including kernel as well)
-initramfs:
+initrd:
+#	Reserve for file information
+	@dd if=/dev/zero of=initramfs seek=0 bs=1 count=4096 conv=notrunc > /dev/null 2>&1
 #	Compile and write the init server
-	@off=0; \
-	org=`expr \( $$off / 16 + 1 \) \* 16 + 65536`; \
+	@target='init'; entry=0; \
+	off=`stat -f "%z" initramfs`; \
+	org=`expr \( $$off / 16 + 1 \) \* 16 + 131072`; \
+	printf "$$target\000" | dd of=initramfs seek=`expr $$entry \* 32` bs=1 conv=notrunc > /dev/null 2>&1; \
+	printf "0: %.16x" $$off | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 16` conv=notrunc > /dev/null 2>&1; \
+	printf "0: %.16x" `stat -f "%z" src/$$target` | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 24` conv=notrunc > /dev/null 2>&1; \
 	ORG=$$org make -C src init; \
 	dd if=src/init of=initramfs seek=$$off bs=1 conv=notrunc > /dev/null 2>&1
 
@@ -38,7 +44,7 @@ kernel:
 	make -C src kpack
 
 ## Create FAT12/16 image
-image: bootloader kernel initramfs
+image: bootloader kernel initrd
 # Check the file size first
 	@if [ ${DISKBOOT_SIZE} -ge 446 ]; then echo "Error: src/diskboot is too large"; exit 1; fi
 	@if [ ${BOOTMON_SIZE} -ge 28672 ]; then echo "Error: src/bootmon is too large"; exit 1; fi

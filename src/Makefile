@@ -61,7 +61,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 
 ## init server
 init: servers/init/init.o
-	$(LD) -nostdlib -o $@ $^
+	$(LD) -N -e main -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## Clean
 clean:
