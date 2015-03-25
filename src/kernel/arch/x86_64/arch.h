@@ -214,6 +214,7 @@ void cli(void);
 void sti(void);
 void intr_null(void);
 void intr_apic_loc_tmr(void);
+void syscall_setup(void *);
 void pause(void);
 u8 inb(u16);
 u16 inw(u16);

@@ -61,6 +61,13 @@ _load_trampoline(void)
     return 0;
 }
 
+void
+_test(u64 nr)
+{
+    __asm__ __volatile__ (" sti;hlt;cli ");
+    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(nr));
+}
+
 /*
  * Initialize the bootstrap processor
  */
@@ -119,6 +126,9 @@ bsp_init(void)
 
     /* Initialize the local APIC */
     lapic_init();
+
+    /* Setup system call */
+    syscall_setup(_test);
 
     /* Enable this processor */
     pdata = this_cpu();

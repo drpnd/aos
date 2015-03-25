@@ -250,8 +250,9 @@ _spin_unlock_intr:
 	ret
 
 
-/* void syscall_setup(void) */
+/* void syscall_setup(void *) */
 _syscall_setup:
+	movq	%rdi,(syscall_function)
 	/* Write syscall entry point */
 	movq	$0xc0000082,%rcx	/* IA32_LSTAR */
 	movq	$syscall_entry,%rax
@@ -292,15 +293,10 @@ syscall_entry:
 	andw	$3,%ax
 	pushq	%rax
 
-	/* Check the system call number */
-	cmpq	$SYSCALL_MAX_NR,%rdi
-	jg	1f		/* Exceed the maximum */
-
-	/* Find the corresponding system call function */
-	shlq	$3,%rdi
-	//movq	(_syscall_table),%rdx
-	addq	%rdi,%rdx
-	movq	(%rdx),%rax
+	/* Call a function in C */
+	movq	(syscall_function),%rax
+	cmpq	$0,%rax
+	je	1f
 	callq	*%rax
 1:
 	popq	%rax
@@ -500,3 +496,8 @@ _task_restart:
 2:
 	intr_lapic_isr_done
 	iretq
+
+
+	.data
+syscall_function:
+	.quad	0
