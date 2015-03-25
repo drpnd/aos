@@ -252,7 +252,7 @@ _spin_unlock_intr:
 
 /* void syscall_setup(void *) */
 _syscall_setup:
-	movq	%rdi,(syscall_function)
+	movq	%rdi,(syscall_table)
 	/* Write syscall entry point */
 	movq	$0xc0000082,%rcx	/* IA32_LSTAR */
 	movq	$syscall_entry,%rax
@@ -272,14 +272,6 @@ _syscall_setup:
 	ret
 
 
-/* void syscall(u64); */
-_syscall:
-	cli
-	syscall
-	sti
-	ret
-
-
 /* Entry point to a syscall */
 syscall_entry:
 	cli
@@ -289,63 +281,65 @@ syscall_entry:
 	pushq	%rcx		/* rip */
 	pushq	%r11		/* rflags */
 	/* Save the ring */
-	movw	%cs,%ax
-	andw	$3,%ax
-	pushq	%rax
+	movw	%cs,%cx
+	andw	$3,%cx
+	pushq	%rcx
 
-	/* Call a function in C */
-	movq	(syscall_function),%rax
-	cmpq	$0,%rax
+	/* Lookup the system call table and call one corresponding to %rax */
+	movq	(syscall_table),%rcx
+	cmpq	$0,%rcx
 	je	1f
-	callq	*%rax
+	shlq	$3,%rax		/* 8 byte for each function pointer */
+	addq	%rax,%rcx
+	callq	*(%rcx)		/* Call the function */
 1:
-	popq	%rax
+	popq	%rdx
 	popq	%r11
 	popq	%rcx
 	popq	%rbp
 	popq	%rsp
-	cmpw	$3,%ax
+	cmpw	$3,%dx
 	je	syscall_r3	/* Ring 3 */
-	cmpw	$2,%ax
+	cmpw	$2,%dx
 	je	syscall_r2	/* Ring 2 */
-	cmpw	$1,%ax
+	cmpw	$1,%dx
 	je	syscall_r1	/* Ring 1 */
 syscall_r0:
 	/* Use iretq because sysretq cannot return to ring 0 */
-	movq	$GDT_RING0_DATA_SEL,%rax
-	pushq	%rax		/* ss */
-	leaq	8(%rsp),%rax
-	pushq	%rax		/* rsp */
+	movq	$GDT_RING0_DATA_SEL,%rdx
+	pushq	%rdx		/* ss */
+	leaq	8(%rsp),%rdx
+	pushq	%rdx		/* rsp */
 	pushq	%r11		/* remove IA32_FMASK; */
 				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$GDT_RING0_CODE_SEL,%rax
-	pushq	%rax		/* cs */
+	movq	$GDT_RING0_CODE_SEL,%rdx
+	pushq	%rdx		/* cs */
 	pushq	%rcx		/* rip */
 	sti
 	iretq
 syscall_r1:
 	/* Use iretq because sysretq cannot return to ring 1 */
-	movq	$(GDT_RING1_DATA_SEL + 1),%rax
-	pushq	%rax		/* ss */
-	leaq	8(%rsp),%rax
-	pushq	%rax		/* rsp */
+	movq	$(GDT_RING1_DATA_SEL + 1),%rdx
+	pushq	%rdx		/* ss */
+	leaq	8(%rsp),%rdx
+	pushq	%rdx		/* rsp */
 	pushq	%r11		/* remove IA32_FMASK; */
 				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$(GDT_RING1_CODE_SEL + 1),%rax
-	pushq	%rax		/* cs */
+	movq	$(GDT_RING1_CODE_SEL + 1),%rdx
+	pushq	%rdx		/* cs */
 	pushq	%rcx		/* rip */
 	sti
 	iretq
 syscall_r2:
 	/* Use iretq because sysretq cannot return to ring 2 */
-	movq	$(GDT_RING2_DATA_SEL + 2),%rax
-	pushq	%rax		/* ss */
-	leaq	8(%rsp),%rax
-	pushq	%rax		/* rsp */
+	movq	$(GDT_RING2_DATA_SEL + 2),%rdx
+	pushq	%rdx		/* ss */
+	leaq	8(%rsp),%rdx
+	pushq	%rdx		/* rsp */
 	pushq	%r11		/* remove IA32_FMASK; */
 				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$(GDT_RING2_CODE_SEL + 2),%rax
-	pushq	%rax		/* cs */
+	movq	$(GDT_RING2_CODE_SEL + 2),%rdx
+	pushq	%rdx		/* cs */
 	pushq	%rcx		/* rip */
 	sti
 	iretq
@@ -499,5 +493,5 @@ _task_restart:
 
 
 	.data
-syscall_function:
+syscall_table:
 	.quad	0

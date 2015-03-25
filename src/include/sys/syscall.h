@@ -21,21 +21,17 @@
  * SOFTWARE.
  */
 
-#include <aos/const.h>
+#ifndef _SYS_SYSCALL_H
+#define _SYS_SYSCALL_H
 
-/*
- * Entry point for the init program
- */
-int
-main(int argc, char *argv[])
-{
-    __asm__ __volatile__ ( "syscall" :: "a"(1), "D"(10), "S"(20) );
-    for ( ;; ) {
-        //__asm__ __volatile__ ( "syscall" :: "a"(1), "D"(10), "S"(20) );
-    }
+#define SYS_exit        1
+#define SYS_fork        2
+#define SYS_read        3
+#define SYS_write       4
+#define SYS_open        5
+#define SYS_close       6
 
-    return 0;
-}
+#endif /* _SYS_SYSCALL_H */
 
 /*
  * Local variables:

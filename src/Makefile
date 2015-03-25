@@ -10,7 +10,7 @@ ARCH=x86_64
 
 ## Global flags
 ASFLAGS=-nostdlib -I./kernel/arch/$(ARCH)/
-CFLAGS=-I./include -Wall -nostdlib -O3 -m64
+CFLAGS=-I./include -Wall -nostdlib -O3 -m64 -Wsuggest-attribute=noreturn
 
 ## Override the flags
 diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
@@ -60,7 +60,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
 
 ## init server
-init: servers/init/init.o
+init: servers/init/init.o lib/libc.o
 	$(LD) -N -e main -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## Clean

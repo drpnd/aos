@@ -36,6 +36,8 @@ static int _load_trampoline(void);
 struct arch_task t;
 struct stackframe64 s;
 
+void *syscall_table[SYSCALL_MAX_NR];
+
 /* ACPI structure */
 struct acpi arch_acpi;
 
@@ -62,10 +64,9 @@ _load_trampoline(void)
 }
 
 void
-_test(u64 nr)
+_test()
 {
-    __asm__ __volatile__ (" sti;hlt;cli ");
-    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(nr));
+    __asm__ __volatile__ ("movq %rdi,%dr0;movq %rsi,%dr1;sti;hlt;cli");
 }
 
 /*
@@ -128,7 +129,11 @@ bsp_init(void)
     lapic_init();
 
     /* Setup system call */
-    syscall_setup(_test);
+    for ( i = 0; i < SYSCALL_MAX_NR; i++ ) {
+        syscall_table[i] = NULL;
+    }
+    syscall_table[1] = _test;
+    syscall_setup(syscall_table);
 
     /* Enable this processor */
     pdata = this_cpu();
