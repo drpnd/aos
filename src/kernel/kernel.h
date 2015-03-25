@@ -30,19 +30,41 @@
 /* Page size */
 #define PAGESIZE                4096
 
+/* Task policy */
+#define KTASK_POLICY_KERNEL     0
+#define KTASK_POLICY_DRIVER     1
+#define KTASK_POLICY_USER       3
+
+/*
+ * Kernel task state
+ */
+enum ktask_state {
+    KTASK_STATE_CREATED,
+    KTASK_STATE_READY,
+    KTASK_STATE_RUNNING,
+    KTASK_STATE_BLOCKED,
+};
+
+/*
+ * Kernel task data structure
+ */
 struct ktask {
     /* Task ID */
     u64 id;
     /* Architecture specific structure; i.e., (struct arch_task) */
     void *arch;
+    /* State */
+    enum ktask_state state;
 };
+
+/* in kernel.c */
+int kstrcmp(const char *, const char *);
 
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in asm.s. */
 #define HAS_KMEMCMP     1       /* kmemcmp is implemented in asm.s. */
 void * kmemset(void *, int, size_t);
-int kmemcmp(void *, void *, size_t);
-int kstrcmp(const char *, const char *);
+int kmemcmp(const void *, const void *, size_t);
 void halt(void);
 
 /* in memory.c */

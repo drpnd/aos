@@ -50,6 +50,8 @@
 	.globl	_spin_unlock_intr
 	.globl	_spin_lock
 	.globl	_spin_unlock
+	.globl	_syscall_setup
+	.globl	_syscall
 	.globl	_asm_ioapic_map_intr
 	.globl	_task_restart
 	.globl	_intr_null
@@ -248,6 +250,110 @@ _spin_unlock_intr:
 	ret
 
 
+/* void syscall_setup(void) */
+_syscall_setup:
+	/* Write syscall entry point */
+	movq	$0xc0000082,%rcx        /* IA32_LSTAR */
+	movq	$syscall_entry,%rax
+	movq	%rax,%rdx
+	shrq	$32,%rdx
+	wrmsr
+	/* Segment register */
+	movq	$0xc0000081,%rcx
+	movq	$0x0,%rax
+	movq	$(GDT_RING0_CODE_SEL | ((GDT_RING3_CODE_SEL + 3) << 16)),%rdx
+	wrmsr
+	/* Enable syscall */
+	movl	$0xc0000080,%ecx        /* EFER MSR number */
+	rdmsr
+	btsl	$0,%eax                 /* SYSCALL ENABLE bit = 1 */
+	wrmsr
+	ret
+
+/* void syscall(u64); */
+_syscall:
+	cli
+	syscall
+	sti
+	ret
+
+/* Entry point to a syscall */
+syscall_entry:
+	cli
+	/* rip and rflags are stored in rcx and r11, respectively. */
+	pushq	%rsp
+	pushq	%rbp
+	pushq	%rcx		/* rip */
+	pushq	%r11		/* rflags */
+	/* Save the ring */
+	movw	%cs,%ax
+	andw	$3,%ax
+	pushq	%rax
+
+	/* Check the system call number */
+	cmpq	$SYSCALL_MAX_NR,%rdi
+	jg	1f		/* Exceed the maximum */
+
+	/* Find the corresponding system call function */
+	shlq	$3,%rdi
+	//movq	(_syscall_table),%rdx
+	addq	%rdi,%rdx
+	movq	(%rdx),%rax
+	callq	*%rax
+1:
+	popq	%rax
+	popq	%r11
+	popq	%rcx
+	popq	%rbp
+	popq	%rsp
+	cmpw	$3,%ax
+	je	syscall_r3	/* Ring 3 */
+	cmpw	$2,%ax
+	je	syscall_r2	/* Ring 2 */
+	cmpw	$1,%ax
+	je	syscall_r1	/* Ring 1 */
+syscall_r0:
+	/* Use iretq because sysretq cannot return to ring 0 */
+	movq	$GDT_RING0_DATA_SEL,%rax
+	pushq	%rax		/* ss */
+	leaq	8(%rsp),%rax
+	pushq	%rax		/* rsp */
+	pushq	%r11		/* remove IA32_FMASK; */
+				/* rflags <- (r11 & 3C7FD7H) | 2; */
+	movq	$GDT_RING0_CODE_SEL,%rax
+	pushq	%rax		/* cs */
+	pushq	%rcx		/* rip */
+	sti
+	iretq
+syscall_r1:
+	/* Use iretq because sysretq cannot return to ring 1 */
+	movq	$(GDT_RING1_DATA_SEL + 1),%rax
+	pushq	%rax		/* ss */
+	leaq	8(%rsp),%rax
+	pushq	%rax		/* rsp */
+	pushq	%r11		/* remove IA32_FMASK; */
+				/* rflags <- (r11 & 3C7FD7H) | 2; */
+	movq	$(GDT_RING1_CODE_SEL + 1),%rax
+	pushq	%rax		/* cs */
+	pushq	%rcx		/* rip */
+	sti
+	iretq
+syscall_r2:
+	/* Use iretq because sysretq cannot return to ring 2 */
+	movq	$(GDT_RING2_DATA_SEL + 2),%rax
+	pushq	%rax		/* ss */
+	leaq	8(%rsp),%rax
+	pushq	%rax		/* rsp */
+	pushq	%r11		/* remove IA32_FMASK; */
+				/* rflags <- (r11 & 3C7FD7H) | 2; */
+	movq	$(GDT_RING2_CODE_SEL + 2),%rax
+	pushq	%rax		/* cs */
+	pushq	%rcx		/* rip */
+	sti
+	iretq
+syscall_r3:
+	sysretq
+
 /* void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base) */
 _asm_ioapic_map_intr:
 	/* Copy arguments */
@@ -376,7 +482,7 @@ _task_restart:
 	/* Notify that the current task is switched (to the kernel) */
 	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
-	callq	_ktask_swiched
+	callq	_arch_task_swiched
 	/* Task switch (set the stack frame of the new task) */
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
 	movq	%rax,P_CUR_TASK_OFFSET(%rbp)

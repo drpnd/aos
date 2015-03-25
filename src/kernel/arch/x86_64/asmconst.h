@@ -22,6 +22,16 @@
  * SOFTWARE.
  */
 
+	/* GDT selectors */
+	.set	GDT_RING0_CODE_SEL,0x08
+	.set	GDT_RING0_DATA_SEL,0x10
+	.set	GDT_RING1_CODE_SEL,0x18
+	.set	GDT_RING1_DATA_SEL,0x20
+	.set	GDT_RING2_CODE_SEL,0x28
+	.set	GDT_RING2_DATA_SEL,0x30
+	.set	GDT_RING3_CODE_SEL,0x38
+	.set	GDT_RING3_DATA_SEL,0x40
+
 	/* Temporary GDT for application processors */
 	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
 	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
@@ -50,3 +60,6 @@
 	.set	TSS_SP0,4
 	/* Trampoline */
 	.set	TRAMPOLINE_VEC,0x70
+
+	/* Syscall */
+	.set	SYSCALL_MAX_NR,0x10

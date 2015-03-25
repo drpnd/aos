@@ -171,11 +171,11 @@ bsp_init(void)
     }
 
     kmemset(&s, 0, sizeof(struct stackframe64));
-    s.ss = 0x10;
-    s.cs = 0x08;
+    s.ss = 0x20 + 1;
+    s.cs = 0x18 + 1;
     s.ip = 0x20000ULL + offset;
     s.sp = kmalloc(4096);
-    s.flags = 0x0200;
+    s.flags = 0x1200;
     t.rp = &s;
     t.sp0 = kmalloc(4096);
     this_cpu()->next_task = &t;
@@ -237,6 +237,91 @@ this_cpu(void)
     pdata = (struct p_data *)(P_DATA_BASE + lapic_id() * P_DATA_SIZE);
 
     return pdata;
+}
+
+/*
+ * Create a new task
+ */
+struct arch_task *
+arch_task_new(void *entry, int policy)
+{
+    struct arch_task *t;
+    struct stackframe64 *s;
+    void *kstack;
+    void *ustack;
+    u64 cs;
+    u64 ss;
+    u64 flags;
+
+    switch ( policy ) {
+    case KTASK_POLICY_KERNEL:
+        cs = GDT_RING0_CODE_SEL;
+        ss = GDT_RING0_DATA_SEL;
+        flags = 0x0200;
+        break;
+    case KTASK_POLICY_DRIVER:
+        cs = GDT_RING1_CODE_SEL;
+        ss = GDT_RING1_DATA_SEL;
+        flags = 0x1200;
+        break;
+    case KTASK_POLICY_USER:
+        cs = GDT_RING3_CODE_SEL;
+        ss = GDT_RING3_DATA_SEL;
+        flags = 0x3200;
+        break;
+    }
+
+    /* Allocate task */
+    t = kmalloc(sizeof(struct arch_task));
+    if ( NULL == t ) {
+        return NULL;
+    }
+    /* Allocate for stack frame */
+    s = kmalloc(sizeof(struct stackframe64));
+    if ( NULL == s ) {
+        kfree(t);
+        return NULL;
+    }
+    kmemset(s, 0, sizeof(struct stackframe64));
+    /* Allocate kernel stack */
+    kstack = kmalloc(4096);
+    if ( NULL == kstack ) {
+        kfree(t);
+        kfree(s);
+        return NULL;
+    }
+    /* Allocate user stack */
+    ustack = kmalloc(4096);
+    if ( NULL == ustack ) {
+        kfree(t);
+        kfree(s);
+        kfree(kstack);
+        return NULL;
+    }
+    s->cs = cs;
+    s->ss = ss;
+    s->ip = (u64)entry;
+    s->sp = (u64)ustack;
+    s->flags = flags;
+    t->rp = s;
+    t->sp0 = (u64)kstack;
+
+    return t;
+}
+
+
+/*
+ * A routine called when task is switched
+ * Note that this is in the interrupt handler and DO NOT change the interrupt 
+ */
+void
+arch_task_swiched(struct arch_task *prev, struct arch_task *next)
+{
+    if ( NULL != prev ) {
+        /* Switched from a task */
+        prev->ktask->state = KTASK_STATE_READY;
+        next->ktask->state = KTASK_STATE_RUNNING;
+    }
 }
 
 /*

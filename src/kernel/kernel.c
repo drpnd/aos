@@ -35,15 +35,6 @@ kmain(void)
     }
 }
 
-void
-ktask_swiched(void *prev, void *next)
-{
-    u16 *video;
-    video = (u16 *)0xb8000;
-    *(video + 80 + lapic_id()) = 0x0700 | '*';
-}
-
-
 #if !defined(HAS_KMEMSET) || !HAS_KMEMSET
 /*
  * kmemset
@@ -69,7 +60,7 @@ kmemset(void *b, int c, size_t len)
  * kmemcmp
  */
 int
-kmemcmp(void *s1, void *s2, size_t n)
+kmemcmp(const void *s1, const void *s2, size_t n)
 {
     size_t i;
     int diff;
