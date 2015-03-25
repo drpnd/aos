@@ -253,7 +253,7 @@ _spin_unlock_intr:
 /* void syscall_setup(void) */
 _syscall_setup:
 	/* Write syscall entry point */
-	movq	$0xc0000082,%rcx        /* IA32_LSTAR */
+	movq	$0xc0000082,%rcx	/* IA32_LSTAR */
 	movq	$syscall_entry,%rax
 	movq	%rax,%rdx
 	shrq	$32,%rdx
@@ -264,11 +264,12 @@ _syscall_setup:
 	movq	$(GDT_RING0_CODE_SEL | ((GDT_RING3_CODE_SEL + 3) << 16)),%rdx
 	wrmsr
 	/* Enable syscall */
-	movl	$0xc0000080,%ecx        /* EFER MSR number */
+	movl	$0xc0000080,%ecx	/* EFER MSR number */
 	rdmsr
-	btsl	$0,%eax                 /* SYSCALL ENABLE bit = 1 */
+	btsl	$0,%eax		/* SYSCALL ENABLE bit [bit 0] = 1 */
 	wrmsr
 	ret
+
 
 /* void syscall(u64); */
 _syscall:
@@ -276,6 +277,7 @@ _syscall:
 	syscall
 	sti
 	ret
+
 
 /* Entry point to a syscall */
 syscall_entry:
@@ -353,6 +355,7 @@ syscall_r2:
 	iretq
 syscall_r3:
 	sysretq
+
 
 /* void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base) */
 _asm_ioapic_map_intr:
