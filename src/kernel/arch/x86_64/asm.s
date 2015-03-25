@@ -376,7 +376,7 @@ _task_restart:
 	/* Notify that the current task is switched (to the kernel) */
 	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
-	//callq
+	callq	_ktask_swiched
 	/* Task switch (set the stack frame of the new task) */
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
 	movq	%rax,P_CUR_TASK_OFFSET(%rbp)

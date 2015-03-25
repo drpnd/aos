@@ -33,7 +33,6 @@
 /* Prototype declarations */
 static int _load_trampoline(void);
 
-void intr_gpf(void);
 struct arch_task t;
 struct stackframe64 s;
 
@@ -185,7 +184,9 @@ bsp_init(void)
     /* Initialize local APIC counter */
     sti();
     lapic_start_timer(HZ, IV_LOC_TMR);
-    //task_restart();
+
+    /* Start the init process */
+    task_restart();
 }
 
 /*

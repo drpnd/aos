@@ -35,6 +35,15 @@ kmain(void)
     }
 }
 
+void
+ktask_swiched(void *prev, void *next)
+{
+    u16 *video;
+    video = (u16 *)0xb8000;
+    *(video + 80 + lapic_id()) = 0x0700 | '*';
+}
+
+
 #if !defined(HAS_KMEMSET) || !HAS_KMEMSET
 /*
  * kmemset
