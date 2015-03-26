@@ -21,19 +21,22 @@
  * SOFTWARE.
  */
 
-#include <aos/const.h>
+#include <sys/syscall.h>
+
+int syscall();
+
+void exit(int) __attribute__ ((__noreturn__));
 
 /*
- * Entry point for the init program
+ * Exit
  */
-int
-main(int argc, char *argv[])
+void
+exit(int status)
 {
-    for ( ;; ) {
-        //__asm__ __volatile__ ( "syscall" :: "a"(1), "D"(10), "S"(20) );
-    }
+    syscall(SYS_exit, status);
 
-    return 0;
+    /* Infinite loop to prevent the warning: 'noreturn' function does return */
+    while ( 1 ) {}
 }
 
 /*

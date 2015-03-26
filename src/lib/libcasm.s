@@ -21,26 +21,19 @@
  * SOFTWARE.
  */
 
-#include <aos/const.h>
+	.text
 
-/*
- * Entry point for the init program
- */
-int
-main(int argc, char *argv[])
-{
-    for ( ;; ) {
-        //__asm__ __volatile__ ( "syscall" :: "a"(1), "D"(10), "S"(20) );
-    }
+	.code64
+	.globl	_syscall
 
-    return 0;
-}
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */
+/* int syscall(arg0, ..., arg5) */
+_syscall:
+	movq	%rdi,%rax
+	movq	%rsi,%rdi
+	movq	%rdx,%rsi
+	movq	%rcx,%rdx
+	movq	%r8,%r10
+	movq	%r9,%r8
+	movq	-8(%rsp),%r9
+	syscall
+	ret

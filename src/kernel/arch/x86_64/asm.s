@@ -51,7 +51,6 @@
 	.globl	_spin_lock
 	.globl	_spin_unlock
 	.globl	_syscall_setup
-	.globl	_syscall
 	.globl	_asm_ioapic_map_intr
 	.globl	_task_restart
 	.globl	_intr_null
@@ -278,6 +277,7 @@ syscall_entry:
 	/* rip and rflags are stored in rcx and r11, respectively. */
 	pushq	%rsp
 	pushq	%rbp
+	pushq	%rbx
 	pushq	%rcx		/* rip */
 	pushq	%r11		/* rflags */
 	/* Save the ring */
@@ -286,16 +286,18 @@ syscall_entry:
 	pushq	%rcx
 
 	/* Lookup the system call table and call one corresponding to %rax */
-	movq	(syscall_table),%rcx
-	cmpq	$0,%rcx
+	movq	(syscall_table),%rbx
+	cmpq	$0,%rbx
 	je	1f
-	shlq	$3,%rax		/* 8 byte for each function pointer */
-	addq	%rax,%rcx
-	callq	*(%rcx)		/* Call the function */
+	shlq	$3,%rbx		/* 8 byte for each function pointer */
+	addq	%rax,%rbx
+	movq	%r10,%rcx	/* Replace the 4th argument with %r10 */
+	callq	*(%rbx)		/* Call the function */
 1:
 	popq	%rdx
 	popq	%r11
 	popq	%rcx
+	popq	%rbx
 	popq	%rbp
 	popq	%rsp
 	cmpw	$3,%dx
