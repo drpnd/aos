@@ -30,6 +30,9 @@
 /* Page size */
 #define PAGESIZE                4096
 
+/* Process table size */
+#define PROC_NR                 65536
+
 /* Task policy */
 #define KTASK_POLICY_KERNEL     0
 #define KTASK_POLICY_DRIVER     1
@@ -44,6 +47,17 @@ struct proc {
 
     /* Parent process */
     struct proc *parent;
+
+    /* Architecture specific structure; i.e., (struct arch_proc) */
+    void *arch;
+};
+
+/*
+ * Process table
+ */
+struct proc_table {
+    struct proc *procs[PROC_NR];
+    int lastpid;
 };
 
 /*

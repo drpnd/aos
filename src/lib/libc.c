@@ -21,6 +21,16 @@
  * SOFTWARE.
  */
 
+#if __LP64__
+
+typedef signed long long ssize_t;
+typedef unsigned long long size_t;
+typedef signed int pid_t;
+
+#else
+#error "Must be LP64"
+#endif
+
 #include <sys/syscall.h>
 
 int syscall();
@@ -37,6 +47,33 @@ exit(int status)
 
     /* Infinite loop to prevent the warning: 'noreturn' function does return */
     while ( 1 ) {}
+}
+
+/*
+ * Fork
+ */
+pid_t
+fork(void)
+{
+    return syscall(SYS_fork);
+}
+
+/*
+ * getpid
+ */
+pid_t
+getpid(void)
+{
+    return syscall(SYS_getpid);
+}
+
+/*
+ * getppid
+ */
+pid_t
+getppid(void)
+{
+    return syscall(SYS_getppid);
 }
 
 /*

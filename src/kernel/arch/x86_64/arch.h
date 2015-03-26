@@ -166,6 +166,14 @@ struct tss {
 
 
 /*
+ * Process (architecture specific structure)
+ */
+struct arch_proc {
+    /* Page table (cr3) */
+    u64 pgt;
+} __attribute__ ((packed));
+
+/*
  * Task (architecture specific structure)
  */
 struct arch_task {

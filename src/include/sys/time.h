@@ -21,57 +21,23 @@
  * SOFTWARE.
  */
 
-	.text
+#ifndef _SYS_TIME_H
+#define _SYS_TIME_H
 
-	.code64
-	.globl	_syscall
-	.globl	_memset
-	.globl	_memcmp
-	.globl	_memcpy
+#include <sys/types.h>
 
-/* int syscall(arg0, ..., arg5) */
-_syscall:
-	movq	%rdi,%rax
-	movq	%rsi,%rdi
-	movq	%rdx,%rsi
-	movq	%rcx,%rdx
-	movq	%r8,%r10
-	movq	%r9,%r8
-	movq	-8(%rsp),%r9
-	syscall
-	ret
+struct timeval {
+    time_t      tv_sec;         /* seconds since Jan. 1, 1970 */
+    suseconds_t tv_usec;        /* and microseconds */
+};
 
-/* void * memset(void *b, int c, size_t len) */
-_memset:
-	pushq	%rdi
-	pushq	%rsi
-	movl	%esi,%eax	/* c */
-	movq	%rdx,%rcx	/* len */
-	cld			/* Ensure the DF cleared */
-	rep	stosb		/* Set %al to (%rdi)-(%rdi+%rcx) */
-	popq	%rsi
-	popq	%rdi
-	movq	%rdi,%rax	/* Restore for the return value */
-	ret
+#endif /* _SYS_TIME_H */
 
-/* int memcmp(void *s1, void *s2, size_t n) */
-_memcmp:
-	xorq	%rax,%rax
-	movq	%rdx,%rcx	/* n */
-	cld			/* Ensure the DF cleared */
-	repe	cmpsb		/* Compare byte at (%rsi) with byte at (%rdi) */
-	jz	1f
-	decq	%rdi		/* rollback one */
-	decq	%rsi		/* rollback one */
-	movb	(%rdi),%al	/* *s1 */
-	subb	(%rsi),%al	/* *s1 - *s2 */
-1:
-	ret
-
-/* int memcpy(void *__restrict dst, void *__restrict src, size_t n) */
-_memcpy:
-	movq	%rdi,%rax	/* Return value */
-	movq	%rdx,%rcx	/* n */
-	cld			/* Ensure the DF cleared */
-	rep	movsb		/* Copy byte at (%rsi) to (%rdi) */
-	ret
+/*
+ * Local variables:
+ * tab-width: 4
+ * c-basic-offset: 4
+ * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
+ */

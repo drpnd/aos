@@ -159,6 +159,54 @@ sys_open(const char *path, int oflag, ...)
 }
 
 /*
+ * Wait for process termination
+ *
+ * SYNOPSIS
+ *      pid_t
+ *      wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage);
+ *
+ * DESCRIPTION
+ *      The wait4() function suspends execution of its calling process until
+ *      stat_loc information is available for a terminated child process, or a
+ *      signal is received.  On return from a successful from a successful
+ *      wait4() call, the stat_loc area contains termination information about
+ *      the process that exited as defined below.
+ *
+ *      The pid parameter specified the set of child processes for which to
+ *      wait.  If pid is -1, the call waits for any child process.  If pid is 0,
+ *      the call wailts for any child process in the process group of the
+ *      caller.  If pid is greater than zero, the call waits for the process
+ *      with process ID pid.  If pid is less than -1, the call waits for any
+ *      process whose process group ID equals the absolute value of pid.
+ *
+ *      The stat_loc parameter is defined below.  The options parameter contains
+ *      the bitwise OR of any of the following options.  The WNOHANG options is
+ *      used to indicate that the call should not block if there are no
+ *      processes that wish to report status.  If the WUNTRACED option is set,
+ *      children of the current process that are stopped due to a SIGTTIN,
+ *      SIGTTOU, SIGTSTPP, or SIGTOP signal also have their status reported.
+ *
+ *      If rusage is non-zero, a summary of the resources used by the terminated
+ *      process and all its children is returned.
+ *
+ *      When the WNOHANG option is specified and no processes with to report
+ *      status, the wait4() function returns a process ID of 0.
+ *
+ * RETURN VALUES
+ *      If the wait4() function returns due to a stopped or terminated child
+ *      process, the process ID of the child is returned to the calling process.
+ *      If there are no children not previously awaited, a value of -1 is
+ *      returned.  Otherwise, if WNOHANG is specified and there are no stopped
+ *      or exited children, a value of 0 is returned.  If an error is detected
+ *      or a caught signal aborts the call, a value of -1 is returned.
+ */
+pid_t
+wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
+{
+    return -1;
+}
+
+/*
  * Delete a descriptor
  *
  * SYNOPSIS
