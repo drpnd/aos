@@ -34,7 +34,7 @@
 #define SYS_getpid      20
 #define SYS_getppid     39
 #define SYS_execve      59
-#define SYS_NR          60
+#define SYS_MAXSYSCALL  60
 
 #endif /* _SYS_SYSCALL_H */
 

@@ -26,6 +26,7 @@
 
 #include <aos/const.h>
 #include <aos/types.h>
+#include <sys/resource.h>
 
 /* Page size */
 #define PAGESIZE                4096
@@ -105,6 +106,7 @@ ssize_t sys_read(int, void *, size_t);
 ssize_t sys_write(int, const void *, size_t);
 int sys_open(const char *, int, ...);
 int sys_close(int);
+pid_t sys_wait4(pid_t, int *, int, struct rusage *);
 int sys_execve(const char *, char *const [], char *const []);
 pid_t sys_getpid(void);
 pid_t sys_getppid(void);

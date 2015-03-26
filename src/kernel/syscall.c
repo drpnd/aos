@@ -163,7 +163,7 @@ sys_open(const char *path, int oflag, ...)
  *
  * SYNOPSIS
  *      pid_t
- *      wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage);
+ *      sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage);
  *
  * DESCRIPTION
  *      The wait4() function suspends execution of its calling process until
@@ -201,7 +201,7 @@ sys_open(const char *path, int oflag, ...)
  *      or a caught signal aborts the call, a value of -1 is returned.
  */
 pid_t
-wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
+sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
 {
     return -1;
 }

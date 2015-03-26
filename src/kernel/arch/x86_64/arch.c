@@ -38,7 +38,7 @@ struct arch_task t;
 struct stackframe64 s;
 
 /* System call table */
-void *syscall_table[SYS_NR];
+void *syscall_table[SYS_MAXSYSCALL];
 
 /* ACPI structure */
 struct acpi arch_acpi;
@@ -125,7 +125,7 @@ bsp_init(void)
     lapic_init();
 
     /* Setup system call */
-    for ( i = 0; i < SYS_NR; i++ ) {
+    for ( i = 0; i < SYS_MAXSYSCALL; i++ ) {
         syscall_table[i] = NULL;
     }
     syscall_table[SYS_exit] = sys_exit;
@@ -134,10 +134,11 @@ bsp_init(void)
     syscall_table[SYS_write] = sys_write;
     syscall_table[SYS_open] = sys_open;
     syscall_table[SYS_close] = sys_close;
+    syscall_table[SYS_wait4] = sys_wait4;
     syscall_table[SYS_execve] = sys_execve;
     syscall_table[SYS_getpid] = sys_getpid;
     syscall_table[SYS_getppid] = sys_getppid;
-    syscall_setup(syscall_table, SYS_NR);
+    syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
     /* Enable this processor */
     pdata = this_cpu();

@@ -23,6 +23,7 @@
 
 #if __LP64__
 
+#define NULL    ((void *)0)
 typedef signed long long ssize_t;
 typedef unsigned long long size_t;
 typedef signed int pid_t;
@@ -33,12 +34,16 @@ typedef signed int pid_t;
 
 #include <sys/syscall.h>
 
-int syscall();
+int syscall(int, ...);
 
 void exit(int) __attribute__ ((__noreturn__));
+pid_t fork(void);
+pid_t waitpid(pid_t, int *, int);
+pid_t getpid(void);
+pid_t getppid(void);
 
 /*
- * Exit
+ * exit
  */
 void
 exit(int status)
@@ -50,12 +55,21 @@ exit(int status)
 }
 
 /*
- * Fork
+ * fork
  */
 pid_t
 fork(void)
 {
     return syscall(SYS_fork);
+}
+
+/*
+ * waitpid
+ */
+pid_t
+waitpid(pid_t pid, int *stat_loc, int options)
+{
+    return syscall(SYS_wait4, pid, stat_loc, options, NULL);
 }
 
 /*
