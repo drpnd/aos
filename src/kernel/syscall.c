@@ -31,14 +31,47 @@
 void
 sys_exit(int status)
 {
+    struct ktask *t;
+
+    /* Get the task */
+    t = this_ktask();
+    if ( NULL == t ) {
+        return;
+    }
+
+    /* Call atexit */
 }
 
 /*
  * Create a new process
+ *
+ * SYNOPSIS
+ *      pid_t
+ *      sys_fork(void);
+ *
+ * DESCRIPTION
+ *
+ * RETURN VALUES
+ *      Upon successful completion, the fork() function returns a value of 0 to
+ *      the child process and returns the process ID of the child process to the
+ *      parent process.  Otherwise, a value of -1 is returned to the parent
+ *      process and no child process is created.
  */
 pid_t
 sys_fork(void)
 {
+    struct ktask *t;
+
+    /* Allocate task data structure */
+    t = kmalloc(sizeof(struct ktask));
+    if ( NULL == t ) {
+        /* Failed to create a new task */
+        return -1;
+    }
+    t->state = KTASK_STATE_CREATED;
+
+    /* Copy the process */
+
     return -1;
 }
 
@@ -144,6 +177,105 @@ int
 sys_close(int fildes)
 {
     return -1;
+}
+
+/*
+ * execute a file
+ *
+ * SYNOPSIS
+ *      int
+ *      sys_execve(const char *path, char *const argv[], char *const envp[]);
+ *
+ * DESCRIPTION
+ *      The function execve() transforms the calling process into a new process.
+ *      The new process is constructed from an ordinary file, whose name is
+ *      pointed by path, called the new process file.  In the current
+ *      implementation, this file should be an executable object file, whose
+ *      text section virtual address starts from 0x40000000.  The design of
+ *      relocatable object support is still ongoing.
+ *
+ * RETURN VALUES
+ *      As the function execve() overlays the current process image with a new
+ *      process image, the successful call has no process to return to.  If it
+ *      does return to the calling process, an error has occurred; the return
+ *      value will be -1.
+ */
+int
+sys_execve(const char *path, char *const argv[], char *const envp[])
+{
+    return -1;
+}
+
+/*
+ * Get calling process identification
+ *
+ * SYNOPSIS
+ *      pid_t
+ *      getpid(void);
+ *
+ * DESCRIPTION
+ *      The getpid() function returns the process ID of the calling process.
+ *
+ * RETURN VALUES
+ *      The getpid() function is always successful, and no return value is
+ *      reserved to indicate an error.
+ */
+pid_t
+sys_getpid(void)
+{
+    struct ktask *t;
+
+    /* Get the current task information */
+    t = this_ktask();
+    if ( NULL == t ) {
+        /* This error must not occur. */
+        return -1;
+    }
+    if ( NULL == t->proc ) {
+        /* This error must not occur. */
+        return -1;
+    }
+
+    /* Return the process ID */
+    return t->proc->id;
+}
+
+/*
+ * Get parent process identification
+ *
+ * SYNOPSIS
+ *      pid_t
+ *      getppid(void);
+ *
+ * DESCRIPTION
+ *      The getppid() function returns the process ID of the parent of the
+ *      calling process.
+ *
+ * RETURN VALUES
+ *      The getppid() function is always successful, and no return value is
+ *      reserved to indicate an error.
+ */
+pid_t
+sys_getppid(void)
+{
+    struct ktask *t;
+
+    /* Get the current task information */
+    t = this_ktask();
+    if ( NULL == t ) {
+        /* This error must not occur. */
+        return -1;
+    }
+    if ( NULL == t->proc ) {
+        /* This error must not occur. */
+        return -1;
+    }
+    if ( NULL == t->proc->parent ) {
+        /* No parent process found */
+        return -1;
+    }
+
+    return t->proc->parent->id;
 }
 
 /*

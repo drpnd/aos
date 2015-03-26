@@ -79,6 +79,23 @@ kmemcmp(const void *s1, const void *s2, size_t n)
 }
 #endif
 
+#if !defined(HAS_KMEMCPY) || !HAS_KMEMCPY
+/*
+ * kstrcpy
+ */
+void *
+kmemcpy(void *__restrict dst, const void *__restrict src, size_t n)
+{
+    size_t i;
+
+    for ( i = 0; i < n; i++ ) {
+        *((u8 *)dst + i) = *((u8 *)src + i);
+    }
+
+    return dst;
+}
+#endif
+
 /*
  * kstrcmp
  */

@@ -77,8 +77,6 @@
 #define GDT_RING3_CODE_SEL      (7<<3)
 #define GDT_RING3_DATA_SEL      (8<<3)
 #define GDT_TSS_SEL_BASE        (9<<3)
-/* Syscall */
-#define SYSCALL_MAX_NR          0x10
 
 /*
  * Boot information from boot loader
@@ -196,9 +194,9 @@ struct p_data {
     /* P_TSS_OFFSET */
     struct tss tss;
     /* P_CUR_TASK_OFFSET */
-    u64 cur_task;
+    struct arch_task *cur_task;
     /* P_NEXT_TASK_OFFSET */
-    u64 next_task;
+    struct arch_task *next_task;
     /* Stack and stack guard follow */
 } __attribute__ ((packed));
 
@@ -214,7 +212,8 @@ void cli(void);
 void sti(void);
 void intr_null(void);
 void intr_apic_loc_tmr(void);
-void syscall_setup(void *);
+void task_restart(void);
+void syscall_setup(void *, u64);
 void pause(void);
 u8 inb(u16);
 u16 inw(u16);

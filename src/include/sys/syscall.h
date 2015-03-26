@@ -30,6 +30,10 @@
 #define SYS_write       4
 #define SYS_open        5
 #define SYS_close       6
+#define SYS_getpid      20
+#define SYS_getppid     39
+#define SYS_execve      59
+#define SYS_NR          60
 
 #endif /* _SYS_SYSCALL_H */
 

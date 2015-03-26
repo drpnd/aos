@@ -45,6 +45,7 @@
 	.globl	_mfwrite32
 	.globl	_kmemset
 	.globl	_kmemcmp
+	.globl	_kmemcpy
 	.globl	_binorder
 	.globl	_spin_lock_intr
 	.globl	_spin_unlock_intr
@@ -211,6 +212,14 @@ _kmemcmp:
 1:
 	ret
 
+/* int kmemcpy(void *__restrict dst, void *__restrict src, size_t n) */
+_kmemcpy:
+	movq	%rdi,%rax	/* Return value */
+	movq	%rdx,%rcx	/* n */
+	cld			/* Ensure the DF cleared */
+	rep	movsb		/* Copy byte at (%rsi) to (%rdi) */
+	ret
+
 /* u64 binorder(u64) */
 _binorder:
 	decq	%rdi
@@ -249,9 +258,10 @@ _spin_unlock_intr:
 	ret
 
 
-/* void syscall_setup(void *) */
+/* void syscall_setup(void *, u64 nr) */
 _syscall_setup:
 	movq	%rdi,(syscall_table)
+	movq	%rsi,(syscall_nr)
 	/* Write syscall entry point */
 	movq	$0xc0000082,%rcx	/* IA32_LSTAR */
 	movq	$syscall_entry,%rax
@@ -284,6 +294,10 @@ syscall_entry:
 	movw	%cs,%cx
 	andw	$3,%cx
 	pushq	%rcx
+
+	/* Check the number */
+	cmpq	(syscall_nr),%rax
+	jge	1f
 
 	/* Lookup the system call table and call one corresponding to %rax */
 	movq	(syscall_table),%rbx
@@ -496,4 +510,6 @@ _task_restart:
 
 	.data
 syscall_table:
+	.quad	0
+syscall_nr:
 	.quad	0

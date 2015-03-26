@@ -22,6 +22,7 @@
  */
 
 #include <aos/const.h>
+#include <sys/syscall.h>
 #include "../../kernel.h"
 #include "arch.h"
 #include "desc.h"
@@ -36,7 +37,8 @@ static int _load_trampoline(void);
 struct arch_task t;
 struct stackframe64 s;
 
-void *syscall_table[SYSCALL_MAX_NR];
+/* System call table */
+void *syscall_table[SYS_NR];
 
 /* ACPI structure */
 struct acpi arch_acpi;
@@ -61,12 +63,6 @@ _load_trampoline(void)
     }
 
     return 0;
-}
-
-void
-_test()
-{
-    __asm__ __volatile__ ("movq %rdi,%dr0;movq %rsi,%dr1;sti;hlt;cli");
 }
 
 /*
@@ -129,11 +125,19 @@ bsp_init(void)
     lapic_init();
 
     /* Setup system call */
-    for ( i = 0; i < SYSCALL_MAX_NR; i++ ) {
+    for ( i = 0; i < SYS_NR; i++ ) {
         syscall_table[i] = NULL;
     }
-    syscall_table[1] = _test;
-    syscall_setup(syscall_table);
+    syscall_table[SYS_exit] = sys_exit;
+    syscall_table[SYS_fork] = sys_fork;
+    syscall_table[SYS_read] = sys_read;
+    syscall_table[SYS_write] = sys_write;
+    syscall_table[SYS_open] = sys_open;
+    syscall_table[SYS_close] = sys_close;
+    syscall_table[SYS_execve] = sys_execve;
+    syscall_table[SYS_getpid] = sys_getpid;
+    syscall_table[SYS_getppid] = sys_getppid;
+    syscall_setup(syscall_table, SYS_NR);
 
     /* Enable this processor */
     pdata = this_cpu();
@@ -323,10 +327,29 @@ arch_task_new(void *entry, int policy)
     return t;
 }
 
+/*
+ * Clone a task
+ */
+struct arch_task *
+arch_task_clone(struct arch_task *task)
+{
+    struct arch_task *ntask;
+
+    /* Allocate */
+    ntask = kmalloc(sizeof(struct arch_task));
+    if ( NULL == ntask ) {
+        return NULL;
+    }
+    /* Copy */
+    kmemcpy(ntask, task, sizeof(struct arch_task));
+
+    return ntask;
+}
 
 /*
  * A routine called when task is switched
- * Note that this is in the interrupt handler and DO NOT change the interrupt 
+ * Note that this is in the interrupt handler and DO NOT change the interrupt
+ * flag (i.e., DO NOT use sti/cli).  Also use caution in use of lock.
  */
 void
 arch_task_swiched(struct arch_task *prev, struct arch_task *next)
@@ -336,6 +359,25 @@ arch_task_swiched(struct arch_task *prev, struct arch_task *next)
         prev->ktask->state = KTASK_STATE_READY;
         next->ktask->state = KTASK_STATE_RUNNING;
     }
+}
+
+/*
+ * Get the kernel task currently running on this processor
+ */
+struct ktask *
+this_ktask(void)
+{
+    struct p_data *pdata;
+
+    /* Get the information on this processor */
+    pdata = this_cpu();
+    if ( NULL == pdata->cur_task ) {
+        /* No task running on this processor */
+        return NULL;
+    }
+
+    /* Return the kernel task data structure */
+    return pdata->cur_task->ktask;
 }
 
 /*

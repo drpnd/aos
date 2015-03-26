@@ -36,6 +36,17 @@
 #define KTASK_POLICY_USER       3
 
 /*
+ * Process
+ */
+struct proc {
+    /* Process ID */
+    pid_t id;
+
+    /* Parent process */
+    struct proc *parent;
+};
+
+/*
  * Kernel task state
  */
 enum ktask_state {
@@ -49,12 +60,13 @@ enum ktask_state {
  * Kernel task data structure
  */
 struct ktask {
-    /* Task ID */
-    u64 id;
     /* Architecture specific structure; i.e., (struct arch_task) */
     void *arch;
     /* State */
     enum ktask_state state;
+
+    /* Process */
+    struct proc *proc;
 };
 
 /* in kernel.c */
@@ -63,9 +75,10 @@ int kstrcmp(const char *, const char *);
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in asm.s. */
 #define HAS_KMEMCMP     1       /* kmemcmp is implemented in asm.s. */
+#define HAS_KMEMCPY     1       /* kmemcpy is implemented in asm.s. */
 void * kmemset(void *, int, size_t);
 int kmemcmp(const void *, const void *, size_t);
-void halt(void);
+void * kmemcpy(void *__restrict, const void *__restrict, size_t);
 
 /* in memory.c */
 void * kmalloc(size_t);
@@ -78,6 +91,14 @@ ssize_t sys_read(int, void *, size_t);
 ssize_t sys_write(int, const void *, size_t);
 int sys_open(const char *, int, ...);
 int sys_close(int);
+int sys_execve(const char *, char *const [], char *const []);
+pid_t sys_getpid(void);
+pid_t sys_getppid(void);
+
+/* The followings are mandatory functions for the kernel and should be
+   implemented somewhere in arch/<arch_name>/ */
+struct ktask * this_ktask(void);
+void halt(void);
 
 #endif /* _KERNEL_H */
 
