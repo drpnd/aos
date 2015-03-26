@@ -30,7 +30,6 @@ int
 main(int argc, char *argv[])
 {
     for ( ;; ) {
-        //__asm__ __volatile__ ( "syscall" :: "a"(1), "D"(10), "S"(20) );
     }
 
     return 0;

@@ -56,7 +56,8 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/trampoline.o \
 	kernel/arch/$(ARCH)/ap_entry32.o \
 	kernel/arch/$(ARCH)/ap_entry64.o \
-	kernel/kernel.o
+	kernel/kernel.o \
+	kernel/syscall.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
 
 ## init server

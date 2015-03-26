@@ -100,26 +100,6 @@ kstrcmp(const char *s1, const char *s2)
     return 0;
 }
 
-
-/*
- * Create a new process
- */
-void
-sys_exit(int status)
-{
-    return;
-}
-
-/*
- * Create a new process
- */
-int
-sys_fork(void)
-{
-    return -1;
-}
-
-
 /*
  * Local variables:
  * tab-width: 4

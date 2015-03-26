@@ -71,6 +71,14 @@ void halt(void);
 void * kmalloc(size_t);
 void kfree(void *);
 
+/* in syscall.c */
+void sys_exit(int);
+pid_t sys_fork(void);
+ssize_t sys_read(int, void *, size_t);
+ssize_t sys_write(int, const void *, size_t);
+int sys_open(const char *, int, ...);
+int sys_close(int);
+
 #endif /* _KERNEL_H */
 
 /*

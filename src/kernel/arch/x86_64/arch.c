@@ -194,7 +194,6 @@ bsp_init(void)
     t.rp = &s;
     t.sp0 = kmalloc(4096);
     this_cpu()->next_task = &t;
-    this_cpu()->tss.rsp0l = kmalloc(4096);
 
     /* Initialize local APIC counter */
     sti();
