@@ -458,10 +458,12 @@ _intr_null:
 	popq	%rax
 .endm
 
+
 /* Interrupt handler for local APIC timer */
 _intr_apic_loc_tmr:
 	intr_lapic_isr 0x50
 	jmp	_task_restart
+
 
 /* Crash interrupt */
 _intr_crash:

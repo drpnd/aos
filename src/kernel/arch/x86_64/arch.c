@@ -34,9 +34,6 @@
 /* Prototype declarations */
 static int _load_trampoline(void);
 
-struct arch_task t;
-struct stackframe64 s;
-
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
 struct proc_table *proc_table;
@@ -69,7 +66,7 @@ _load_trampoline(void)
 /*
  * Panic -- damn blue screen, lovely green screen
  */
-static void
+void
 panic(char *s)
 {
     int i;
@@ -114,7 +111,6 @@ bsp_init(void)
 {
     struct bootinfo *bi;
     struct p_data *pdata;
-    u16 *video;
     long long i;
 
     /* Ensure the i8254 timer is stopped */
@@ -190,10 +186,6 @@ bsp_init(void)
     /* Estimate the frequency */
     pdata->freq = lapic_estimate_freq();
 
-    /* Display a mark to notify me that this code is properly executed */
-    video = (u16 *)0xb8000;
-    *(video + lapic_id()) = 0x0700 | '*';
-
     /* Load trampoline code */
     _load_trampoline();
 
@@ -246,24 +238,57 @@ bsp_init(void)
 
     /* Allocate a process for init server */
     struct proc *proc;
-    proc = kmalloc(sizeof(struct proc_table));
+    struct arch_proc *arch_proc;
+    proc = kmalloc(sizeof(struct proc));
     if ( NULL == proc ) {
         /* Cannot allocate proc */
         panic("Fatal: Could not initialize the `init' server process.");
         return;
     }
+    arch_proc = kmalloc(sizeof(struct arch_proc));
+    if ( NULL == arch_proc ) {
+        /* Cannot allocate arch_proc */
+        panic("Fatal: Could not initialize the `init' server process.");
+        return;
+    }
+    arch_proc->proc = proc;
+    proc->arch = arch_proc;
     proc_table->procs[0] = proc;
     proc_table->lastpid = 0;
 
-    kmemset(&s, 0, sizeof(struct stackframe64));
-    s.ss = 0x20 + 1;
-    s.cs = 0x18 + 1;
-    s.ip = 0x20000ULL + offset;
-    s.sp = kmalloc(4096);
-    s.flags = 0x1200;
-    t.rp = &s;
-    t.sp0 = kmalloc(4096);
-    this_cpu()->next_task = &t;
+    struct ktask *task;
+    struct arch_task *arch_task;
+    struct stackframe64 *s;
+    task = kmalloc(sizeof(struct ktask));
+    if ( NULL == task ) {
+        panic("Fatal: Could not initialize the kernel task.");
+        return;
+    }
+    arch_task = kmalloc(sizeof(struct arch_task));
+    if ( NULL == arch_task ) {
+        panic("Fatal: Could not initialize the kernel task.");
+        return;
+    }
+    s = kmalloc(sizeof(struct stackframe64));
+    if ( NULL == s ) {
+        panic("Fatal: Could not initialize the kernel task.");
+        return;
+    }
+    kmemset(s, 0, sizeof(struct stackframe64));
+    s->ss = GDT_RING1_DATA_SEL + 1;
+    s->cs = GDT_RING1_CODE_SEL + 1;
+    s->ip = 0x20000ULL + offset;
+    s->sp = kmalloc(4096);
+    s->flags = 0x1200;
+    arch_task->rp = s;
+    arch_task->sp0 = kmalloc(4096);
+
+    task->arch = arch_task;
+    arch_task->ktask = task;
+    proc->ktask = task;
+
+    /* Schedule */
+    this_cpu()->next_task = arch_task;
 
     /* Initialize local APIC counter */
     sti();
@@ -280,7 +305,6 @@ void
 ap_init(void)
 {
     struct p_data *pdata;
-    u16 *video;
 
     /* Load global descriptor table */
     gdt_load();
@@ -304,10 +328,6 @@ ap_init(void)
 
     /* Initialize the local APIC */
     lapic_init();
-
-    /* Display a mark to notify me that this code is properly executed */
-    video = (u16 *)0xb8000;
-    *(video + lapic_id()) = 0x0700 | '*';
 }
 
 /*

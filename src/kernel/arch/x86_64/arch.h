@@ -172,6 +172,8 @@ struct tss {
 struct arch_proc {
     /* Page table (cr3) */
     u64 pgt;
+    /* Parent structure (architecture-independent generic process structure) */
+    struct proc *proc;
 } __attribute__ ((packed));
 
 /*

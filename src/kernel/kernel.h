@@ -51,14 +51,19 @@ struct proc {
 
     /* Architecture specific structure; i.e., (struct arch_proc) */
     void *arch;
+
+    /* Task */
+    struct ktask *ktask;
 };
 
 /*
  * Process table
  */
 struct proc_table {
+    /* Process table */
     struct proc *procs[PROC_NR];
-    int lastpid;
+    /* pid last assigned (to find the next pid by sequential search) */
+    pid_t lastpid;
 };
 
 /*
