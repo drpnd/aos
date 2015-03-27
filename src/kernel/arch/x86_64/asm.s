@@ -56,6 +56,7 @@
 	.globl	_task_restart
 	.globl	_intr_null
 	.globl	_intr_apic_loc_tmr
+	.globl	_intr_crash
 
 	.set	APIC_LAPIC_ID,0x020
 	.set	APIC_EOI,0x0b0
@@ -155,21 +156,21 @@ _inl:
 /* void outb(u16 port, u8 value) */
 _outb:
 	movw	%di,%dx
-	movw	%di,%ax
+	movw	%si,%ax
 	outb	%al,%dx
 	ret
 
 /* void outw(u16 port, u16 value) */
 _outw:
 	movw	%di,%dx
-	movw	%di,%ax
+	movw	%si,%ax
 	outw	%ax,%dx
 	ret
 
 /* void outl(u16 port, u32 value) */
 _outl:
 	movw	%di,%dx
-	movl	%edi,%eax
+	movl	%esi,%eax
 	outl	%eax,%dx
 	ret
 
@@ -461,6 +462,14 @@ _intr_null:
 _intr_apic_loc_tmr:
 	intr_lapic_isr 0x50
 	jmp	_task_restart
+
+/* Crash interrupt */
+_intr_crash:
+	cli
+1:
+	hlt
+	jmp	1b
+
 
 /* Task restart */
 _task_restart:

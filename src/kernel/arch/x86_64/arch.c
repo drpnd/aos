@@ -39,6 +39,7 @@ struct stackframe64 s;
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
+struct proc_table *proc_table;
 
 /* ACPI structure */
 struct acpi arch_acpi;
@@ -63,6 +64,46 @@ _load_trampoline(void)
     }
 
     return 0;
+}
+
+/*
+ * Panic -- damn blue screen, lovely green screen
+ */
+static void
+panic(char *s)
+{
+    int i;
+    u16 *video;
+    u16 val;
+
+    /* Disable interrupt */
+    cli();
+
+    /* Notify other processors to stop */
+    /* Send IPI and halt self */
+    lapic_send_fixed_ipi(IV_CRASH);
+
+    /* Print out the message string directly */
+    video = (u16 *)0xb8000;
+    for ( i = 0; *s; i++, s++  ) {
+        *video = 0x2f00 | *s;
+        video++;
+    }
+    /* Move the cursor */
+    val = ((i & 0xff) << 8) | 0x0f;
+    outw(0x3d4, val);   /* Low */
+    val = (((i >> 8) & 0xff) << 8) | 0x0e;
+    outw(0x3d4, val);   /* High */
+    /* Fill out */
+    for ( ; i < 80 * 25; i++ ) {
+        *video = 0x2f00;
+        video++;
+    }
+
+    /* Stop forever */
+    while ( 1 ) {
+        halt();
+    }
 }
 
 /*
@@ -102,6 +143,7 @@ bsp_init(void)
 
     /* Set up interrupt vector */
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
+    idt_setup_intr_gate(IV_CRASH, intr_crash);
 
     /* Initialize memory manager */
     (void)phys_mem_init(bi);
@@ -173,6 +215,17 @@ bsp_init(void)
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
 
+    /* Initialize the process table */
+    proc_table = kmalloc(sizeof(struct proc_table));
+    if ( NULL == proc_table ) {
+        panic("Fatal: Could not initialize the process table.");
+        return;
+    }
+    for ( i = 0; i < PROC_NR; i++ ) {
+        proc_table->procs[i] = NULL;
+    }
+    proc_table->lastpid = -1;
+
     /* Find init server from the initramfs */
     u64 *initramfs = (u64 *)0x20000ULL;
     u64 offset = 0;
@@ -187,8 +240,19 @@ bsp_init(void)
     }
     if ( 0 == offset ) {
         /* Could not find init */
+        panic("Fatal: Could not find the `init' server.");
         return;
     }
+
+    /* Allocate a process for init server */
+    struct proc *proc;
+    proc = kmalloc(sizeof(struct proc_table));
+    if ( NULL == proc ) {
+        /* Cannot allocate proc */
+        return;
+    }
+    proc_table->procs[0] = proc;
+    proc_table->lastpid = 0;
 
     kmemset(&s, 0, sizeof(struct stackframe64));
     s.ss = 0x20 + 1;

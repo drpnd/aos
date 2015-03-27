@@ -34,7 +34,14 @@ typedef signed int pid_t;
 
 #include <sys/syscall.h>
 
-int syscall(int, ...);
+typedef __builtin_va_list va_list;
+#define va_start(ap, last)      __builtin_va_start((ap), (last))
+#define va_arg                  __builtin_va_arg
+#define va_end(ap)              __builtin_va_end(ap)
+#define va_copy(dest, src)      __builtin_va_copy((dest), (src))
+#define alloca(size)            __builtin_alloca((size))
+
+unsigned long long syscall(int, ...);
 
 void exit(int) __attribute__ ((__noreturn__));
 pid_t fork(void);
@@ -61,6 +68,48 @@ pid_t
 fork(void)
 {
     return syscall(SYS_fork);
+}
+
+/*
+ * read
+ */
+ssize_t
+read(int fildes, void *buf, size_t nbyte)
+{
+    return syscall(SYS_read, fildes, buf, nbyte);
+}
+
+/*
+ * write
+ */
+ssize_t
+write(int fildes, const void *buf, size_t nbyte)
+{
+    return syscall(SYS_write, fildes, buf, nbyte);
+}
+
+/*
+ * open
+ */
+int
+open(const char *path, int oflag, ...)
+{
+    va_list ap;
+
+    va_start(ap, oflag);
+    syscall(SYS_open, path, oflag, ap);
+    va_end(ap);
+
+    return -1;
+}
+
+/*
+ * close
+ */
+int
+close(int fildes)
+{
+    return syscall(SYS_close, fildes);
 }
 
 /*

@@ -48,6 +48,7 @@
 /* Tick */
 #define HZ                      100
 #define IV_LOC_TMR              0x50
+#define IV_CRASH                0xfe
 #define IV_IRQ(n)       (0x20 + (n))
 
 /*********************************************************/
@@ -220,6 +221,7 @@ void cli(void);
 void sti(void);
 void intr_null(void);
 void intr_apic_loc_tmr(void);
+void intr_crash(void);
 void task_restart(void);
 void syscall_setup(void *, u64);
 void pause(void);

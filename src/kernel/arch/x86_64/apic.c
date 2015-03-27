@@ -96,6 +96,25 @@ lapic_send_startup_ipi(u8 vector)
 }
 
 /*
+ * Broadcast fixed IPI
+ */
+void
+lapic_send_fixed_ipi(u8 vector)
+{
+    u32 icrl;
+    u32 icrh;
+
+    icrl = mfread32(APIC_BASE + APIC_ICR_LOW);
+    icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
+
+    icrl = (icrl & ~0x000cdfff) | ICR_FIXED | ICR_DEST_ALL_EX_SELF | vector;
+    icrh = (icrh & 0x000fffff);
+
+    mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
+    mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
+}
+
+/*
  * Return this local APIC ID
  */
 int
