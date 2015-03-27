@@ -249,6 +249,7 @@ bsp_init(void)
     proc = kmalloc(sizeof(struct proc_table));
     if ( NULL == proc ) {
         /* Cannot allocate proc */
+        panic("Fatal: Could not initialize the `init' server process.");
         return;
     }
     proc_table->procs[0] = proc;
