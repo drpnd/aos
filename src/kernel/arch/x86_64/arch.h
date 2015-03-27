@@ -36,7 +36,7 @@
  */
 #define PHYS_MEM_FREE_ADDR      0x02000000ULL
 
-/* Maximum number of processors */
+/* Maximum number of processors supported in this operating system */
 #define MAX_PROCESSORS          256
 
 /* GDT and IDT */

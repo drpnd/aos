@@ -52,8 +52,8 @@ struct proc {
     /* Architecture specific structure; i.e., (struct arch_proc) */
     void *arch;
 
-    /* Task */
-    struct ktask *ktask;
+    /* Policy */
+    int policy;
 };
 
 /*

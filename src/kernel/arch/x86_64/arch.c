@@ -41,6 +41,9 @@ struct proc_table *proc_table;
 /* ACPI structure */
 struct acpi arch_acpi;
 
+#define KSTACK_SIZE     PAGESIZE
+#define USTACK_SIZE     (PAGESIZE * 16)
+
 /*
  * Relocate the trampoline code to a 4 KiB page alined space
  */
@@ -101,6 +104,78 @@ panic(char *s)
     while ( 1 ) {
         halt();
     }
+}
+
+/* This function is trial one, so need to be modified. */
+int
+kexecve(const char *path, char *const argv[], char *const envp[])
+{
+    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 offset = 0;
+    u64 size;
+    struct arch_task *t;
+    u64 cs;
+    u64 ss;
+    u64 flags;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, path) ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find init */
+        return -1;
+    }
+
+    /* Get the currently running task information */
+    t = this_cpu()->cur_task;
+    kfree(t->kstack);
+    kfree(t->ustack);
+    kmemset(t->rp, 0, sizeof(struct stackframe64));
+
+    /* Clean up memory space of the current process */
+
+    /* Inherit the policy from the current task */
+    switch ( t->ktask->proc->policy ) {
+    case KTASK_POLICY_KERNEL:
+        cs = GDT_RING0_CODE_SEL;
+        ss = GDT_RING0_DATA_SEL;
+        flags = 0x0200;
+        break;
+    case KTASK_POLICY_DRIVER:
+        cs = GDT_RING1_CODE_SEL + 1;
+        ss = GDT_RING1_DATA_SEL + 1;
+        flags = 0x1200;
+        break;
+    case KTASK_POLICY_USER:
+        cs = GDT_RING3_CODE_SEL + 3;
+        ss = GDT_RING3_DATA_SEL + 3;
+        flags = 0x3200;
+        break;
+    }
+
+    /* Setup page table */
+
+    /* Replace the current process with the new process */
+    t->kstack = kmalloc(KSTACK_SIZE);
+    t->ustack = kmalloc(USTACK_SIZE);
+    t->sp0 = (u64)t->kstack;
+    t->rp->sp = (u64)t->ustack;
+    t->rp->ss = ss;
+    t->rp->cs = cs;
+    t->rp->ip = 0x40000000ULL;
+    t->rp->flags = flags;
+
+    /* Restart the task */
+    task_restart();
+
+    /* Never reach here but do this to prevent a compiler error */
+    return -1;
 }
 
 /*
@@ -218,12 +293,15 @@ bsp_init(void)
     }
     proc_table->lastpid = -1;
 
+
+    kexecve("/servers/init", NULL, NULL);
+
     /* Find init server from the initramfs */
     u64 *initramfs = (u64 *)0x20000ULL;
     u64 offset = 0;
     u64 size;
     while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, "init") ) {
+        if ( 0 == kstrcmp((char *)initramfs, "/servers/init") ) {
             offset = *(initramfs + 2);
             size = *(initramfs + 3);
             break;
@@ -285,7 +363,6 @@ bsp_init(void)
 
     task->arch = arch_task;
     arch_task->ktask = task;
-    proc->ktask = task;
 
     /* Schedule */
     this_cpu()->next_task = arch_task;
