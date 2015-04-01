@@ -32,9 +32,19 @@ void
 sys_exit(int status)
 {
     struct ktask *t;
+    u16 *video;
+    int i;
+    char *s = "Hello syscall!";
 
-    u16 *video = (u16 *)0xb8000;
-    *video = 0x2f00 | 'a';
+    video = (u16 *)0xb8000;
+    for ( i = 0; i < 80 * 25; i++ ) {
+        *(video + i) = 0xe000;
+    }
+    while ( *s ) {
+        *video = 0xe000 | (u16)*s;
+        s++;
+        video++;
+    }
 
     /* Get the task */
     t = this_ktask();

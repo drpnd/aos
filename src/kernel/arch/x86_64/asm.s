@@ -424,9 +424,6 @@ _intr_pf:
 1:	popq	%rbx
 	popq	%rbp
 	addq	$0x8,%rsp
-2:	cli
-	hlt
-	jmp	2b
 	iretq
 
 /* macro to save registers to the stackframe and call the interrupt handler */
