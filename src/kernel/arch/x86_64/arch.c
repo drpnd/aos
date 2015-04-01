@@ -204,6 +204,7 @@ kexecve(const char *path, char *const argv[], char *const envp[])
         }
     }
     pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
     for ( i = 2; i < 3; i++ ) {
         pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
         for ( j = 0; j < 512; j++ ) {
@@ -235,7 +236,7 @@ kexecve(const char *path, char *const argv[], char *const envp[])
     (void)kmemcpy(exec, (void *)(0x20000ULL + offset), size);
     for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
         /* Mapping */
-        pgt[6].entries[i] = (u64)exec | 0x087;
+        pgt[6].entries[i] = ((u64)exec + i * PAGESIZE) | 0x087;
     }
     /* Stack */
     ustack = kmalloc(PAGESIZE);
@@ -243,9 +244,7 @@ kexecve(const char *path, char *const argv[], char *const envp[])
         kfree(exec);
         return -1;
     }
-    for ( i = 0; i < (PAGESIZE - 1) / 4096 + 1; i++ ) {
-        pgt[517].entries[512 - (PAGESIZE - 1) / 4096 + i] = (u64)ustack | 0x087;
-    }
+    pgt[517].entries[511] = (u64)ustack | 0x087;
 
     /* Replace the current process with the new process */
     t->kstack = kmalloc(KSTACK_SIZE);
@@ -253,7 +252,7 @@ kexecve(const char *path, char *const argv[], char *const envp[])
     t->sp0 = (u64)t->kstack;
     t->rp->gs = ss;
     t->rp->fs = ss;
-    t->rp->sp = (u64)0x40200000ULL - 16; //t->ustack;
+    t->rp->sp = (u64)0x80000000ULL - 16; //t->ustack;
     t->rp->ss = ss;
     t->rp->cs = cs;
     t->rp->ip = 0x40000000ULL;

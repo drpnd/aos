@@ -23,12 +23,15 @@
 
 #include <aos/const.h>
 
+void exit(int) __attribute__ ((__noreturn__));
+
 /*
  * Entry point for the init program
  */
 int
 main(int argc, char *argv[])
 {
+    exit(0);
     for ( ;; ) {
     }
 

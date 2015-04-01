@@ -33,6 +33,9 @@ sys_exit(int status)
 {
     struct ktask *t;
 
+    u16 *video = (u16 *)0xb8000;
+    *video = 0x2f00 | 'a';
+
     /* Get the task */
     t = this_ktask();
     if ( NULL == t ) {

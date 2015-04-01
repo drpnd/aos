@@ -306,7 +306,7 @@ syscall_entry:
 	movq	(syscall_table),%rbx
 	cmpq	$0,%rbx
 	je	1f
-	shlq	$3,%rbx		/* 8 byte for each function pointer */
+	shlq	$3,%rax		/* 8 byte for each function pointer */
 	addq	%rax,%rbx
 	movq	%r10,%rcx	/* Replace the 4th argument with %r10 */
 	callq	*(%rbx)		/* Call the function */
