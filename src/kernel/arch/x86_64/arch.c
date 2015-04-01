@@ -38,6 +38,8 @@ static int _load_trampoline(void);
 void *syscall_table[SYS_MAXSYSCALL];
 struct proc_table *proc_table;
 
+void intr_pf(void);
+
 /* ACPI structure */
 struct acpi arch_acpi;
 
@@ -134,9 +136,18 @@ kexecve(const char *path, char *const argv[], char *const envp[])
 
     /* Get the currently running task information */
     t = this_cpu()->cur_task;
-    kfree(t->kstack);
-    kfree(t->ustack);
-    kmemset(t->rp, 0, sizeof(struct stackframe64));
+    if ( NULL != t ) {
+        kfree(t->kstack);
+        kfree(t->ustack);
+        kmemset(t->rp, 0, sizeof(struct stackframe64));
+    } else {
+        t = kmalloc(sizeof(struct arch_task));
+        t->rp = kmalloc(sizeof(struct stackframe64));
+        t->ktask = kmalloc(sizeof(struct ktask));
+        t->ktask->arch = t;
+        t->ktask->proc = kmalloc(sizeof(struct proc));
+        t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    }
 
     /* Clean up memory space of the current process */
 
@@ -160,16 +171,99 @@ kexecve(const char *path, char *const argv[], char *const envp[])
     }
 
     /* Setup page table */
+    /* 0: Present
+       1: R/W
+       2: U/S (user/superuser)
+       3: PWT (page-level write through)
+       4: PCD (page-level cache disable)
+     */
+    u64 *pgt = kmalloc(4096 * (6 + 512));
+    if ( NULL == pgt ) {
+        return -1;
+    }
+    kmemset(pgt, 0, 4096 * (6 + 512));
+    /* PML4 */
+    pgt[0] = (u64)pgt + 0x1007;
+    u64 i;
+    u64 j;
+    /* PDPT */
+    for ( i = 0; i < 1; i++ ) {
+        pgt[512 + i] = (u64)pgt + ((i + 2) << 12) + 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[1024 + 512 * i + j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+    /* PT (1GB-- +2MiB) */
+    for ( i = 1; i < 2; i++ ) {
+        pgt[512 + i] = (u64)pgt + ((i + 2) << 12) + 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            pgt[1024 + 512 * i + j] = 0x000;
+        }
+    }
+    pgt[1024 + 512 * 1 + 0] = (u64)pgt + ((6 + 0) << 12) + 0x007;
+    for ( i = 2; i < 3; i++ ) {
+        pgt[512 + i] = (u64)pgt + ((i + 2) << 12) + 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            /* Not present */
+            pgt[1024 + 512 * i + j] = 0x000;
+        }
+    }
+    for ( i = 3; i < 4; i++ ) {
+        pgt[512 + i] = ((u64)pgt + ((i + 2) << 12)) | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[1024 + 512 * i + j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+
+    /* Relocate the file */
+    void *exec;
+    void *ustack;
+    if ( size < PAGESIZE ) {
+        /* Alignment */
+        exec = kmalloc(PAGESIZE);
+    } else {
+        exec = kmalloc(size);
+    }
+    if ( NULL == exec ) {
+        return -1;
+    }
+    (void)kmemcpy(exec, (void *)(0x20000ULL + offset), size);
+    for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
+        /* Mapping */
+        pgt[1024 + 512 + i] = (u64)exec | 0x087;
+    }
+    __asm__ __volatile__ (" movq %%rax,%%dr3 " :: "a"(i));
+    //__asm__ __volatile__ (" movq %%rax,%%dr3 " :: "a"(pgt[3072 + 0]));
+    //__asm__ __volatile__ (" movq %%rax,%%dr2 " :: "a"(exec));
+    /* Stack */
+    ustack = kmalloc(PAGESIZE);
+    if ( NULL == ustack ) {
+        kfree(exec);
+        return -1;
+    }
+    for ( i = 0; i < (PAGESIZE - 1) / 4096 + 1; i++ ) {
+        pgt[265216 - (PAGESIZE - 1) / 4096 + 1 + i] = (u64)ustack | 0x087;
+    }
 
     /* Replace the current process with the new process */
     t->kstack = kmalloc(KSTACK_SIZE);
-    t->ustack = kmalloc(USTACK_SIZE);
+    t->ustack = ustack;
     t->sp0 = (u64)t->kstack;
-    t->rp->sp = (u64)t->ustack;
+    t->rp->gs = ss;
+    t->rp->fs = ss;
+    t->rp->sp = (u64)0x40200000ULL - 16; //t->ustack;
     t->rp->ss = ss;
     t->rp->cs = cs;
     t->rp->ip = 0x40000000ULL;
     t->rp->flags = flags;
+
+    /* Schedule */
+    this_cpu()->next_task = t;
+    //__asm__ __volatile__ (" movq %%rax,%%dr2 " :: "a"(*(u64 *)0x40000000ULL));
+    __asm__ __volatile__ (" movq %%rax,%%cr3 " :: "a"(pgt));
+    __asm__ __volatile__ (" movq %%rax,%%dr2 " :: "a"(*(u64 *)0x40000000ULL));
 
     /* Restart the task */
     task_restart();
@@ -213,6 +307,9 @@ bsp_init(void)
     acpi_load(&arch_acpi);
 
     /* Set up interrupt vector */
+    for ( i = 0; i < 7; i++ ) {
+        idt_setup_intr_gate(i, intr_pf);
+    }
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 

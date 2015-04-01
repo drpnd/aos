@@ -55,6 +55,7 @@
 	.globl	_asm_ioapic_map_intr
 	.globl	_task_restart
 	.globl	_intr_null
+	.globl	_intr_pf
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
 
@@ -402,6 +403,22 @@ _intr_null:
 	addq	%rax,%rdx
 	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
+	iretq
+
+
+_intr_pf:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rbx
+	movq	16(%rbp),%rbx
+	movq	%rbx,%dr0	/* rip */
+	movq	8(%rbp),%rbx
+	movq	%rbx,%dr1	/* error code */
+1:	popq	%rbx
+	popq	%rbp
+	addq	$0x8,%rsp
+	cli
+	hlt
 	iretq
 
 
