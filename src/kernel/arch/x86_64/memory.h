@@ -49,7 +49,7 @@ struct phys_mem_buddy {
 struct phys_mem_page {
     u64 flags;
     int order;
-} __attribute__ ((packed));
+};
 
 /*
  * List structure in unused page for the buddy system

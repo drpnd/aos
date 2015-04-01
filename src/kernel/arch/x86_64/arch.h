@@ -165,13 +165,19 @@ struct tss {
     u16 iomap;
 } __attribute__ ((packed));
 
+/*
+ * Page table entry
+ */
+struct page_entry {
+    u64 entries[512];
+} __attribute__ ((packed));
 
 /*
  * Process (architecture specific structure)
  */
-struct arch_proc {
+ struct arch_proc {
     /* Page table (cr3) */
-    u64 pgt;
+    void *pgt;
     /* Parent structure (architecture-independent generic process structure) */
     struct proc *proc;
 } __attribute__ ((packed));
@@ -213,6 +219,7 @@ struct p_data {
 
 /* in arch.c */
 struct p_data * this_cpu(void);
+void panic(char *);
 
 /* in asm.s */
 void lidt(void *);
@@ -236,6 +243,7 @@ void outl(u16, u32);
 u32 mfread32(u64);
 void mfwrite32(u64, u32);
 u64 binorder(u64);
+void set_cr3(void *);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);

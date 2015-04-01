@@ -50,6 +50,7 @@ static int
 _split(struct phys_mem_buddy *buddy, int o)
 {
     int ret;
+    struct phys_mem_buddy_list *next;
 
     /* Check the head of the current order */
     if ( NULL != buddy->heads[o] ) {
@@ -73,15 +74,18 @@ _split(struct phys_mem_buddy *buddy, int o)
         }
     }
 
+    /* Save next at the upper order */
+    next = buddy->heads[o + 1]->next;
     /* Split into two */
     buddy->heads[o] = buddy->heads[o + 1];
     buddy->heads[o]->prev = NULL;
-    buddy->heads[o]->next = (struct phys_mem_buddy_list *)((u64)buddy->heads[o]
-                                                           + (1 << o));
+    buddy->heads[o]->next
+        = (struct phys_mem_buddy_list *)((u64)buddy->heads[o]
+                                         + (1 << o) * PAGESIZE);
     buddy->heads[o]->next->prev = buddy->heads[o];
     buddy->heads[o]->next->next = NULL;
     /* Remove the split one from the upper order */
-    buddy->heads[o + 1] = buddy->heads[o + 1]->next;
+    buddy->heads[o + 1] = next;
     if ( NULL != buddy->heads[o + 1] ) {
         buddy->heads[o + 1]->prev = NULL;
     }
@@ -109,7 +113,7 @@ _merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
     p0 = (struct phys_mem_buddy_list *)((u64)off / (1 << (o + 1))
                                         * (1 << (o + 1)));
     /* Get the neighboring buddy */
-    p1 = (struct phys_mem_buddy_list *)((u64)p0 + (1 << o));
+    p1 = (struct phys_mem_buddy_list *)((u64)p0 + (1 << o) * PAGESIZE);
 
     /* Check the current level and remove the pairs */
     list = buddy->heads[o];
@@ -422,15 +426,18 @@ phys_mem_alloc_pages(int order)
     }
 
     /* Mark pages ``allocated'' */
-    for ( i = (u64)a / PAGESIZE; i < (1 << order); i++ ) {
+    for ( i = (u64)a / PAGESIZE; i < (u64)a / PAGESIZE + (1 << order); i++ ) {
+        if ( phys_mem->pages[i].flags & PHYS_MEM_ALLOC ) {
+            panic("Fatal: Invalid operation in phys_mem_alloc_pages().");
+        }
         phys_mem->pages[i].flags |= PHYS_MEM_ALLOC;
     }
 
     /* Save the order */
-    phys_mem->pages[i].order = order;
+    phys_mem->pages[(u64)a / PAGESIZE].order = order;
 
     /* Clear the memory for security */
-    kmemset(a, 0, 1 << order);
+    kmemset(a, 0, (1 << order) * PAGESIZE);
 
     /* Unlock */
     spin_unlock(&phys_mem_lock);
@@ -484,7 +491,7 @@ phys_mem_free_pages(void *a)
     phys_mem->pages[p].order = -1;
 
     /* Unmark pages ``allocated'' */
-    for ( i = p; i < (1 << order); i++ ) {
+    for ( i = p; i < p + (1 << order); i++ ) {
         phys_mem->pages[i].flags &= ~PHYS_MEM_ALLOC;
     }
 
@@ -499,7 +506,7 @@ phys_mem_free_pages(void *a)
     }
 
     /* Merge buddies if possible */
-    _merge(&phys_mem->buddy, a, 0);
+    _merge(&phys_mem->buddy, a, order);
 
     /* Unlock */
     spin_unlock(&phys_mem_lock);
@@ -527,6 +534,7 @@ kmalloc(size_t size)
     size_t o;
     void *ptr;
     int nr;
+    size_t s;
     int i;
     struct phys_mem_slab *hdr;
 
@@ -596,12 +604,13 @@ kmalloc(size_t size)
             }
         } else {
             /* No free space, then allocate new page for slab objects */
-            nr = CEIL(1 << (o + PHYS_MEM_SLAB_BASE_ORDER
-                            + PHYS_MEM_SLAB_NR_OBJ_ORDER), PAGESIZE) / PAGESIZE;
+            s = (1ULL << (o + PHYS_MEM_SLAB_BASE_ORDER
+                       + PHYS_MEM_SLAB_NR_OBJ_ORDER))
+                + sizeof(struct phys_mem_slab);
             /* Align the page to fit to the buddy system, and get the order */
-            nr = binorder(nr);
+            nr = binorder(CEIL(s, PAGESIZE) / PAGESIZE);
             /* Allocate pages */
-            hdr = phys_mem_alloc_pages(nr);
+            hdr = phys_mem_alloc_pages(nr ? nr + 2 : 1);
             if ( NULL == hdr ) {
                 /* Unlock before return */
                 spin_unlock(&phys_mem_slab_lock);

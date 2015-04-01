@@ -53,6 +53,7 @@
 	.globl	_spin_unlock
 	.globl	_syscall_setup
 	.globl	_asm_ioapic_map_intr
+	.globl	_set_cr3
 	.globl	_task_restart
 	.globl	_intr_null
 	.globl	_intr_pf
@@ -229,8 +230,8 @@ _binorder:
 	testq	%rdi,%rdi
 	jz	1f
 	bsrq	%rdi,%rax
-1:
 	incq	%rax
+1:
 	ret
 
 /* void spin_lock_intr(u32 *) */
@@ -391,6 +392,12 @@ _asm_ioapic_map_intr:
 	ret
 
 
+/* void set_cr3(void *) */
+_set_cr3:
+	movq	%rdi,%cr3
+	ret
+
+
 /* Null function for interrupt handler */
 _intr_null:
 	/* APIC EOI */
@@ -405,22 +412,22 @@ _intr_null:
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
 	iretq
 
-
+/* void intr_pf(void) */
 _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rbx
 	movq	16(%rbp),%rbx
-	movq	%rbx,%dr0	/* rip */
+	movq	%rbx,%dr0       /* rip */
 	movq	8(%rbp),%rbx
-	movq	%rbx,%dr1	/* error code */
+	movq	%rbx,%dr1       /* error code */
 1:	popq	%rbx
 	popq	%rbp
 	addq	$0x8,%rsp
-	cli
+2:	cli
 	hlt
+	jmp	2b
 	iretq
-
 
 /* macro to save registers to the stackframe and call the interrupt handler */
 .macro	intr_lapic_isr vec
