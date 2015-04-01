@@ -610,7 +610,7 @@ kmalloc(size_t size)
             /* Align the page to fit to the buddy system, and get the order */
             nr = binorder(CEIL(s, PAGESIZE) / PAGESIZE);
             /* Allocate pages */
-            hdr = phys_mem_alloc_pages(nr ? nr + 2 : 1);
+            hdr = phys_mem_alloc_pages(nr);
             if ( NULL == hdr ) {
                 /* Unlock before return */
                 spin_unlock(&phys_mem_slab_lock);
