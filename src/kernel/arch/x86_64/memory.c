@@ -110,8 +110,8 @@ _merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
     }
 
     /* Get the first page of the upper order */
-    p0 = (struct phys_mem_buddy_list *)((u64)off / (1 << (o + 1))
-                                        * (1 << (o + 1)));
+    p0 = (struct phys_mem_buddy_list *)((u64)off / (1 << (o + 1)) / PAGESIZE
+                                        * (1 << (o + 1)) * PAGESIZE);
     /* Get the neighboring buddy */
     p1 = (struct phys_mem_buddy_list *)((u64)p0 + (1 << o) * PAGESIZE);
 
@@ -341,6 +341,7 @@ phys_mem_init(struct bootinfo *bi)
                     phys_mem->buddy.heads[k]->prev = NULL;
                     phys_mem->buddy.heads[k]->next = NULL;
                 } else {
+                    /* Search the tail */
                     list = phys_mem->buddy.heads[k];
                     while ( NULL != list->next ) {
                         list = list->next;
