@@ -39,12 +39,21 @@
 #define KTASK_POLICY_DRIVER     1
 #define KTASK_POLICY_USER       3
 
+/* Tick */
+#define HZ                      100
+#define IV_LOC_TMR              0x50
+#define IV_CRASH                0xfe
+#define IV_IRQ(n)       (0x20 + (n))
+
 /*
  * Process
  */
 struct proc {
     /* Process ID */
     pid_t id;
+
+    /* Name */
+    char *name;
 
     /* Parent process */
     struct proc *parent;
@@ -87,6 +96,10 @@ struct ktask {
 
     /* Process */
     struct proc *proc;
+
+    /* Pointers for scheduler */
+    struct ktask *next;
+    int credit;
 };
 
 /* in kernel.c */
@@ -119,6 +132,7 @@ pid_t sys_getppid(void);
 /* The followings are mandatory functions for the kernel and should be
    implemented somewhere in arch/<arch_name>/ */
 struct ktask * this_ktask(void);
+void set_next_ktask(struct ktask *);
 void panic(char *);
 void halt(void);
 

@@ -104,7 +104,18 @@ _create_idle_task(void)
         kfree(t);
         return NULL;
     }
-    t->ktask = NULL;
+    t->ktask = kmalloc(sizeof(struct ktask));
+    if ( NULL == t->ktask ) {
+        kfree(t->ustack);
+        kfree(t->kstack);
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ktask->arch = t;
+    t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->proc = NULL;
+    t->ktask->next = NULL;
 
     /* Idle task runs at ring 0. */
     t->rp->cs = GDT_RING0_CODE_SEL;
@@ -312,9 +323,13 @@ bsp_init(void)
     t->ktask->proc = kmalloc(sizeof(struct proc));
     t->ktask->proc->policy = KTASK_POLICY_DRIVER;
     t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
+    t->ktask->next = NULL;
     ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
     t->kstack = kmalloc(KSTACK_SIZE);
     t->ustack = kmalloc(USTACK_SIZE);
+
+    t->ktask->next = pdata->idle_task->ktask;
+    t->ktask->credit = 100;
 
     arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
 
@@ -344,11 +359,13 @@ ap_init(void)
     pdata->freq = lapic_estimate_freq();
 
     /* Set idle task */
+#if 0
     pdata->idle_task = _create_idle_task();
     if ( NULL == pdata->idle_task ) {
         panic("Fatal: Could not create the idle task for BSP.");
         return;
     }
+#endif
 
     /* Load LDT */
     lldt(0);
@@ -533,8 +550,8 @@ arch_task_swiched(struct arch_task *prev, struct arch_task *next)
 {
     if ( NULL != prev ) {
         /* Switched from a task */
-        prev->ktask->state = KTASK_STATE_READY;
-        next->ktask->state = KTASK_STATE_RUNNING;
+        //prev->ktask->state = KTASK_STATE_READY;
+        //next->ktask->state = KTASK_STATE_RUNNING;
     }
 }
 
@@ -555,6 +572,15 @@ this_ktask(void)
 
     /* Return the kernel task data structure */
     return pdata->cur_task->ktask;
+}
+
+/*
+ * Schedule the next task
+ */
+void
+set_next_ktask(struct ktask *ktask)
+{
+    this_cpu()->next_task = ktask->arch;
 }
 
 /*

@@ -61,6 +61,35 @@ proc_new()
 void
 sched(void)
 {
+    struct ktask *ktask;
+
+    ktask = this_ktask();
+    if ( ktask ) {
+        ktask->credit--;
+        if ( ktask->next && ktask->credit <= 0 ) {
+            set_next_ktask(ktask->next);
+        }
+    }
+}
+
+void
+ktask_enqueue(void)
+{
+}
+
+/*
+ * Interrupt service routine
+ */
+void
+kintr_isr(u64 vec)
+{
+    switch ( vec ) {
+    case IV_LOC_TMR:
+        sched();
+        break;
+    default:
+        ;
+    }
 }
 
 #if !defined(HAS_KMEMSET) || !HAS_KMEMSET

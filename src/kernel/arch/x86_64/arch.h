@@ -46,12 +46,6 @@
 #define IDT_ADDR                0x76000ULL
 #define IDT_MAX_SIZE            0x2000
 
-/* Tick */
-#define HZ                      100
-#define IV_LOC_TMR              0x50
-#define IV_CRASH                0xfe
-#define IV_IRQ(n)       (0x20 + (n))
-
 /*********************************************************/
 /* The folloowing values are also defined in asmconst.h */
 /*********************************************************/

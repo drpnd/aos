@@ -445,6 +445,9 @@ _intr_pf:
 	pushq	%rbp
 	pushw	%fs
 	pushw	%gs
+	/* Call kernel function for ISR */
+	movq	$\vec,%rdi
+	callq	_kintr_isr
 	/* EOI for the local APIC */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
