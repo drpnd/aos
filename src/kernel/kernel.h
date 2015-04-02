@@ -119,6 +119,7 @@ pid_t sys_getppid(void);
 /* The followings are mandatory functions for the kernel and should be
    implemented somewhere in arch/<arch_name>/ */
 struct ktask * this_ktask(void);
+void panic(char *);
 void halt(void);
 
 #endif /* _KERNEL_H */

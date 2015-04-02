@@ -33,6 +33,7 @@
 
 /* Prototype declarations */
 static int _load_trampoline(void);
+static struct arch_task * _create_idle_task(void);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
@@ -45,6 +46,11 @@ struct acpi arch_acpi;
 
 #define KSTACK_SIZE     PAGESIZE
 #define USTACK_SIZE     (PAGESIZE * 16)
+
+
+#define INITRAMFS_BASE  0x20000ULL
+#define USTACK_INIT     0x80000000ULL - 16
+#define CODE_INIT       0x40000000ULL
 
 /*
  * Relocate the trampoline code to a 4 KiB page alined space
@@ -66,6 +72,49 @@ _load_trampoline(void)
     }
 
     return 0;
+}
+
+/*
+ * Create an idle task
+ */
+static struct arch_task *
+_create_idle_task(void)
+{
+    struct arch_task *t;
+
+    t = kmalloc(sizeof(struct arch_task));
+    if ( NULL == t ) {
+        return NULL;
+    }
+    t->rp = kmalloc(sizeof(struct stackframe64));
+    if ( NULL == t->rp ) {
+        kfree(t);
+        return NULL;
+    }
+    t->kstack = kmalloc(PAGESIZE);
+    if ( NULL == t->kstack ) {
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ustack = kmalloc(PAGESIZE);
+    if ( NULL == t->ustack ) {
+        kfree(t->kstack);
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ktask = NULL;
+
+    /* Idle task runs at ring 0. */
+    t->rp->cs = GDT_RING0_CODE_SEL;
+    t->rp->ss = GDT_RING0_DATA_SEL;
+    t->rp->ip = (u64)arch_idle;
+    t->rp->sp = (u64)t->ustack + PAGESIZE - 16;
+    t->rp->flags = 0x0200;
+    t->sp0 = (u64)t->kstack + PAGESIZE - 16;
+
+    return t;
 }
 
 /*
@@ -106,172 +155,6 @@ panic(char *s)
     while ( 1 ) {
         halt();
     }
-}
-
-/* This function is trial one, so need to be modified. */
-int
-kexecve(const char *path, char *const argv[], char *const envp[])
-{
-    u64 *initramfs = (u64 *)0x20000ULL;
-    u64 offset = 0;
-    u64 size;
-    struct arch_task *t;
-    u64 cs;
-    u64 ss;
-    u64 flags;
-
-    /* Find the file pointed by path from the initramfs */
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, path) ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find init */
-        return -1;
-    }
-
-    /* Get the currently running task information */
-    t = this_cpu()->cur_task;
-    if ( NULL != t ) {
-        kfree(t->kstack);
-        kfree(t->ustack);
-        kmemset(t->rp, 0, sizeof(struct stackframe64));
-    } else {
-        t = kmalloc(sizeof(struct arch_task));
-        t->rp = kmalloc(sizeof(struct stackframe64));
-        t->ktask = kmalloc(sizeof(struct ktask));
-        t->ktask->arch = t;
-        t->ktask->proc = kmalloc(sizeof(struct proc));
-        t->ktask->proc->policy = KTASK_POLICY_DRIVER;
-        t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
-        ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
-    }
-
-    /* Clean up memory space of the current process */
-
-    /* Inherit the policy from the current task */
-    switch ( t->ktask->proc->policy ) {
-    case KTASK_POLICY_KERNEL:
-        cs = GDT_RING0_CODE_SEL;
-        ss = GDT_RING0_DATA_SEL;
-        flags = 0x0200;
-        break;
-    case KTASK_POLICY_DRIVER:
-        cs = GDT_RING1_CODE_SEL + 1;
-        ss = GDT_RING1_DATA_SEL + 1;
-        flags = 0x1200;
-        break;
-    case KTASK_POLICY_USER:
-        cs = GDT_RING3_CODE_SEL + 3;
-        ss = GDT_RING3_DATA_SEL + 3;
-        flags = 0x3200;
-        break;
-    }
-
-    /* Setup page table */
-    /* 0: Present
-       1: R/W
-       2: U/S (user/superuser)
-       3: PWT (page-level write through)
-       4: PCD (page-level cache disable)
-     */
-    struct page_entry *pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
-    if ( NULL == pgt ) {
-        return -1;
-    }
-    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* PML4 */
-    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
-    u64 i;
-    u64 j;
-    /* PDPT */
-    for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
-    }
-    /* PT (1GB-- +2MiB) */
-    for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
-    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
-    for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            /* Not present */
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    /* Kernel */
-    for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
-    }
-
-    /* Relocate the file */
-    void *exec;
-    void *ustack;
-    if ( size < PAGESIZE ) {
-        /* Alignment */
-        exec = kmalloc(PAGESIZE);
-    } else {
-        exec = kmalloc(size);
-    }
-    if ( NULL == exec ) {
-        return -1;
-    }
-    (void)kmemcpy(exec, (void *)(0x20000ULL + offset), size);
-    for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
-        /* Mapping */
-        pgt[6].entries[i] = ((u64)exec + i * PAGESIZE) | 0x087;
-    }
-    /* Stack */
-    ustack = kmalloc(PAGESIZE);
-    if ( NULL == ustack ) {
-        kfree(exec);
-        return -1;
-    }
-    pgt[517].entries[511] = (u64)ustack | 0x087;
-
-    /* Replace the current process with the new process */
-    t->kstack = kmalloc(KSTACK_SIZE);
-    t->ustack = ustack;
-    t->sp0 = (u64)t->kstack;
-    t->rp->gs = ss;
-    t->rp->fs = ss;
-    t->rp->sp = (u64)0x80000000ULL - 16; //t->ustack;
-    t->rp->ss = ss;
-    t->rp->cs = cs;
-    t->rp->ip = 0x40000000ULL;
-    t->rp->flags = flags;
-
-    /* Set the page table for the client */
-    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
-
-    /* Set the page table for the client */
-    set_cr3(pgt);
-
-    /* Schedule */
-    this_cpu()->next_task = t;
-
-    /* Restart the task */
-    task_restart();
-
-    /* Never reach here but do this to prevent a compiler error */
-    return -1;
 }
 
 /*
@@ -350,6 +233,17 @@ bsp_init(void)
     syscall_table[SYS_getppid] = sys_getppid;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
+    /* Initialize the process table */
+    proc_table = kmalloc(sizeof(struct proc_table));
+    if ( NULL == proc_table ) {
+        panic("Fatal: Could not initialize the process table.");
+        return;
+    }
+    for ( i = 0; i < PROC_NR; i++ ) {
+        proc_table->procs[i] = NULL;
+    }
+    proc_table->lastpid = -1;
+
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
@@ -357,6 +251,13 @@ bsp_init(void)
 
     /* Estimate the frequency */
     pdata->freq = lapic_estimate_freq();
+
+    /* Set idle task */
+    pdata->idle_task = _create_idle_task();
+    if ( NULL == pdata->idle_task ) {
+        panic("Fatal: Could not create the idle task for BSP.");
+        return;
+    }
 
     /* Load trampoline code */
     _load_trampoline();
@@ -379,24 +280,16 @@ bsp_init(void)
     /* Wait 200 us */
     acpi_busy_usleep(&arch_acpi, 200);
 
-    /* Initialize the process table */
-    proc_table = kmalloc(sizeof(struct proc_table));
-    if ( NULL == proc_table ) {
-        panic("Fatal: Could not initialize the process table.");
-        return;
-    }
-    for ( i = 0; i < PROC_NR; i++ ) {
-        proc_table->procs[i] = NULL;
-    }
-    proc_table->lastpid = -1;
+    /* Initialize local APIC counter */
+    lapic_start_timer(HZ, IV_LOC_TMR);
 
     cli();
-    kexecve("/servers/init", NULL, NULL);
-
-    /* Find init server from the initramfs */
-    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
     u64 offset = 0;
     u64 size;
+    struct arch_task *t;
+
+    /* Find the file pointed by path from the initramfs */
     while ( 0 != *initramfs ) {
         if ( 0 == kstrcmp((char *)initramfs, "/servers/init") ) {
             offset = *(initramfs + 2);
@@ -411,65 +304,21 @@ bsp_init(void)
         return;
     }
 
-    /* Allocate a process for init server */
-    struct proc *proc;
-    struct arch_proc *arch_proc;
-    proc = kmalloc(sizeof(struct proc));
-    if ( NULL == proc ) {
-        /* Cannot allocate proc */
-        panic("Fatal: Could not initialize the `init' server process.");
-        return;
-    }
-    arch_proc = kmalloc(sizeof(struct arch_proc));
-    if ( NULL == arch_proc ) {
-        /* Cannot allocate arch_proc */
-        panic("Fatal: Could not initialize the `init' server process.");
-        return;
-    }
-    arch_proc->proc = proc;
-    proc->arch = arch_proc;
-    proc_table->procs[0] = proc;
-    proc_table->lastpid = 0;
+    /* Create a process */
+    t = kmalloc(sizeof(struct arch_task));
+    t->rp = kmalloc(sizeof(struct stackframe64));
+    t->ktask = kmalloc(sizeof(struct ktask));
+    t->ktask->arch = t;
+    t->ktask->proc = kmalloc(sizeof(struct proc));
+    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
+    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
+    t->kstack = kmalloc(KSTACK_SIZE);
+    t->ustack = kmalloc(USTACK_SIZE);
 
-    struct ktask *task;
-    struct arch_task *arch_task;
-    struct stackframe64 *s;
-    task = kmalloc(sizeof(struct ktask));
-    if ( NULL == task ) {
-        panic("Fatal: Could not initialize the kernel task.");
-        return;
-    }
-    arch_task = kmalloc(sizeof(struct arch_task));
-    if ( NULL == arch_task ) {
-        panic("Fatal: Could not initialize the kernel task.");
-        return;
-    }
-    s = kmalloc(sizeof(struct stackframe64));
-    if ( NULL == s ) {
-        panic("Fatal: Could not initialize the kernel task.");
-        return;
-    }
-    kmemset(s, 0, sizeof(struct stackframe64));
-    s->ss = GDT_RING1_DATA_SEL + 1;
-    s->cs = GDT_RING1_CODE_SEL + 1;
-    s->ip = 0x20000ULL + offset;
-    s->sp = kmalloc(4096);
-    s->flags = 0x1200;
-    arch_task->rp = s;
-    arch_task->sp0 = kmalloc(4096);
+    arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
 
-    task->arch = arch_task;
-    arch_task->ktask = task;
-
-    /* Schedule */
-    this_cpu()->next_task = arch_task;
-
-    /* Initialize local APIC counter */
-    sti();
-    lapic_start_timer(HZ, IV_LOC_TMR);
-
-    /* Start the init process */
-    task_restart();
+    panic("Fatal: Could not start the `init' server.");
 }
 
 /*
@@ -493,6 +342,13 @@ ap_init(void)
 
     /* Estimate the frequency */
     pdata->freq = lapic_estimate_freq();
+
+    /* Set idle task */
+    pdata->idle_task = _create_idle_task();
+    if ( NULL == pdata->idle_task ) {
+        panic("Fatal: Could not create the idle task for BSP.");
+        return;
+    }
 
     /* Load LDT */
     lldt(0);
@@ -518,19 +374,101 @@ this_cpu(void)
 }
 
 /*
- * Create a new task
+ * Execute a process
  */
-struct arch_task *
-arch_task_new(void *entry, int policy)
+int
+arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
 {
-    struct arch_task *t;
-    struct stackframe64 *s;
-    void *kstack;
-    void *ustack;
     u64 cs;
     u64 ss;
     u64 flags;
+    struct page_entry *pgt;
+    u64 i;
+    u64 j;
+    void *exec;
+    void *kstack;
+    void *ustack;
 
+    /* Setup page table */
+    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
+    if ( NULL == pgt ) {
+        return -1;
+    }
+    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
+    /* PML4 */
+    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
+    /* PDPT */
+    for ( i = 0; i < 1; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+    /* PT (1GB-- +2MiB) */
+    for ( i = 1; i < 2; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
+    for ( i = 2; i < 3; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            /* Not present */
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    /* Kernel */
+    for ( i = 3; i < 4; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+
+    /* Program */
+    if ( size < PAGESIZE ) {
+        /* Alignment */
+        exec = kmalloc(PAGESIZE);
+    } else {
+        exec = kmalloc(size);
+    }
+    if ( NULL == exec ) {
+        kfree(pgt);
+        return -1;
+    }
+    /* Stack */
+    kstack = kmalloc(KSTACK_SIZE);
+    if ( NULL == kstack ) {
+        kfree(pgt);
+        kfree(exec);
+        return -1;
+    }
+    ustack = kmalloc(USTACK_SIZE);
+    if ( NULL == ustack ) {
+        kfree(pgt);
+        kfree(exec);
+        kfree(kstack);
+        return -1;
+    }
+
+    /* Copy the executable memory */
+    (void)kmemcpy(exec, entry, size);
+    for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
+        /* Mapping */
+        pgt[6].entries[i] = ((u64)exec + i * PAGESIZE) | 0x087;
+    }
+    /* Setup the page table for user stack */
+    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
+        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
+            = ((u64)ustack + i * PAGESIZE) | 0x087;
+    }
+
+    /* Configure the ring protection by the policy */
     switch ( policy ) {
     case KTASK_POLICY_KERNEL:
         cs = GDT_RING0_CODE_SEL;
@@ -538,72 +476,51 @@ arch_task_new(void *entry, int policy)
         flags = 0x0200;
         break;
     case KTASK_POLICY_DRIVER:
-        cs = GDT_RING1_CODE_SEL;
-        ss = GDT_RING1_DATA_SEL;
+        cs = GDT_RING1_CODE_SEL + 1;
+        ss = GDT_RING1_DATA_SEL + 1;
         flags = 0x1200;
         break;
     case KTASK_POLICY_USER:
-        cs = GDT_RING3_CODE_SEL;
-        ss = GDT_RING3_DATA_SEL;
+        cs = GDT_RING3_CODE_SEL + 3;
+        ss = GDT_RING3_DATA_SEL + 3;
         flags = 0x3200;
         break;
     }
 
-    /* Allocate task */
-    t = kmalloc(sizeof(struct arch_task));
-    if ( NULL == t ) {
-        return NULL;
-    }
-    /* Allocate for stack frame */
-    s = kmalloc(sizeof(struct stackframe64));
-    if ( NULL == s ) {
-        kfree(t);
-        return NULL;
-    }
-    kmemset(s, 0, sizeof(struct stackframe64));
-    /* Allocate kernel stack */
-    kstack = kmalloc(4096);
-    if ( NULL == kstack ) {
-        kfree(t);
-        kfree(s);
-        return NULL;
-    }
-    /* Allocate user stack */
-    ustack = kmalloc(4096);
-    if ( NULL == ustack ) {
-        kfree(t);
-        kfree(s);
-        kfree(kstack);
-        return NULL;
-    }
-    s->cs = cs;
-    s->ss = ss;
-    s->ip = (u64)entry;
-    s->sp = (u64)ustack;
-    s->flags = flags;
-    t->rp = s;
-    t->sp0 = (u64)kstack;
+    /* Clean up memory space of the current process */
+    kfree(t->kstack);
+    kfree(t->ustack);
+    kmemset(t->rp, 0, sizeof(struct stackframe64));
 
-    return t;
-}
+    /* Replace the current process with the new process */
+    t->kstack = kstack;
+    t->ustack = ustack;
+    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
+    t->rp->gs = ss;
+    t->rp->fs = ss;
+    t->rp->sp = USTACK_INIT;
+    t->rp->ss = ss;
+    t->rp->cs = cs;
+    t->rp->ip = CODE_INIT;
+    t->rp->flags = flags;
 
-/*
- * Clone a task
- */
-struct arch_task *
-arch_task_clone(struct arch_task *task)
-{
-    struct arch_task *ntask;
+    /* Set the page table for the client */
+    set_cr3(pgt);
 
-    /* Allocate */
-    ntask = kmalloc(sizeof(struct arch_task));
-    if ( NULL == ntask ) {
-        return NULL;
-    }
-    /* Copy */
-    kmemcpy(ntask, task, sizeof(struct arch_task));
+    /* Free the old page table */
+    kfree(((struct arch_proc *)t->ktask->proc->arch)->pgt);
 
-    return ntask;
+    /* Set the page table for the client */
+    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
+
+    /* Schedule */
+    this_cpu()->next_task = t;
+
+    /* Restart the task */
+    task_restart();
+
+    /* Never reach here but do this to prevent a compiler error */
+    return -1;
 }
 
 /*
@@ -638,6 +555,17 @@ this_ktask(void)
 
     /* Return the kernel task data structure */
     return pdata->cur_task->ktask;
+}
+
+/*
+ * Idle task
+ */
+void
+arch_idle(void)
+{
+    while ( 1 ) {
+        halt();
+    }
 }
 
 /*

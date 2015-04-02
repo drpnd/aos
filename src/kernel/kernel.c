@@ -35,6 +35,34 @@ kmain(void)
     }
 }
 
+struct proc *
+proc_new()
+{
+    struct proc *proc;
+    struct ktask *ktask;
+
+    proc = kmalloc(sizeof(struct proc));
+    if ( NULL == proc ) {
+        return NULL;
+    }
+    ktask = kmalloc(sizeof(struct ktask));
+    if ( NULL == ktask ) {
+        kfree(proc);
+        return NULL;
+    }
+    ktask->proc = proc;
+
+    return proc;
+}
+
+/*
+ * Schedule
+ */
+void
+sched(void)
+{
+}
+
 #if !defined(HAS_KMEMSET) || !HAS_KMEMSET
 /*
  * kmemset

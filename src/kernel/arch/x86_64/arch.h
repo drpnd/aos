@@ -25,6 +25,7 @@
 #define _KERNEL_ARCH_H
 
 #include <aos/const.h>
+#include <aos/types.h>
 
 /* Boot information from the boot loader */
 #define BOOTINFO_BASE           0x8000ULL
@@ -214,12 +215,15 @@ struct p_data {
     struct arch_task *cur_task;
     /* P_NEXT_TASK_OFFSET */
     struct arch_task *next_task;
+    /* Idle task */
+    struct arch_task *idle_task;
     /* Stack and stack guard follow */
 } __attribute__ ((packed));
 
 /* in arch.c */
 struct p_data * this_cpu(void);
-void panic(char *);
+int arch_exec(struct arch_task *, void (*)(void), size_t, int);
+void arch_idle(void);
 
 /* in asm.s */
 void lidt(void *);
