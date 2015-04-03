@@ -35,8 +35,11 @@ kmain(void)
     }
 }
 
+/*
+ * Create a new process
+ */
 struct proc *
-proc_new()
+proc_create(void)
 {
     struct proc *proc;
     struct ktask *ktask;
@@ -70,11 +73,6 @@ sched(void)
             set_next_ktask(ktask->next);
         }
     }
-}
-
-void
-ktask_enqueue(void)
-{
 }
 
 /*

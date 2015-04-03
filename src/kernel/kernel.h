@@ -43,7 +43,7 @@
 #define HZ                      100
 #define IV_LOC_TMR              0x50
 #define IV_CRASH                0xfe
-#define IV_IRQ(n)       (0x20 + (n))
+#define IV_IRQ(n)               (0x20 + (n))
 
 /*
  * Process
@@ -116,6 +116,9 @@ void * kmemcpy(void *__restrict, const void *__restrict, size_t);
 /* in memory.c */
 void * kmalloc(size_t);
 void kfree(void *);
+
+/* in ramfs.c */
+int ramfs_init(u64 *);
 
 /* in syscall.c */
 void sys_exit(int);

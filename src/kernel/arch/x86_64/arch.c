@@ -359,13 +359,11 @@ ap_init(void)
     pdata->freq = lapic_estimate_freq();
 
     /* Set idle task */
-#if 0
     pdata->idle_task = _create_idle_task();
     if ( NULL == pdata->idle_task ) {
         panic("Fatal: Could not create the idle task for BSP.");
         return;
     }
-#endif
 
     /* Load LDT */
     lldt(0);
@@ -550,8 +548,8 @@ arch_task_swiched(struct arch_task *prev, struct arch_task *next)
 {
     if ( NULL != prev ) {
         /* Switched from a task */
-        //prev->ktask->state = KTASK_STATE_READY;
-        //next->ktask->state = KTASK_STATE_RUNNING;
+        prev->ktask->state = KTASK_STATE_READY;
+        next->ktask->state = KTASK_STATE_RUNNING;
     }
 }
 

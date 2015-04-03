@@ -24,6 +24,69 @@
 #include <aos/const.h>
 #include "kernel.h"
 
+#define RAMFS_TYPE_FILE        0
+#define RAMFS_TYPE_DIR         1
+
+/*
+ * Entry
+ */
+struct ramfs_ent {
+    int type;
+    char *name;
+    void *content;
+    size_t size;
+};
+
+/*
+ * ramfs
+ */
+struct ramfs {
+    u64 *root;
+};
+
+struct ramfs *ramfs;
+
+/*
+ * Initialize ramfs
+ */
+int
+ramfs_init(u64 *buffer)
+{
+    int ret;
+
+    /* Allocate the ramfs space */
+    ramfs = kmalloc(sizeof(struct ramfs));
+    if ( NULL == ramfs ) {
+        return -1;
+    }
+    ramfs->root = buffer;
+
+    return 0;
+}
+
+/*
+ * Open the file
+ */
+int
+ramfs_open(const char *path)
+{
+    u64 *buffer;
+    u64 offset;
+    u64 size;
+
+    /* Search the specified file */
+    buffer = ramfs->root;
+    while ( 0 != *buffer ) {
+        if ( 0 == kstrcmp((char *)buffer, path) ) {
+            offset = *(buffer + 2);
+            size = *(buffer + 3);
+        }
+        buffer += 4;
+    }
+
+    return 0;
+}
+
 /*
  * Local variables:
  * tab-width: 4
