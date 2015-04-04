@@ -61,6 +61,7 @@
 	.globl	_intr_pf
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
+	.globl	_sys_fork_restart
 
 	.set	APIC_LAPIC_ID,0x020
 	.set	APIC_EOI,0x0b0
@@ -316,42 +317,44 @@ syscall_entry:
 	popq	%rbp
 	sysretq
 
-/* void sys_fork_restart(u64 task, u64 ret) */
+/* void sys_fork_restart(u64 task, u64 ret0, u64, ret1) */
 _sys_fork_restart:
+	movq	%rdx,%rax
 	popq	%rdx		/* Pop the return point */
 	leaveq			/* Restore the stack */
-
 	/* Setup the stackframe for the forked task */
 	movq	TASK_RP(%rdi),%rdx
-	movq	%rax,-8(%rdx)	/* ss */
-	movq	%rax,-16(%rdx)	/* rsp */
+	addq	$164,%rdx
+	movq	$GDT_RING0_DATA_SEL,%rcx
+	movq	%rcx,-8(%rdx)	/* ss */
+	movq	%rbp,%rcx
+	//addq	$8,%rcx
+	movq	%rcx,-16(%rdx)	/* rsp */
 	movq	-16(%rbp),%rcx
+	andq	$0x3c7fd7,%rcx
 	movq	%rcx,-24(%rdx)	/* rflags */
+	movq	$GDT_RING0_CODE_SEL,%rcx
 	movq	%rcx,-32(%rdx)	/* cs */
-	movq	-24(%rbp),%rcx
+	movq	-8(%rbp),%rcx
+	movq	$1f,%rcx
 	movq	%rcx,-40(%rdx)	/* rip */
-	movq	%rax,-48(%rdx)	/* rax */
-	movq	%rbx,-56(%rdx)	/* rbx */
+	movq	%rsi,-48(%rdx)	/* rax */
+	movq	-24(%rbp),%rcx
+	movq	%rcx,-56(%rdx)	/* rbx */
+	movq	-8(%rbp),%rcx
 	movq	%rcx,-64(%rdx)	/* rcx */
-	movq	%rdx,-72(%rdx)	/* rdx */
-	movq	%r8,-80(%rdx)	/* r8 */
-	movq	%r9,-88(%rdx)	/* r9 */
-	movq	%r10,-96(%rdx)	/* r10 */
+	movq	-16(%rbp),%rcx
 	movq	%r11,-104(%rdx)	/* r11 */
 	movq	%r12,-112(%rdx)	/* r12 */
 	movq	%r13,-120(%rdx)	/* r13 */
 	movq	%r14,-128(%rdx)	/* r14 */
 	movq	%r15,-136(%rdx)	/* r15 */
-	movq	%rsi,-144(%rdx)	/* rsi */
-	movq	%rdi,-152(%rdx)	/* rdi */
-	movq	%rbp,-160(%rdx)	/* rbp */
-	
-	movq	%rcx,-24(%rdx)	/* rflags */
-	movq	-24(%rbp),%rcx
-	movq	%rcx,-40(%rdx)	/* rip */
-	/* Return value */
-	movq	%rsi,-48(%rdx)	/* rax */
-
+	movq	0(%rbp),%rcx
+	movq	%rcx,-152(%rdx)	/* rbp */
+	movw	$(GDT_RING3_DATA_SEL+3),%cx
+	movw	%cx,-162(%rdx)
+	movw	%cx,-164(%rdx)
+	/* Restore */
 	popq	%rdx
 	popq	%rbx
 	popq	%r11
@@ -359,6 +362,11 @@ _sys_fork_restart:
 	movq	%rbp,%rsp
 	popq	%rbp
 	sysretq
+1:
+	popq	%rbp
+	sysretq
+	hlt
+	jmp	1b
 
 
 /* void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base) */
@@ -431,7 +439,7 @@ _intr_gpf:
 	movq	%rsp,%rbp
 	pushq	%rbx
 	movq	16(%rbp),%rbx
-	movq	%rbx,%dr0	/* rip */
+	//movq	%rbx,%dr0	/* rip */
 	movq	8(%rbp),%rbx
 	//movq	%rbx,%dr1	/* error code */
 	movq	40(%rbp),%rbx
@@ -579,14 +587,6 @@ _task_restart:
 	movq	%rdx,TSS_SP0(%rax)
 2:
 	intr_lapic_isr_done
-	pushq	%rax
-	movq	8(%rsp),%rax
-	//movq	%rax,%dr0
-	movq	32(%rsp),%rax
-	//movq	%rax,%dr1
-	movq	16(%rsp),%rax
-	//movq	%rax,%dr2
-	popq	%rax
 	iretq
 
 

@@ -619,7 +619,7 @@ task_clone(struct ktask *ot)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64));
+    t->rp = kmalloc(sizeof(struct stackframe64) + 4096) + 512;
     if ( NULL == t->rp ) {
         kfree(t);
         return NULL;
@@ -647,23 +647,32 @@ task_clone(struct ktask *ot)
     }
     t->ktask->arch = t;
 
-    kmemcpy(t->rp, ((struct arch_task *)ot->arch)->rp,
-            sizeof(struct stackframe64));
+
+    struct page_entry *pgt;
+    u64 i;
+    /* Setup page table */
+    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
+    if ( NULL == pgt ) {
+        return NULL;
+    }
+    kmemcpy(pgt, (void *)((struct arch_task *)ot->arch)->cr3,
+            sizeof(struct page_entry) * (6 + 512));
+    /* Setup the page table for user stack */
+    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
+        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
+            = ((u64)t->ustack + i * PAGESIZE) | 0x087;
+    }
+
+    t->cr3 = (u64)pgt;
+
+    t->sp0 = (u64)t->kstack + PAGESIZE - 16;
+
     kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
             KSTACK_SIZE);
     kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
             USTACK_SIZE);
 
     return t->ktask;
-}
-
-/*
- * Set return value
- */
-void
-task_set_return(struct ktask *t, unsigned long long ret)
-{
-    ((struct arch_task *)t->arch)->rp->ax = ret;
 }
 
 /*

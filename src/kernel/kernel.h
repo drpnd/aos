@@ -162,6 +162,7 @@ void panic(char *);
 void halt(void);
 struct ktask * task_clone(struct ktask *);
 void task_set_return(struct ktask *, unsigned long long);
+void sys_fork_restart(void *, u64, u64);
 
 #endif /* _KERNEL_H */
 

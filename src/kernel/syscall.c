@@ -112,9 +112,16 @@ sys_fork(void)
     }
     nt->proc = np;
     nt->state = KTASK_STATE_CREATED;
+    nt->next = NULL;
+    nt->credit = 100;
 
     proc_table->procs[pid] = np;
     proc_table->lastpid = pid;
+
+    t->next = nt;
+    //t->next = NULL;
+
+    sys_fork_restart(nt->arch, 0, pid);
 
     return -1;
 }

@@ -40,15 +40,18 @@ main(int argc, char *argv[])
         exit(-1);
         break;
     case 0:
+        exit(-1);
         /* The child process */
-        execve("/servers/pm", NULL, NULL);
+        //execve("/servers/pm", NULL, NULL);
         break;
     default:
+        //exit(-1);
         /* The parent process */
         ;
     }
 
     for ( ;; ) {
+        __asm__ ( "pause" );
     }
 
     return 0;
