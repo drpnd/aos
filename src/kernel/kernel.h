@@ -102,6 +102,23 @@ struct ktask {
     int credit;
 };
 
+/*
+ * vfs
+ */
+struct vfs {
+};
+
+/*
+ * File descriptor
+ */
+struct fildes {
+    void *data;
+    off_t pos;
+    ssize_t (*read)(struct fildes *, void *, size_t);
+    ssize_t (*write)(struct fildes *, const void *, size_t);
+    off_t (*lseek)(struct fildes *, off_t, int);
+};
+
 /* in kernel.c */
 int kstrcmp(const char *, const char *);
 

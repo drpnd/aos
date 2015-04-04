@@ -22,6 +22,7 @@
  */
 
 #include <aos/const.h>
+#include <unistd.h>
 #include <sys/syscall.h>
 #include "kernel.h"
 
@@ -138,7 +139,7 @@ sys_write(int fildes, const void *buf, size_t nbyte)
  *      sys_open(const char *path, int oflags);
  *
  * DESCRIPTION
- *      The open() function attempts to open a file specified by path for
+ *      The sys_open() function attempts to open a file specified by path for
  *      reading and/or writing, as specified by the argument oflag.
  *
  *      The flags specified for the oflag argument are formed by or'ing the
@@ -162,7 +163,7 @@ sys_write(int fildes, const void *buf, size_t nbyte)
  *              O_CLOEXEC       mark as close-on-exec
  *
  * RETURN VALUES
- *      If success, open() returns a non-negative integer, termed a file
+ *      If success, sys_open() returns a non-negative integer, termed a file
  *      descriptor.  It returns -1 on failure.
  */
 int
@@ -179,11 +180,11 @@ sys_open(const char *path, int oflag, ...)
  *      sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage);
  *
  * DESCRIPTION
- *      The wait4() function suspends execution of its calling process until
+ *      The sys_wait4() function suspends execution of its calling process until
  *      stat_loc information is available for a terminated child process, or a
  *      signal is received.  On return from a successful from a successful
- *      wait4() call, the stat_loc area contains termination information about
- *      the process that exited as defined below.
+ *      sys_wait4() call, the stat_loc area contains termination information
+ *      about the process that exited as defined below.
  *
  *      The pid parameter specified the set of child processes for which to
  *      wait.  If pid is -1, the call waits for any child process.  If pid is 0,
@@ -203,10 +204,10 @@ sys_open(const char *path, int oflag, ...)
  *      process and all its children is returned.
  *
  *      When the WNOHANG option is specified and no processes with to report
- *      status, the wait4() function returns a process ID of 0.
+ *      status, the sys_wait4() function returns a process ID of 0.
  *
  * RETURN VALUES
- *      If the wait4() function returns due to a stopped or terminated child
+ *      If the sys_wait4() function returns due to a stopped or terminated child
  *      process, the process ID of the child is returned to the calling process.
  *      If there are no children not previously awaited, a value of -1 is
  *      returned.  Otherwise, if WNOHANG is specified and there are no stopped
@@ -224,11 +225,11 @@ sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
  *
  * SYNOPSIS
  *      int
- *      close(int fildes);
+ *      sys_close(int fildes);
  *
  * DESCRIPTION
- *      The close() function deletes a descriptor from the per-process object
- *      reference table.
+ *      The sys_close() function deletes a descriptor from the per-process
+ *      object reference table.
  *
  * RETURN VALUES
  *      Upon successful completion, a value of 0 is returned.  Otherwise, a
@@ -248,17 +249,17 @@ sys_close(int fildes)
  *      sys_execve(const char *path, char *const argv[], char *const envp[]);
  *
  * DESCRIPTION
- *      The function execve() transforms the calling process into a new process.
- *      The new process is constructed from an ordinary file, whose name is
- *      pointed by path, called the new process file.  In the current
+ *      The function sys_execve() transforms the calling process into a new
+ *      process. The new process is constructed from an ordinary file, whose
+ *      name is pointed by path, called the new process file.  In the current
  *      implementation, this file should be an executable object file, whose
  *      text section virtual address starts from 0x40000000.  The design of
  *      relocatable object support is still ongoing.
  *
  * RETURN VALUES
- *      As the function execve() overlays the current process image with a new
- *      process image, the successful call has no process to return to.  If it
- *      does return to the calling process, an error has occurred; the return
+ *      As the function sys_execve() overlays the current process image with a
+ *      new process image, the successful call has no process to return to.  If
+ *      it does return to the calling process, an error has occurred; the return
  *      value will be -1.
  */
 int
@@ -272,13 +273,13 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
  *
  * SYNOPSIS
  *      pid_t
- *      getpid(void);
+ *      sys_getpid(void);
  *
  * DESCRIPTION
- *      The getpid() function returns the process ID of the calling process.
+ *      The sys_getpid() function returns the process ID of the calling process.
  *
  * RETURN VALUES
- *      The getpid() function is always successful, and no return value is
+ *      The sys_getpid() function is always successful, and no return value is
  *      reserved to indicate an error.
  */
 pid_t
@@ -306,14 +307,14 @@ sys_getpid(void)
  *
  * SYNOPSIS
  *      pid_t
- *      getppid(void);
+ *      sys_getppid(void);
  *
  * DESCRIPTION
- *      The getppid() function returns the process ID of the parent of the
+ *      The sys_getppid() function returns the process ID of the parent of the
  *      calling process.
  *
  * RETURN VALUES
- *      The getppid() function is always successful, and no return value is
+ *      The sys_getppid() function is always successful, and no return value is
  *      reserved to indicate an error.
  */
 pid_t
@@ -337,6 +338,46 @@ sys_getppid(void)
     }
 
     return t->proc->parent->id;
+}
+
+/*
+ * Reposition read/write file offset
+ *
+ * SYNOPSIS
+ *      off_t
+ *      sys_lseek(int fildes, off_t offset, int whence);
+ *
+ * DESCRIPTION
+ *      The sys_lseek() function repositions the offset of the file descriptor
+ *      fildes to the argument offset, according to the directive whence.  The
+ *      argument fildes must be an open file descriptor.  The function
+ *      sys_lseek() repositions the file pointer fildes as follows:
+ *
+ *              If whence is SEEK_SET, the offset is set to offset bytes.
+ *
+ *              If whence is SEEK_CUR, the offset is set to its current location
+ *              plus offset bytes.
+ *
+ *              If whnce is SEEK_END, the offset is set to the size of the file
+ *              plust offset bytes.
+ *
+ *      The sys_lseek() function allows the file offset to be set beyond the end
+ *      of the existing end-of-file of the file.  If the data is later written
+ *      at this point, subsequence reads of the data in the gap return bytes of
+ *      zeros (until data is actually written into the gap).
+ *
+ *      Some devices are incapable of seeking.  The value of the pointer
+ *      associated with such device is undefined.
+ *
+ * RETURN VALUES
+ *      Upon successful completion, the sys_lseek() function returns the
+ *      resulting offset location as measured in bytes from the beginning of the
+ *      file.  Otherwise, a value of -1 is returned.
+ */
+off_t
+sys_lseek(int fildes, off_t offset, int whence)
+{
+    return -1;
 }
 
 /*

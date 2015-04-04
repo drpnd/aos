@@ -35,7 +35,8 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 
 ## Kernel
 kernel/arch/$(ARCH)/arch.o: include/aos/const.h kernel/kernel.h \
-	kernel/arch/$(ARCH)/arch.h
+	kernel/arch/$(ARCH)/arch.h \
+	include/sys/syscall.h
 kernel/arch/$(ARCH)/desc.o: include/aos/const.h kernel/kernel.h \
 	kernel/arch/$(ARCH)/arch.h \
 	kernel/arch/$(ARCH)/desc.h
@@ -46,6 +47,7 @@ kernel/arch/$(ARCH)/i8254.o: include/aos/const.h kernel/kernel.h \
 	kernel/arch/$(ARCH)/arch.h \
 	kernel/arch/$(ARCH)/i8254.h
 kernel/kernel.o: include/aos/const.h kernel/kernel.h
+kernel/memory.o: include/aos/const.h kernel/kernel.h kernel/memory.h
 kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/arch.o \
 	kernel/arch/$(ARCH)/desc.o \

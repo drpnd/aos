@@ -21,23 +21,14 @@
  * SOFTWARE.
  */
 
-#ifndef _SYS_SYSCALL_H
-#define _SYS_SYSCALL_H
+#ifndef _UNISTD_H
+#define _UNISTD_H
 
-#define SYS_exit        1
-#define SYS_fork        2
-#define SYS_read        3
-#define SYS_write       4
-#define SYS_open        5
-#define SYS_close       6
-#define SYS_wait4       7
-#define SYS_getpid      20
-#define SYS_getppid     39
-#define SYS_execve      59
-#define SYS_lseek       478
-#define SYS_MAXSYSCALL  479
+#define SEEK_SET        0
+#define SEEK_CUR        1
+#define SEEK_END        2
 
-#endif /* _SYS_SYSCALL_H */
+#endif /* _UNISTD_H */
 
 /*
  * Local variables:

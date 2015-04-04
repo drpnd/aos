@@ -270,6 +270,12 @@ bsp_init(void)
         return;
     }
 
+    /* Initialize initramfs */
+    if ( ramfs_init((u64 *)INITRAMFS_BASE) < 0 ) {
+        panic("Fatal: Could not initialize the ramfs.");
+        return;
+    }
+
     /* Load trampoline code */
     _load_trampoline();
 

@@ -28,6 +28,7 @@
 
 typedef signed long long ssize_t;
 typedef unsigned long long size_t;
+typedef signed long long off_t;
 typedef signed int pid_t;
 
 #else

@@ -24,15 +24,10 @@
 #include <aos/const.h>
 #include "kernel.h"
 
-#define RAMFS_TYPE_FILE        0
-#define RAMFS_TYPE_DIR         1
-
 /*
- * Entry
+ * Data structure for a file descriptor
  */
-struct ramfs_ent {
-    int type;
-    char *name;
+struct ramfs_fildes {
     void *content;
     size_t size;
 };
@@ -46,14 +41,17 @@ struct ramfs {
 
 struct ramfs *ramfs;
 
+/* Prototype declarations */
+ssize_t ramfs_read(struct fildes *, void *, size_t);
+ssize_t ramfs_write(struct fildes *, const void *, size_t);
+off_t ramfs_lseek(struct fildes *, off_t, int);
+
 /*
  * Initialize ramfs
  */
 int
 ramfs_init(u64 *buffer)
 {
-    int ret;
-
     /* Allocate the ramfs space */
     ramfs = kmalloc(sizeof(struct ramfs));
     if ( NULL == ramfs ) {
@@ -73,18 +71,69 @@ ramfs_open(const char *path)
     u64 *buffer;
     u64 offset;
     u64 size;
+    struct fildes *fildes;
+    struct ramfs_fildes *data;
 
     /* Search the specified file */
     buffer = ramfs->root;
+    offset = 0;
     while ( 0 != *buffer ) {
         if ( 0 == kstrcmp((char *)buffer, path) ) {
             offset = *(buffer + 2);
             size = *(buffer + 3);
+            break;
         }
         buffer += 4;
     }
+    if ( 0 == offset ) {
+        return -1;
+    }
+
+    /* Create a fild descriptor */
+    fildes = kmalloc(sizeof(struct fildes));
+    kmemset(fildes, 0, sizeof(struct fildes));
+    data = kmalloc(sizeof(struct ramfs_fildes));
+    if ( NULL == data ) {
+        kfree(fildes);
+        return -1;
+    }
+    data->content = (void *)((u64)ramfs->root + offset);
+    data->size = size;
+
+    /* Set functions and file descriptor specific data */
+    fildes->data = data;
+    fildes->read = ramfs_read;
+    fildes->write = ramfs_write;
+    fildes->lseek = ramfs_lseek;
 
     return 0;
+}
+
+/*
+ * Read
+ */
+ssize_t
+ramfs_read(struct fildes *fildes, void *buf, size_t nbyte)
+{
+    return -1;
+}
+
+/*
+ * Write
+ */
+ssize_t
+ramfs_write(struct fildes *fildes, const void *buf, size_t nbyte)
+{
+    return -1;
+}
+
+/*
+ * Seek
+ */
+off_t
+ramfs_lseek(struct fildes *fildes, off_t offset, int whence)
+{
+    return -1;
 }
 
 /*
