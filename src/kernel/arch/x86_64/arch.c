@@ -619,7 +619,7 @@ task_clone(struct ktask *ot)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64) + 4096) + 512;
+    t->rp = kmalloc(sizeof(struct stackframe64));
     if ( NULL == t->rp ) {
         kfree(t);
         return NULL;

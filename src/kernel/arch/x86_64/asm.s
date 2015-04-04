@@ -328,14 +328,12 @@ _sys_fork_restart:
 	movq	$GDT_RING0_DATA_SEL,%rcx
 	movq	%rcx,-8(%rdx)	/* ss */
 	movq	%rbp,%rcx
-	//addq	$8,%rcx
 	movq	%rcx,-16(%rdx)	/* rsp */
-	movq	-16(%rbp),%rcx
-	andq	$0x3c7fd7,%rcx
+	pushfq
+	popq	%rcx
 	movq	%rcx,-24(%rdx)	/* rflags */
 	movq	$GDT_RING0_CODE_SEL,%rcx
 	movq	%rcx,-32(%rdx)	/* cs */
-	movq	-8(%rbp),%rcx
 	movq	$1f,%rcx
 	movq	%rcx,-40(%rdx)	/* rip */
 	movq	%rsi,-48(%rdx)	/* rax */
@@ -365,8 +363,6 @@ _sys_fork_restart:
 1:
 	popq	%rbp
 	sysretq
-	hlt
-	jmp	1b
 
 
 /* void asm_ioapic_map_intr(u64 val, u64 tbldst, u64 ioapic_base) */

@@ -119,7 +119,6 @@ sys_fork(void)
     proc_table->lastpid = pid;
 
     t->next = nt;
-    //t->next = NULL;
 
     sys_fork_restart(nt->arch, 0, pid);
 
@@ -254,6 +253,9 @@ sys_open(const char *path, int oflag, ...)
 pid_t
 sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
 {
+    /* Change the state to BLOCKED */
+
+
     return -1;
 }
 
@@ -302,6 +304,21 @@ sys_close(int fildes)
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
+    u16 *video;
+    int i;
+    const char *s = path;
+
+    video = (u16 *)0xb8000;
+    for ( i = 0; i < 80 * 25; i++ ) {
+        *(video + i) = 0xe000;
+    }
+    while ( *s ) {
+        *video = 0xe000 | (u16)*s;
+        s++;
+        video++;
+    }
+
+    /* On failure */
     return -1;
 }
 
