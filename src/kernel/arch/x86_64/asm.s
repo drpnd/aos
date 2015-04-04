@@ -56,6 +56,8 @@
 	.globl	_set_cr3
 	.globl	_task_restart
 	.globl	_intr_null
+	.globl	_intr_iof
+	.globl	_intr_gpf
 	.globl	_intr_pf
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
@@ -274,7 +276,7 @@ _syscall_setup:
 	/* Segment register */
 	movq	$0xc0000081,%rcx
 	movq	$0x0,%rax
-	movq	$(GDT_RING0_CODE_SEL | ((GDT_RING3_CODE_SEL + 3) << 16)),%rdx
+	movq	$(GDT_RING0_CODE_SEL | ((GDT_RING3_CODE32_SEL + 3) << 16)),%rdx
 	wrmsr
 	/* Enable syscall */
 	movl	$0xc0000080,%ecx	/* EFER MSR number */
@@ -288,15 +290,11 @@ _syscall_setup:
 syscall_entry:
 	cli
 	/* rip and rflags are stored in rcx and r11, respectively. */
-	pushq	%rsp
 	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rcx		/* -8(%rbp): rip */
+	pushq	%r11		/* -16(%rbp): rflags */
 	pushq	%rbx
-	pushq	%rcx		/* rip */
-	pushq	%r11		/* rflags */
-	/* Save the ring */
-	movw	%cs,%cx
-	andw	$3,%cx
-	pushq	%rcx
 
 	/* Check the number */
 	cmpq	(syscall_nr),%rax
@@ -311,58 +309,55 @@ syscall_entry:
 	movq	%r10,%rcx	/* Replace the 4th argument with %r10 */
 	callq	*(%rbx)		/* Call the function */
 1:
-	popq	%rdx
+	popq	%rbx
 	popq	%r11
 	popq	%rcx
-	popq	%rbx
+	movq	%rbp,%rsp
 	popq	%rbp
-	popq	%rsp
-	cmpw	$3,%dx
-	je	syscall_r3	/* Ring 3 */
-	cmpw	$2,%dx
-	je	syscall_r2	/* Ring 2 */
-	cmpw	$1,%dx
-	je	syscall_r1	/* Ring 1 */
-syscall_r0:
-	/* Use iretq because sysretq cannot return to ring 0 */
-	movq	$GDT_RING0_DATA_SEL,%rdx
-	pushq	%rdx		/* ss */
-	leaq	8(%rsp),%rdx
-	pushq	%rdx		/* rsp */
-	pushq	%r11		/* remove IA32_FMASK; */
-				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$GDT_RING0_CODE_SEL,%rdx
-	pushq	%rdx		/* cs */
-	pushq	%rcx		/* rip */
-	sti
-	iretq
-syscall_r1:
-	/* Use iretq because sysretq cannot return to ring 1 */
-	movq	$(GDT_RING1_DATA_SEL + 1),%rdx
-	pushq	%rdx		/* ss */
-	leaq	8(%rsp),%rdx
-	pushq	%rdx		/* rsp */
-	pushq	%r11		/* remove IA32_FMASK; */
-				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$(GDT_RING1_CODE_SEL + 1),%rdx
-	pushq	%rdx		/* cs */
-	pushq	%rcx		/* rip */
-	sti
-	iretq
-syscall_r2:
-	/* Use iretq because sysretq cannot return to ring 2 */
-	movq	$(GDT_RING2_DATA_SEL + 2),%rdx
-	pushq	%rdx		/* ss */
-	leaq	8(%rsp),%rdx
-	pushq	%rdx		/* rsp */
-	pushq	%r11		/* remove IA32_FMASK; */
-				/* rflags <- (r11 & 3C7FD7H) | 2; */
-	movq	$(GDT_RING2_CODE_SEL + 2),%rdx
-	pushq	%rdx		/* cs */
-	pushq	%rcx		/* rip */
-	sti
-	iretq
-syscall_r3:
+	sysretq
+
+/* void sys_fork_restart(u64 task, u64 ret) */
+_sys_fork_restart:
+	popq	%rdx		/* Pop the return point */
+	leaveq			/* Restore the stack */
+
+	/* Setup the stackframe for the forked task */
+	movq	TASK_RP(%rdi),%rdx
+	movq	%rax,-8(%rdx)	/* ss */
+	movq	%rax,-16(%rdx)	/* rsp */
+	movq	-16(%rbp),%rcx
+	movq	%rcx,-24(%rdx)	/* rflags */
+	movq	%rcx,-32(%rdx)	/* cs */
+	movq	-24(%rbp),%rcx
+	movq	%rcx,-40(%rdx)	/* rip */
+	movq	%rax,-48(%rdx)	/* rax */
+	movq	%rbx,-56(%rdx)	/* rbx */
+	movq	%rcx,-64(%rdx)	/* rcx */
+	movq	%rdx,-72(%rdx)	/* rdx */
+	movq	%r8,-80(%rdx)	/* r8 */
+	movq	%r9,-88(%rdx)	/* r9 */
+	movq	%r10,-96(%rdx)	/* r10 */
+	movq	%r11,-104(%rdx)	/* r11 */
+	movq	%r12,-112(%rdx)	/* r12 */
+	movq	%r13,-120(%rdx)	/* r13 */
+	movq	%r14,-128(%rdx)	/* r14 */
+	movq	%r15,-136(%rdx)	/* r15 */
+	movq	%rsi,-144(%rdx)	/* rsi */
+	movq	%rdi,-152(%rdx)	/* rdi */
+	movq	%rbp,-160(%rdx)	/* rbp */
+	
+	movq	%rcx,-24(%rdx)	/* rflags */
+	movq	-24(%rbp),%rcx
+	movq	%rcx,-40(%rdx)	/* rip */
+	/* Return value */
+	movq	%rsi,-48(%rdx)	/* rax */
+
+	popq	%rdx
+	popq	%rbx
+	popq	%r11
+	popq	%rcx
+	movq	%rbp,%rsp
+	popq	%rbp
 	sysretq
 
 
@@ -412,19 +407,61 @@ _intr_null:
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
 	iretq
 
+
+/* Interrupt handler for invalid opcode exception */
+_intr_iof:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rbx
+	movq	16(%rbp),%rbx
+	//movq	%rbx,%dr0	/* cs */
+	movq	8(%rbp),%rbx
+	//movq	%rbx,%dr1	/* rip */
+	movq	32(%rbp),%rbx
+	//movq	%rbx,%dr2	/* rsp */
+	popq	%rbx
+	popq	%rbp
+	iretq
+
+
+/* Interrupt handler for general protection fault
+ * Error code, RIP, CS, RFLAGS, (RSP, SS) */
+_intr_gpf:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rbx
+	movq	16(%rbp),%rbx
+	movq	%rbx,%dr0	/* rip */
+	movq	8(%rbp),%rbx
+	//movq	%rbx,%dr1	/* error code */
+	movq	40(%rbp),%rbx
+	//movq	%rbx,%dr2	/* rsp */
+	movq	48(%rbp),%rbx
+	//movq	%rbx,%dr3	/* ss */
+	//movq	(gpf_reentry),%rbx
+	//cmpq	$0,%rbx
+	//jz	1f
+	//movq	%rbx,16(%rbp)   /* Overwrite the reentry point (%rip) */
+1:	popq	%rbx
+	popq	%rbp
+	addq	$0x8,%rsp
+	iretq
+
+
 /* void intr_pf(void) */
 _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rbx
 	movq	16(%rbp),%rbx
-	movq	%rbx,%dr0       /* rip */
+	//movq	%rbx,%dr0       /* rip */
 	movq	8(%rbp),%rbx
-	movq	%rbx,%dr1       /* error code */
+	//movq	%rbx,%dr1       /* error code */
 1:	popq	%rbx
 	popq	%rbp
 	addq	$0x8,%rsp
 	iretq
+
 
 /* macro to save registers to the stackframe and call the interrupt handler */
 .macro	intr_lapic_isr vec
@@ -532,7 +569,9 @@ _task_restart:
 	movq	%rax,P_CUR_TASK_OFFSET(%rbp)
 	movq	TASK_RP(%rax),%rsp
 	movq	$0,P_NEXT_TASK_OFFSET(%rbp)
-	/* ToDo: Load LDT if necessary */
+	/* Change page table */
+	movq	TASK_CR3(%rax),%rax
+	movq	%rax,%cr3
 	/* Setup sp0 in TSS */
 	movq	P_CUR_TASK_OFFSET(%rbp),%rax
 	movq	TASK_SP0(%rax),%rdx
@@ -540,6 +579,14 @@ _task_restart:
 	movq	%rdx,TSS_SP0(%rax)
 2:
 	intr_lapic_isr_done
+	pushq	%rax
+	movq	8(%rsp),%rax
+	//movq	%rax,%dr0
+	movq	32(%rsp),%rax
+	//movq	%rax,%dr1
+	movq	16(%rsp),%rax
+	//movq	%rax,%dr2
+	popq	%rax
 	iretq
 
 

@@ -113,12 +113,9 @@ gdt_init(void)
     /* Code and data descriptor for each ring */
     gdt_setup_desc(&gdt[1], 0, 0xfffff, code, 0, 1, 0, 1); /* Ring 0 code */
     gdt_setup_desc(&gdt[2], 0, 0xfffff, data, 0, 1, 0, 1); /* Ring 0 data */
-    gdt_setup_desc(&gdt[3], 0, 0xfffff, code, 1, 1, 0, 1); /* Ring 1 code */
-    gdt_setup_desc(&gdt[4], 0, 0xfffff, data, 1, 1, 0, 1); /* Ring 1 data */
-    gdt_setup_desc(&gdt[5], 0, 0xfffff, code, 2, 1, 0, 1); /* Ring 2 code */
-    gdt_setup_desc(&gdt[6], 0, 0xfffff, data, 2, 1, 0, 1); /* Ring 2 data */
-    gdt_setup_desc(&gdt[7], 0, 0xfffff, code, 3, 1, 0, 1); /* Ring 3 code */
-    gdt_setup_desc(&gdt[8], 0, 0xfffff, data, 3, 1, 0, 1); /* Ring 3 data */
+    gdt_setup_desc(&gdt[3], 0, 0xfffff, code, 3, 0, 1, 1); /* Ring 3 code */
+    gdt_setup_desc(&gdt[4], 0, 0xfffff, data, 3, 1, 0, 1); /* Ring 3 data */
+    gdt_setup_desc(&gdt[5], 0, 0xfffff, code, 3, 1, 0, 1); /* Ring 3 code */
 
     /* TSS */
     tss = (struct gdt_desc_tss *)(GDT_ADDR + GDT_TSS_SEL_BASE);

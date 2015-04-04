@@ -21,18 +21,9 @@
  * SOFTWARE.
  */
 
-#if __LP64__
-
-#define NULL    ((void *)0)
-typedef signed long long ssize_t;
-typedef unsigned long long size_t;
-typedef signed int pid_t;
-
-#else
-#error "Must be LP64"
-#endif
-
+#include <stdlib.h>
 #include <sys/syscall.h>
+#include <unistd.h>
 
 typedef __builtin_va_list va_list;
 #define va_start(ap, last)      __builtin_va_start((ap), (last))
@@ -41,13 +32,8 @@ typedef __builtin_va_list va_list;
 #define va_copy(dest, src)      __builtin_va_copy((dest), (src))
 #define alloca(size)            __builtin_alloca((size))
 
+/* in libcasm.s */
 unsigned long long syscall(int, ...);
-
-void exit(int) __attribute__ ((__noreturn__));
-pid_t fork(void);
-pid_t waitpid(pid_t, int *, int);
-pid_t getpid(void);
-pid_t getppid(void);
 
 /*
  * exit
@@ -122,6 +108,15 @@ waitpid(pid_t pid, int *stat_loc, int options)
 }
 
 /*
+ * execve
+ */
+int
+execve(const char *path, char *const argv[], char *const envp[])
+{
+    return syscall(SYS_execve, path, argv, envp);
+}
+
+/*
  * getpid
  */
 pid_t
@@ -137,6 +132,15 @@ pid_t
 getppid(void)
 {
     return syscall(SYS_getppid);
+}
+
+/*
+ * lseek
+ */
+off_t
+lseek(int fildes, off_t offset, int whence)
+{
+    return syscall(SYS_lseek, fildes, offset, whence);
 }
 
 /*

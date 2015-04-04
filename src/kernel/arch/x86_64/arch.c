@@ -37,9 +37,6 @@ static struct arch_task * _create_idle_task(void);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
-struct proc_table *proc_table;
-
-void intr_pf(void);
 
 /* ACPI structure */
 struct acpi arch_acpi;
@@ -86,21 +83,14 @@ _create_idle_task(void)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64));
-    if ( NULL == t->rp ) {
-        kfree(t);
-        return NULL;
-    }
     t->kstack = kmalloc(PAGESIZE);
     if ( NULL == t->kstack ) {
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
     t->ustack = kmalloc(PAGESIZE);
     if ( NULL == t->ustack ) {
         kfree(t->kstack);
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
@@ -108,7 +98,6 @@ _create_idle_task(void)
     if ( NULL == t->ktask ) {
         kfree(t->ustack);
         kfree(t->kstack);
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
@@ -117,6 +106,8 @@ _create_idle_task(void)
     t->ktask->proc = NULL;
     t->ktask->next = NULL;
 
+    t->rp = t->kstack + PAGESIZE - 16 - sizeof(struct stackframe64);
+
     /* Idle task runs at ring 0. */
     t->rp->cs = GDT_RING0_CODE_SEL;
     t->rp->ss = GDT_RING0_DATA_SEL;
@@ -124,6 +115,9 @@ _create_idle_task(void)
     t->rp->sp = (u64)t->ustack + PAGESIZE - 16;
     t->rp->flags = 0x0200;
     t->sp0 = (u64)t->kstack + PAGESIZE - 16;
+
+    /* Page table */
+    t->cr3 = KERNEL_PGT;
 
     return t;
 }
@@ -156,7 +150,6 @@ _launch_init_server(void)
 
     /* Create a process */
     t = kmalloc(sizeof(struct arch_task));
-    t->rp = kmalloc(sizeof(struct stackframe64));
     t->ktask = kmalloc(sizeof(struct ktask));
     t->ktask->arch = t;
     t->ktask->proc = kmalloc(sizeof(struct proc));
@@ -166,9 +159,13 @@ _launch_init_server(void)
     ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
     t->kstack = kmalloc(KSTACK_SIZE);
     t->ustack = kmalloc(USTACK_SIZE);
+    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     t->ktask->credit = 100;
 
     t->ktask->next = this_cpu()->idle_task->ktask;
+
+    proc_table->procs[0] = t->ktask->proc;
+    proc_table->lastpid = 0;
 
     arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
 }
@@ -248,6 +245,8 @@ bsp_init(void)
     acpi_load(&arch_acpi);
 
     /* Set up interrupt vector */
+    idt_setup_intr_gate(6, intr_iof);
+    idt_setup_intr_gate(13, intr_gpf);
     idt_setup_intr_gate(14, intr_pf);
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
@@ -287,6 +286,7 @@ bsp_init(void)
     syscall_table[SYS_execve] = sys_execve;
     syscall_table[SYS_getpid] = sys_getpid;
     syscall_table[SYS_getppid] = sys_getppid;
+    syscall_table[SYS_lseek] = sys_lseek;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
     /* Initialize the process table */
@@ -507,12 +507,10 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
         flags = 0x0200;
         break;
     case KTASK_POLICY_DRIVER:
-        cs = GDT_RING1_CODE_SEL + 1;
-        ss = GDT_RING1_DATA_SEL + 1;
-        flags = 0x1200;
-        break;
+    case KTASK_POLICY_SERVER:
     case KTASK_POLICY_USER:
-        cs = GDT_RING3_CODE_SEL + 3;
+    default:
+        cs = GDT_RING3_CODE64_SEL + 3;
         ss = GDT_RING3_DATA_SEL + 3;
         flags = 0x3200;
         break;
@@ -534,12 +532,13 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     t->rp->cs = cs;
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
+    t->cr3 = (u64)pgt;
 
     /* Set the page table for the client */
     set_cr3(pgt);
 
     /* Free the old page table */
-    kfree(((struct arch_proc *)t->ktask->proc->arch)->pgt);
+    //kfree(((struct arch_proc *)t->ktask->proc->arch)->pgt);
 
     /* Set the page table for the client */
     ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
@@ -606,6 +605,65 @@ arch_idle(void)
     while ( 1 ) {
         halt();
     }
+}
+
+/*
+ * Clone the task
+ */
+struct ktask *
+task_clone(struct ktask *ot)
+{
+    struct arch_task *t;
+
+    t = kmalloc(sizeof(struct arch_task));
+    if ( NULL == t ) {
+        return NULL;
+    }
+    t->rp = kmalloc(sizeof(struct stackframe64));
+    if ( NULL == t->rp ) {
+        kfree(t);
+        return NULL;
+    }
+    t->kstack = kmalloc(KSTACK_SIZE);
+    if ( NULL == t->kstack ) {
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ustack = kmalloc(USTACK_SIZE);
+    if ( NULL == t->ustack ) {
+        kfree(t->kstack);
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ktask = kmalloc(sizeof(struct ktask));
+    if ( NULL == t->ktask ) {
+        kfree(t->ustack);
+        kfree(t->kstack);
+        kfree(t->rp);
+        kfree(t);
+        return NULL;
+    }
+    t->ktask->arch = t;
+
+    kmemcpy(t->rp, ((struct arch_task *)ot->arch)->rp,
+            sizeof(struct stackframe64));
+    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
+            KSTACK_SIZE);
+    kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
+            USTACK_SIZE);
+
+    return t->ktask;
+}
+
+/*
+ * Set return value
+ */
+void
+task_set_return(struct ktask *t, unsigned long long ret)
+{
+    ((struct arch_task *)t->arch)->rp->ax = ret;
 }
 
 /*

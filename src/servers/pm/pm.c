@@ -21,37 +21,17 @@
  * SOFTWARE.
  */
 
-#include <stdlib.h>
-#include <unistd.h>
+#include <aos/const.h>
+
+void exit(int) __attribute__ ((__noreturn__));
 
 /*
- * Entry point for the init program
+ * Entry point for the process manager program
  */
 int
 main(int argc, char *argv[])
 {
-    pid_t pid;
-
-    /* fork */
-    pid = fork();
-    switch ( pid ) {
-    case -1:
-        /* Error */
-        exit(-1);
-        break;
-    case 0:
-        /* The child process */
-        execve("/servers/pm", NULL, NULL);
-        break;
-    default:
-        /* The parent process */
-        ;
-    }
-
-    for ( ;; ) {
-    }
-
-    return 0;
+    exit(0);
 }
 
 /*

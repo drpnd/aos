@@ -66,13 +66,10 @@
 #define GDT_NULL_SEL            (0<<3)
 #define GDT_RING0_CODE_SEL      (1<<3)
 #define GDT_RING0_DATA_SEL      (2<<3)
-#define GDT_RING1_CODE_SEL      (3<<3)
-#define GDT_RING1_DATA_SEL      (4<<3)
-#define GDT_RING2_CODE_SEL      (5<<3)
-#define GDT_RING2_DATA_SEL      (6<<3)
-#define GDT_RING3_CODE_SEL      (7<<3)
-#define GDT_RING3_DATA_SEL      (8<<3)
-#define GDT_TSS_SEL_BASE        (9<<3)
+#define GDT_RING3_CODE32_SEL    (3<<3)
+#define GDT_RING3_DATA_SEL      (4<<3)
+#define GDT_RING3_CODE64_SEL    (5<<3)
+#define GDT_TSS_SEL_BASE        (6<<3)
 
 /*
  * Boot information from boot loader
@@ -186,6 +183,8 @@ struct arch_task {
     struct stackframe64 *rp;
     /* SP0 for tss */
     u64 sp0;
+    /* CR3 */
+    u64 cr3;
     /* Stack pointers (kernel and user) */
     void *kstack;
     void *ustack;
@@ -227,6 +226,9 @@ void ltr(u16);
 void cli(void);
 void sti(void);
 void intr_null(void);
+void intr_iof(void);
+void intr_gpf(void);
+void intr_pf(void);
 void intr_apic_loc_tmr(void);
 void intr_crash(void);
 void task_restart(void);

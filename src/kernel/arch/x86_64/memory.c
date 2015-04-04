@@ -337,7 +337,7 @@ phys_mem_init(struct bootinfo *bi)
                 if ( NULL == phys_mem->buddy.heads[k] ) {
                     /* Empty list */
                     phys_mem->buddy.heads[k]
-                        = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
+                        = (struct phys_mem_buddy_list *)(i * PAGESIZE);
                     phys_mem->buddy.heads[k]->prev = NULL;
                     phys_mem->buddy.heads[k]->next = NULL;
                 } else {
@@ -346,8 +346,7 @@ phys_mem_init(struct bootinfo *bi)
                     while ( NULL != list->next ) {
                         list = list->next;
                     }
-                    list->next
-                        = (struct phys_mem_buddy_list *)((i + j) * PAGESIZE);
+                    list->next = (struct phys_mem_buddy_list *)(i * PAGESIZE);
                     list->next->prev = list;
                     list->next->next = NULL;
                 }

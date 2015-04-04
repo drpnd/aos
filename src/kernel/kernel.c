@@ -24,6 +24,8 @@
 #include <aos/const.h>
 #include "kernel.h"
 
+struct proc_table *proc_table;
+
 /*
  * Entry point to the kernel in C for all processors, called from asm.s.
  */

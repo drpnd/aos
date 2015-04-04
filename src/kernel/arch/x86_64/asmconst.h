@@ -25,12 +25,9 @@
 	/* GDT selectors */
 	.set	GDT_RING0_CODE_SEL,0x08
 	.set	GDT_RING0_DATA_SEL,0x10
-	.set	GDT_RING1_CODE_SEL,0x18
-	.set	GDT_RING1_DATA_SEL,0x20
-	.set	GDT_RING2_CODE_SEL,0x28
-	.set	GDT_RING2_DATA_SEL,0x30
-	.set	GDT_RING3_CODE_SEL,0x38
-	.set	GDT_RING3_DATA_SEL,0x40
+	.set	GDT_RING3_CODE32_SEL,0x18
+	.set	GDT_RING3_DATA_SEL,0x20
+	.set	GDT_RING3_CODE64_SEL,0x28
 
 	/* Temporary GDT for application processors */
 	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
@@ -55,7 +52,8 @@
 	/* Task information (struct arch_task) */
 	.set	TASK_RP,0
 	.set	TASK_SP0,8
-	.set	TASK_KTASK,32
+	.set	TASK_CR3,16
+	.set	TASK_KTASK,40
 	/* TSS */
 	.set	TSS_SP0,4
 	/* Trampoline */

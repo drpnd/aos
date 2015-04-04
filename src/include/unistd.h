@@ -24,9 +24,16 @@
 #ifndef _UNISTD_H
 #define _UNISTD_H
 
+#include <aos/types.h>
+
 #define SEEK_SET        0
 #define SEEK_CUR        1
 #define SEEK_END        2
+
+int execve(const char *path, char *const argv[], char *const envp[]);
+pid_t fork(void);
+pid_t getpid(void);
+pid_t getppid(void);
 
 #endif /* _UNISTD_H */
 

@@ -21,38 +21,14 @@
  * SOFTWARE.
  */
 
-#include <stdlib.h>
-#include <unistd.h>
+#ifndef _SYS_WAIT_H
+#define _SYS_WAIT_H
 
-/*
- * Entry point for the init program
- */
-int
-main(int argc, char *argv[])
-{
-    pid_t pid;
+#include <aos/types.h>
 
-    /* fork */
-    pid = fork();
-    switch ( pid ) {
-    case -1:
-        /* Error */
-        exit(-1);
-        break;
-    case 0:
-        /* The child process */
-        execve("/servers/pm", NULL, NULL);
-        break;
-    default:
-        /* The parent process */
-        ;
-    }
+pid_t waitpid(pid_t, int *, int);
 
-    for ( ;; ) {
-    }
-
-    return 0;
-}
+#endif /* _SYS_WAIT_H */
 
 /*
  * Local variables:

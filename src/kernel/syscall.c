@@ -66,25 +66,55 @@ sys_exit(int status)
  * DESCRIPTION
  *
  * RETURN VALUES
- *      Upon successful completion, the fork() function returns a value of 0 to
- *      the child process and returns the process ID of the child process to the
- *      parent process.  Otherwise, a value of -1 is returned to the parent
+ *      Upon successful completion, the sys_fork() function returns a value of 0
+ *      to the child process and returns the process ID of the child process to
+ *      the parent process.  Otherwise, a value of -1 is returned to the parent
  *      process and no child process is created.
  */
 pid_t
 sys_fork(void)
 {
+    int i;
+    struct proc *np;
     struct ktask *t;
+    struct ktask *nt;
+    pid_t pid;
 
-    /* Allocate task data structure */
-    t = kmalloc(sizeof(struct ktask));
-    if ( NULL == t ) {
-        /* Failed to create a new task */
+    /* Get the current process */
+    t = this_ktask();
+    if ( NULL == t || NULL == t->proc ) {
         return -1;
     }
-    t->state = KTASK_STATE_CREATED;
 
-    /* Copy the process */
+    /* Search an available process ID */
+    pid = -1;
+    for ( i = 0; i < PROC_NR; i++ ) {
+        if ( NULL == proc_table->procs[(proc_table->lastpid + i) % PROC_NR] ) {
+            pid = (proc_table->lastpid + i) % PROC_NR;
+            break;
+        }
+    }
+    if ( pid < 0 ) {
+        /* Could not find any available process ID */
+        return -1;
+    }
+
+    /* Create a new process */
+    np = kmalloc(sizeof(struct proc));
+    if ( NULL == np ) {
+        return -1;
+    }
+    kmemset(np, 0, sizeof(struct proc));
+    nt = task_clone(t);
+    if ( NULL == nt ) {
+        kfree(np);
+        return -1;
+    }
+    nt->proc = np;
+    nt->state = KTASK_STATE_CREATED;
+
+    proc_table->procs[pid] = np;
+    proc_table->lastpid = pid;
 
     return -1;
 }

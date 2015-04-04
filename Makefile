@@ -21,15 +21,23 @@ all:
 ## Compile initramfs (including kernel as well)
 initrd:
 #	Reserve for file information
+	@rm -f initramfs
 	@dd if=/dev/zero of=initramfs seek=0 bs=1 count=4096 conv=notrunc > /dev/null 2>&1
 #	Compile and write the init server
-	@target='init'; fname='/servers/init'; entry=0; \
+	@target='init'; fname="/servers/$$target"; entry=0; \
+	ORG=0x40000000 make -C src $$target; \
 	off=`stat -f "%z" initramfs`; \
 	printf "$$fname\000" | dd of=initramfs seek=`expr $$entry \* 32` bs=1 conv=notrunc > /dev/null 2>&1; \
 	printf "0: %.16x" $$off | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 16` conv=notrunc > /dev/null 2>&1; \
 	printf "0: %.16x" `stat -f "%z" src/$$target` | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 24` conv=notrunc > /dev/null 2>&1; \
-	ORG=0x40000000 make -C src init; \
-	dd if=src/init of=initramfs seek=$$off bs=1 conv=notrunc > /dev/null 2>&1
+	dd if=src/$$target of=initramfs seek=$$off bs=1 conv=notrunc > /dev/null 2>&1
+	@target='pm'; fname="/servers/$$target"; entry=1; \
+	ORG=0x40000000 make -C src $$target; \
+	off=`stat -f "%z" initramfs`; \
+	printf "$$fname\000" | dd of=initramfs seek=`expr $$entry \* 32` bs=1 conv=notrunc > /dev/null 2>&1; \
+	printf "0: %.16x" $$off | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 16` conv=notrunc > /dev/null 2>&1; \
+	printf "0: %.16x" `stat -f "%z" src/$$target` | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 24` conv=notrunc > /dev/null 2>&1; \
+	dd if=src/$$target of=initramfs seek=$$off bs=1 conv=notrunc > /dev/null 2>&1
 
 ## Compile boot loader
 bootloader:

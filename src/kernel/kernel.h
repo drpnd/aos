@@ -34,9 +34,13 @@
 /* Process table size */
 #define PROC_NR                 65536
 
+/* Maximum number of file descriptors */
+#define FD_MAX                  4096
+
 /* Task policy */
 #define KTASK_POLICY_KERNEL     0
 #define KTASK_POLICY_DRIVER     1
+#define KTASK_POLICY_SERVER     2
 #define KTASK_POLICY_USER       3
 
 /* Tick */
@@ -44,6 +48,17 @@
 #define IV_LOC_TMR              0x50
 #define IV_CRASH                0xfe
 #define IV_IRQ(n)               (0x20 + (n))
+
+/*
+ * File descriptor
+ */
+struct fildes {
+    void *data;
+    off_t pos;
+    ssize_t (*read)(struct fildes *, void *, size_t);
+    ssize_t (*write)(struct fildes *, const void *, size_t);
+    off_t (*lseek)(struct fildes *, off_t, int);
+};
 
 /*
  * Process
@@ -63,6 +78,9 @@ struct proc {
 
     /* Policy */
     int policy;
+
+    /* File descriptors */
+    struct fildes *fds[FD_MAX];
 };
 
 /*
@@ -102,22 +120,8 @@ struct ktask {
     int credit;
 };
 
-/*
- * vfs
- */
-struct vfs {
-};
-
-/*
- * File descriptor
- */
-struct fildes {
-    void *data;
-    off_t pos;
-    ssize_t (*read)(struct fildes *, void *, size_t);
-    ssize_t (*write)(struct fildes *, const void *, size_t);
-    off_t (*lseek)(struct fildes *, off_t, int);
-};
+/* Global variable */
+extern struct proc_table *proc_table;
 
 /* in kernel.c */
 int kstrcmp(const char *, const char *);
@@ -148,6 +152,7 @@ pid_t sys_wait4(pid_t, int *, int, struct rusage *);
 int sys_execve(const char *, char *const [], char *const []);
 pid_t sys_getpid(void);
 pid_t sys_getppid(void);
+off_t sys_lseek(int, off_t, int);
 
 /* The followings are mandatory functions for the kernel and should be
    implemented somewhere in arch/<arch_name>/ */
@@ -155,6 +160,8 @@ struct ktask * this_ktask(void);
 void set_next_ktask(struct ktask *);
 void panic(char *);
 void halt(void);
+struct ktask * task_clone(struct ktask *);
+void task_set_return(struct ktask *, unsigned long long);
 
 #endif /* _KERNEL_H */
 

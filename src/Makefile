@@ -48,6 +48,8 @@ kernel/arch/$(ARCH)/i8254.o: include/aos/const.h kernel/kernel.h \
 	kernel/arch/$(ARCH)/i8254.h
 kernel/kernel.o: include/aos/const.h kernel/kernel.h
 kernel/memory.o: include/aos/const.h kernel/kernel.h kernel/memory.h
+kernel/ramfs.o: include/aos/const.h kernel/kernel.h
+kernel/syscall.o: include/aos/const.h kernel/kernel.h
 kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/arch.o \
 	kernel/arch/$(ARCH)/desc.o \
@@ -64,12 +66,18 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
 
 ## init server
-init: servers/init/init.o lib/libc.o lib/libcasm.o
+init: servers/init/init.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+
+## process manager
+pm: servers/pm/pm.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## Clean
 clean:
 	find . -name "*.o" | xargs rm -f
-	rm -f src/kpack
-	rm -f src/bootmon
-	rm -f src/diskboot
+	rm -f init
+	rm -f pm
+	rm -f kpack
+	rm -f bootmon
+	rm -f diskboot
