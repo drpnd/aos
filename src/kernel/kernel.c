@@ -70,6 +70,7 @@ sched(void)
     if ( ktask ) {
         ktask->credit--;
         if ( ktask->next && ktask->credit <= 0 ) {
+            ktask->next->credit = 100;
             set_next_ktask(ktask->next);
         }
     }

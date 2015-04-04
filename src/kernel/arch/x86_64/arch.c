@@ -129,6 +129,51 @@ _create_idle_task(void)
 }
 
 /*
+ * Start
+ */
+static void
+_launch_init_server(void)
+{
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
+    u64 offset = 0;
+    u64 size;
+    struct arch_task *t;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, "/servers/init") ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find init */
+        panic("Fatal: Could not find the `init' server.");
+        return;
+    }
+
+    /* Create a process */
+    t = kmalloc(sizeof(struct arch_task));
+    t->rp = kmalloc(sizeof(struct stackframe64));
+    t->ktask = kmalloc(sizeof(struct ktask));
+    t->ktask->arch = t;
+    t->ktask->proc = kmalloc(sizeof(struct proc));
+    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
+    t->ktask->next = NULL;
+    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
+    t->kstack = kmalloc(KSTACK_SIZE);
+    t->ustack = kmalloc(USTACK_SIZE);
+    t->ktask->credit = 100;
+
+    t->ktask->next = this_cpu()->idle_task->ktask;
+
+    arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
+}
+
+/*
  * Panic -- damn blue screen, lovely green screen
  */
 void
@@ -300,44 +345,9 @@ bsp_init(void)
     /* Initialize local APIC counter */
     lapic_start_timer(HZ, IV_LOC_TMR);
 
+    /* Launch the `init' server */
     cli();
-    u64 *initramfs = (u64 *)INITRAMFS_BASE;
-    u64 offset = 0;
-    u64 size;
-    struct arch_task *t;
-
-    /* Find the file pointed by path from the initramfs */
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, "/servers/init") ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find init */
-        panic("Fatal: Could not find the `init' server.");
-        return;
-    }
-
-    /* Create a process */
-    t = kmalloc(sizeof(struct arch_task));
-    t->rp = kmalloc(sizeof(struct stackframe64));
-    t->ktask = kmalloc(sizeof(struct ktask));
-    t->ktask->arch = t;
-    t->ktask->proc = kmalloc(sizeof(struct proc));
-    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
-    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
-    t->ktask->next = NULL;
-    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
-    t->kstack = kmalloc(KSTACK_SIZE);
-    t->ustack = kmalloc(USTACK_SIZE);
-
-    t->ktask->next = pdata->idle_task->ktask;
-    t->ktask->credit = 100;
-
-    arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
+    _launch_init_server();
 
     panic("Fatal: Could not start the `init' server.");
 }
