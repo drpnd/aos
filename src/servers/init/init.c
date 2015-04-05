@@ -43,15 +43,12 @@ main(int argc, char *argv[])
         exit(-1);
         break;
     case 0:
-        exit(-1);
-#if 0
         /* The child process */
         ret = execve("/servers/pm", NULL, NULL);
         if ( ret < 0 ) {
             /* Error */
             return -1;
         }
-#endif
         break;
     default:
         /* The parent process */

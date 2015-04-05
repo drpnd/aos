@@ -247,7 +247,7 @@ bsp_init(void)
     /* Set up interrupt vector */
     idt_setup_intr_gate(6, intr_iof);
     idt_setup_intr_gate(13, intr_gpf);
-    //idt_setup_intr_gate(14, intr_pf);
+    idt_setup_intr_gate(14, intr_pf);
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
@@ -519,6 +519,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     /* Clean up memory space of the current process */
     kfree(t->kstack);
     kfree(t->ustack);
+    //t->rp = kstack;
     kmemset(t->rp, 0, sizeof(struct stackframe64));
 
     /* Replace the current process with the new process */
@@ -541,10 +542,156 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     /* Schedule */
+    this_cpu()->cur_task = NULL;
     this_cpu()->next_task = t;
+
+    //__asm__ ( "movq %%rax,%%dr0;movq %%rsp,%%dr1" :: "a"(t->rp) );
 
     /* Restart the task */
     task_restart();
+
+    /* Never reach here but do this to prevent a compiler error */
+    return -1;
+}
+void task_restart2(void *);
+int
+arch_exec2(struct arch_task *t, void (*entry)(void), size_t size, int policy)
+{
+    u64 cs;
+    u64 ss;
+    u64 flags;
+    struct page_entry *pgt;
+    u64 i;
+    u64 j;
+    void *exec;
+    void *kstack;
+    void *ustack;
+
+    /* Setup page table */
+    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
+    if ( NULL == pgt ) {
+        return -1;
+    }
+    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
+    /* PML4 */
+    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
+    /* PDPT */
+    for ( i = 0; i < 1; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+    /* PT (1GB-- +2MiB) */
+    for ( i = 1; i < 2; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
+    for ( i = 2; i < 3; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            /* Not present */
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    /* Kernel */
+    for ( i = 3; i < 4; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+
+    /* Program */
+    if ( size < PAGESIZE ) {
+        /* Alignment */
+        exec = kmalloc(PAGESIZE);
+    } else {
+        exec = kmalloc(size);
+    }
+    if ( NULL == exec ) {
+        kfree(pgt);
+        return -1;
+    }
+    /* Stack */
+    kstack = kmalloc(KSTACK_SIZE);
+    if ( NULL == kstack ) {
+        kfree(pgt);
+        kfree(exec);
+        return -1;
+    }
+    ustack = kmalloc(USTACK_SIZE);
+    if ( NULL == ustack ) {
+        kfree(pgt);
+        kfree(exec);
+        kfree(kstack);
+        return -1;
+    }
+
+    /* Copy the executable memory */
+    (void)kmemcpy(exec, entry, size);
+    for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
+        /* Mapping */
+        pgt[6].entries[i] = ((u64)exec + i * PAGESIZE) | 0x087;
+    }
+    /* Setup the page table for user stack */
+    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
+        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
+            = ((u64)ustack + i * PAGESIZE) | 0x087;
+    }
+
+    /* Configure the ring protection by the policy */
+    switch ( policy ) {
+    case KTASK_POLICY_KERNEL:
+        cs = GDT_RING0_CODE_SEL;
+        ss = GDT_RING0_DATA_SEL;
+        flags = 0x0200;
+        break;
+    case KTASK_POLICY_DRIVER:
+    case KTASK_POLICY_SERVER:
+    case KTASK_POLICY_USER:
+    default:
+        cs = GDT_RING3_CODE64_SEL + 3;
+        ss = GDT_RING3_DATA_SEL + 3;
+        flags = 0x3200;
+        break;
+    }
+
+    /* Clean up memory space of the current process */
+    kfree(t->kstack);
+    kfree(t->ustack);
+    //t->rp = kstack;
+    kmemset(t->rp, 0, sizeof(struct stackframe64));
+
+    /* Replace the current process with the new process */
+    t->kstack = kstack;
+    t->ustack = ustack;
+    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
+    t->rp->gs = ss;
+    t->rp->fs = ss;
+    t->rp->sp = USTACK_INIT;
+    t->rp->ss = ss;
+    t->rp->cs = cs;
+    t->rp->ip = CODE_INIT;
+    t->rp->flags = flags;
+    t->cr3 = (u64)pgt;
+
+    /* Set the page table for the client */
+    //set_cr3(pgt);
+
+    /* Set the page table for the client */
+    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
+
+    __asm__ ( "movq %%rax,%%dr0;movq %%rsp,%%dr1" :: "a"(t->rp) );
+
+    /* Restart the task */
+    task_restart2(t);
 
     /* Never reach here but do this to prevent a compiler error */
     return -1;
@@ -616,7 +763,7 @@ task_clone(struct ktask *ot)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64) + 4096) + 512;
+    t->rp = kmalloc(sizeof(struct stackframe64));
     if ( NULL == t->rp ) {
         kfree(t);
         return NULL;

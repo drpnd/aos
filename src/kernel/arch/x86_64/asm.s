@@ -55,6 +55,7 @@
 	.globl	_asm_ioapic_map_intr
 	.globl	_set_cr3
 	.globl	_task_restart
+	.globl	_task_restart2
 	.globl	_intr_null
 	.globl	_intr_iof
 	.globl	_intr_gpf
@@ -361,31 +362,9 @@ _sys_fork_restart:
 	popq	%rcx
 	movq	%rbp,%rsp
 	popq	%rbp
-
-	movq	%rax,%dr0
-	movq	%rcx,%dr1
-	movq	16(%rsp),%rdx
-	//movq	0(%rsp),%rdx
-	movq	%rdx,%dr2
-	movq	%cr3,%rdx
-	//movq	%rdx,%dr3
-	movq	0x1ffeffd0,%rdx
-	movq	%rdx,%dr3
-
 	sysretq
 1:
 	popq	%rbp
-	movq	%rax,%dr0
-	movq	%rcx,%dr1
-	movq	16(%rsp),%rdx
-	movq	0(%rsp),%rdx
-	movq	%rdx,%dr2
-	movq	%cr3,%rdx
-	//movq	%rdx,%dr3
-	movq	0x222ffd0,%rdx
-	//movq	0x7fffffd0,%rdx
-	movq	%rdx,%dr3
-
 	sysretq
 
 
@@ -612,6 +591,17 @@ _task_restart:
 	leaq	P_TSS_OFFSET(%rbp),%rax
 	movq	%rdx,TSS_SP0(%rax)
 2:
+	intr_lapic_isr_done
+	iretq
+
+
+_task_restart2:
+	movq	%rdi,%dr1
+	movq	TASK_RP(%rdi),%rsp
+	movq	%rsp,%dr0
+	/* Change page table */
+	movq	TASK_CR3(%rdi),%rax
+	movq	%rax,%cr3
 	intr_lapic_isr_done
 	iretq
 

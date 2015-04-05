@@ -314,7 +314,7 @@ sys_close(int fildes)
  *      it does return to the calling process, an error has occurred; the return
  *      value will be -1.
  */
-int arch_exec(void *, void (*)(void), size_t, int);
+int arch_exec2(void *, void (*)(void), size_t, int);
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
@@ -322,9 +322,6 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
     u64 offset = 0;
     u64 size;
     struct ktask *t;
-
-    sys_exit(0);
-    return 0;
 
     /* Find the file pointed by path from the initramfs */
     while ( 0 != *initramfs ) {
@@ -336,12 +333,13 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
         initramfs += 4;
     }
     if ( 0 == offset ) {
-        /* Could not find init */
+        /* Could not find the file */
         return -1;
     }
 
     t = this_ktask();
-    arch_exec(t->arch, (void *)initramfs, size, KTASK_POLICY_SERVER);
+    arch_exec2(t->arch, (void *)(0x20000ULL + offset), size,
+               KTASK_POLICY_SERVER);
 
     /* On failure */
     return -1;
