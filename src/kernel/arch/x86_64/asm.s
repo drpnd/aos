@@ -320,8 +320,10 @@ syscall_entry:
 /* void sys_fork_restart(u64 task, u64 ret0, u64, ret1) */
 _sys_fork_restart:
 	movq	%rdx,%rax
-	popq	%rdx		/* Pop the return point */
+	//addq	$8,%rsp		/* Pop the return point */
 	leaveq			/* Restore the stack */
+	addq	$8,%rsp		/* Pop the return point */
+
 	/* Setup the stackframe for the forked task */
 	movq	TASK_RP(%rdi),%rdx
 	addq	$164,%rdx
@@ -352,16 +354,38 @@ _sys_fork_restart:
 	movw	$(GDT_RING3_DATA_SEL+3),%cx
 	movw	%cx,-162(%rdx)
 	movw	%cx,-164(%rdx)
+
 	/* Restore */
-	popq	%rdx
 	popq	%rbx
 	popq	%r11
 	popq	%rcx
 	movq	%rbp,%rsp
 	popq	%rbp
+
+	movq	%rax,%dr0
+	movq	%rcx,%dr1
+	movq	16(%rsp),%rdx
+	//movq	0(%rsp),%rdx
+	movq	%rdx,%dr2
+	movq	%cr3,%rdx
+	//movq	%rdx,%dr3
+	movq	0x1ffeffd0,%rdx
+	movq	%rdx,%dr3
+
 	sysretq
 1:
 	popq	%rbp
+	movq	%rax,%dr0
+	movq	%rcx,%dr1
+	movq	16(%rsp),%rdx
+	movq	0(%rsp),%rdx
+	movq	%rdx,%dr2
+	movq	%cr3,%rdx
+	//movq	%rdx,%dr3
+	movq	0x222ffd0,%rdx
+	//movq	0x7fffffd0,%rdx
+	movq	%rdx,%dr3
+
 	sysretq
 
 
@@ -399,6 +423,9 @@ _set_cr3:
 
 /* Null function for interrupt handler */
 _intr_null:
+	pushq	%rax
+	pushq	%rcx
+	pushq	%rdx
 	/* APIC EOI */
 	movq	$MSR_APIC_BASE,%rcx
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
@@ -409,6 +436,9 @@ _intr_null:
 	addq	%rax,%rdx
 	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
 	movl	$0,APIC_EOI(%rdx)	/* EOI */
+	popq	%rdx
+	popq	%rcx
+	popq	%rax
 	iretq
 
 

@@ -23,8 +23,6 @@
 
 #include <aos/const.h>
 
-void exit(int) __attribute__ ((__noreturn__));
-
 /*
  * Entry point for the process manager program
  */
@@ -32,6 +30,11 @@ int
 main(int argc, char *argv[])
 {
     exit(0);
+    while ( 1 ) {
+        /* Wait for a message */
+    }
+
+    return 0;
 }
 
 /*

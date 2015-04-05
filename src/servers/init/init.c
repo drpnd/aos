@@ -43,19 +43,24 @@ main(int argc, char *argv[])
         exit(-1);
         break;
     case 0:
+        exit(-1);
+#if 0
         /* The child process */
         ret = execve("/servers/pm", NULL, NULL);
         if ( ret < 0 ) {
             /* Error */
+            return -1;
         }
+#endif
         break;
     default:
         /* The parent process */
         ;
     }
 
+    pid = waitpid(pid, &stat, 0);
     while ( 1 ) {
-        pid = waitpid(-1, &stat, 0);
+        __asm__ ("pause");
     }
 
     return 0;

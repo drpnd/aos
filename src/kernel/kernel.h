@@ -35,7 +35,7 @@
 #define PROC_NR                 65536
 
 /* Maximum number of file descriptors */
-#define FD_MAX                  4096
+#define FD_MAX                  1024
 
 /* Task policy */
 #define KTASK_POLICY_KERNEL     0

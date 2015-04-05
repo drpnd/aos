@@ -247,7 +247,7 @@ bsp_init(void)
     /* Set up interrupt vector */
     idt_setup_intr_gate(6, intr_iof);
     idt_setup_intr_gate(13, intr_gpf);
-    idt_setup_intr_gate(14, intr_pf);
+    //idt_setup_intr_gate(14, intr_pf);
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
@@ -537,9 +537,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     /* Set the page table for the client */
     set_cr3(pgt);
 
-    /* Free the old page table */
-    //kfree(((struct arch_proc *)t->ktask->proc->arch)->pgt);
-
     /* Set the page table for the client */
     ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
@@ -619,7 +616,7 @@ task_clone(struct ktask *ot)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64));
+    t->rp = kmalloc(sizeof(struct stackframe64) + 4096) + 512;
     if ( NULL == t->rp ) {
         kfree(t);
         return NULL;
@@ -650,13 +647,52 @@ task_clone(struct ktask *ot)
 
     struct page_entry *pgt;
     u64 i;
+    u64 j;
     /* Setup page table */
     pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
     if ( NULL == pgt ) {
         return NULL;
     }
-    kmemcpy(pgt, (void *)((struct arch_task *)ot->arch)->cr3,
-            sizeof(struct page_entry) * (6 + 512));
+    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
+    /* PML4 */
+    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
+    /* PDPT */
+    for ( i = 0; i < 1; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+    /* PT (1GB-- +2MiB) */
+    for ( i = 1; i < 2; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
+    for ( i = 2; i < 3; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        for ( j = 0; j < 512; j++ ) {
+            /* Not present */
+            pgt[2 + i].entries[j] = 0x000;
+        }
+    }
+    /* Kernel */
+    for ( i = 3; i < 4; i++ ) {
+        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        /* PD */
+        for ( j = 0; j < 512; j++ ) {
+            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
+        }
+    }
+    for ( i = 0; i < 512; i++ ) {
+        /* Mapping */
+        pgt[6].entries[i] = ((struct page_entry *)((struct arch_task *)ot->arch)
+                             ->cr3)[6].entries[i];
+    }
     /* Setup the page table for user stack */
     for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
@@ -665,7 +701,7 @@ task_clone(struct ktask *ot)
 
     t->cr3 = (u64)pgt;
 
-    t->sp0 = (u64)t->kstack + PAGESIZE - 16;
+    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 
     kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
             KSTACK_SIZE);

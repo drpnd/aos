@@ -122,6 +122,7 @@ sys_fork(void)
 
     sys_fork_restart(nt->arch, 0, pid);
 
+    /* To prevent compiler error */
     return -1;
 }
 
@@ -254,7 +255,19 @@ pid_t
 sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
 {
     /* Change the state to BLOCKED */
+    u16 *video;
+    int i;
+    char *s = "Hello wait!";
 
+    video = (u16 *)0xb8000;
+    for ( i = 0; i < 80 * 25; i++ ) {
+        *(video + i) = 0xe000;
+    }
+    while ( *s ) {
+        *video = 0xe000 | (u16)*s;
+        s++;
+        video++;
+    }
 
     return -1;
 }
@@ -301,22 +314,34 @@ sys_close(int fildes)
  *      it does return to the calling process, an error has occurred; the return
  *      value will be -1.
  */
+int arch_exec(void *, void (*)(void), size_t, int);
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
-    u16 *video;
-    int i;
-    const char *s = path;
+    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 offset = 0;
+    u64 size;
+    struct ktask *t;
 
-    video = (u16 *)0xb8000;
-    for ( i = 0; i < 80 * 25; i++ ) {
-        *(video + i) = 0xe000;
+    sys_exit(0);
+    return 0;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, path) ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
     }
-    while ( *s ) {
-        *video = 0xe000 | (u16)*s;
-        s++;
-        video++;
+    if ( 0 == offset ) {
+        /* Could not find init */
+        return -1;
     }
+
+    t = this_ktask();
+    arch_exec(t->arch, (void *)initramfs, size, KTASK_POLICY_SERVER);
 
     /* On failure */
     return -1;
