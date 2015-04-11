@@ -149,9 +149,11 @@ ssize_t sys_write(int, const void *, size_t);
 int sys_open(const char *, int, ...);
 int sys_close(int);
 pid_t sys_wait4(pid_t, int *, int, struct rusage *);
-int sys_execve(const char *, char *const [], char *const []);
 pid_t sys_getpid(void);
 pid_t sys_getppid(void);
+int sys_execve(const char *, char *const [], char *const []);
+void * sys_mmap(void *, size_t, int, int, int, off_t);
+int sys_munmap(void *, size_t);
 off_t sys_lseek(int, off_t, int);
 
 /* The followings are mandatory functions for the kernel and should be

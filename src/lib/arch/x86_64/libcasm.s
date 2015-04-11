@@ -24,10 +24,15 @@
 	.text
 
 	.code64
+	.globl	_start
 	.globl	_syscall
 	.globl	_memset
 	.globl	_memcmp
 	.globl	_memcpy
+
+/* starting point */
+_start:
+	jmp	_main
 
 /* int syscall(arg0, ..., arg5) */
 _syscall:

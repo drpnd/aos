@@ -55,7 +55,7 @@
 	.globl	_asm_ioapic_map_intr
 	.globl	_set_cr3
 	.globl	_task_restart
-	.globl	_task_restart2
+	.globl	_task_replace
 	.globl	_intr_null
 	.globl	_intr_iof
 	.globl	_intr_gpf
@@ -594,11 +594,9 @@ _task_restart:
 	intr_lapic_isr_done
 	iretq
 
-
-_task_restart2:
-	movq	%rdi,%dr1
+/* Replace the current task with the task pointed  by %rdi */
+_task_replace:
 	movq	TASK_RP(%rdi),%rsp
-	movq	%rsp,%dr0
 	/* Change page table */
 	movq	TASK_CR3(%rdi),%rax
 	movq	%rax,%cr3

@@ -35,14 +35,17 @@ sys_exit(int status)
     struct ktask *t;
     u16 *video;
     int i;
-    char *s = "Hello syscall!";
+    char *s;
+    s = "exit";
 
     video = (u16 *)0xb8000;
     for ( i = 0; i < 80 * 25; i++ ) {
-        *(video + i) = 0xe000;
+        //*(video + i) = 0xe000;
+        *(video + i) = 0x2000;
     }
     while ( *s ) {
-        *video = 0xe000 | (u16)*s;
+        //*video = 0xe000 | (u16)*s;
+        *video = 0x2f00 | (u16)*s;
         s++;
         video++;
     }
@@ -257,7 +260,7 @@ sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
     /* Change the state to BLOCKED */
     u16 *video;
     int i;
-    char *s = "Hello wait!";
+    char *s = "sys_wait4";
 
     video = (u16 *)0xb8000;
     for ( i = 0; i < 80 * 25; i++ ) {
@@ -290,58 +293,6 @@ sys_wait4(pid_t pid, int *stat_loc, int options, struct rusage *rusage)
 int
 sys_close(int fildes)
 {
-    return -1;
-}
-
-/*
- * execute a file
- *
- * SYNOPSIS
- *      int
- *      sys_execve(const char *path, char *const argv[], char *const envp[]);
- *
- * DESCRIPTION
- *      The function sys_execve() transforms the calling process into a new
- *      process. The new process is constructed from an ordinary file, whose
- *      name is pointed by path, called the new process file.  In the current
- *      implementation, this file should be an executable object file, whose
- *      text section virtual address starts from 0x40000000.  The design of
- *      relocatable object support is still ongoing.
- *
- * RETURN VALUES
- *      As the function sys_execve() overlays the current process image with a
- *      new process image, the successful call has no process to return to.  If
- *      it does return to the calling process, an error has occurred; the return
- *      value will be -1.
- */
-int arch_exec2(void *, void (*)(void), size_t, int);
-int
-sys_execve(const char *path, char *const argv[], char *const envp[])
-{
-    u64 *initramfs = (u64 *)0x20000ULL;
-    u64 offset = 0;
-    u64 size;
-    struct ktask *t;
-
-    /* Find the file pointed by path from the initramfs */
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, path) ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find the file */
-        return -1;
-    }
-
-    t = this_ktask();
-    arch_exec2(t->arch, (void *)(0x20000ULL + offset), size,
-               KTASK_POLICY_SERVER);
-
-    /* On failure */
     return -1;
 }
 
@@ -416,6 +367,118 @@ sys_getppid(void)
 
     return t->proc->parent->id;
 }
+
+/*
+ * execute a file
+ *
+ * SYNOPSIS
+ *      int
+ *      sys_execve(const char *path, char *const argv[], char *const envp[]);
+ *
+ * DESCRIPTION
+ *      The function sys_execve() transforms the calling process into a new
+ *      process. The new process is constructed from an ordinary file, whose
+ *      name is pointed by path, called the new process file.  In the current
+ *      implementation, this file should be an executable object file, whose
+ *      text section virtual address starts from 0x40000000.  The design of
+ *      relocatable object support is still ongoing.
+ *
+ * RETURN VALUES
+ *      As the function sys_execve() overlays the current process image with a
+ *      new process image, the successful call has no process to return to.  If
+ *      it does return to the calling process, an error has occurred; the return
+ *      value will be -1.
+ */
+int arch_exec2(void *, void (*)(void), size_t, int);
+int
+sys_execve(const char *path, char *const argv[], char *const envp[])
+{
+    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 offset = 0;
+    u64 size;
+    struct ktask *t;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, path) ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find the file */
+        return -1;
+    }
+
+    t = this_ktask();
+    arch_exec2(t->arch, (void *)(0x20000ULL + offset), size,
+               KTASK_POLICY_SERVER);
+
+    /* On failure */
+    return -1;
+}
+
+/*
+ * Allocate memory, or map files or devices into memory
+ *
+ * SYNOPSIS
+ *      The sys_mmap() system call causes the pages starting at addr and
+ *      continuing for at most len bytes to be mapped from the object described
+ *      by fd, starting at byte offset offset.  If offset or len is not a
+ *      multiple of the pagesize, the mapped region may extend past the
+ *      specified range.  Any extension beyond the end of the mapped object will
+ *      be zero-filled.
+ *
+ *      The addr argument is used by the system to determine the starting
+ *      address of the mapping, and its interpretation is dependent on the
+ *      setting of the MAP_FIXED flag.  If MAP_FIXED is specified in flags, the
+ *      system will try to place the mapping at the specified address, possibly
+ *      removing a mapping that already exists at that location.  If MAP_FIXED
+ *      is not specified, then the system will attempt to use the range of
+ *      addresses starting at addr if they do not overlap any existing mappings,
+ *      including memory allocated by malloc(3) and other such allocators.
+ *      Otherwise, the system will choose an alternate address for the mapping
+ *      (using an implementation dependent algorithm) that does not overlap any
+ *      existing mappings.  In other words, without MAP_FIXED the system will
+ *      attempt to find an empty location in the address space if the specified
+ *      address range has already been mapped by something else.  If addr is
+ *      zero and MAP_FIXED is not specified, then an address will be selected by
+ *      the system so as not to overlap any existing mappings in the address
+ *      space.  In all cases, the actual starting address of the region is
+ *      returned.  If MAP_FIXED is specified, a successful mmap deletes any
+ *      previous mapping in the allocated address range.  Previous mappings are
+ *      never  deleted if MAP_FIXED is not specified.
+ *
+ * RETURN VALUES
+ *      Upon successful completion, mmap() returns a pointer to the mapped
+ *      region.  Otherwise, a value of MAP_FAILED is returned.
+ */
+void *
+sys_mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset)
+{
+    return NULL;
+}
+
+/*
+ * Remove a mapping
+ *
+ * SYNOPSIS
+ *      The sys_munmap() system call deletes the mappings for the specified
+ *      address range, causing further references to addresses within the range
+ *      to generate invalid memory references.
+ *
+ * RETURN VALUES
+ *      Upon successful completion, munmap returns zero.  Otherwise, a value of
+ *      -1 is returned.
+ */
+int
+sys_munmap(void *addr, size_t len)
+{
+    return -1;
+}
+
 
 /*
  * Reposition read/write file offset

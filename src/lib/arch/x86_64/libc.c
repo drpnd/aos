@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 typedef __builtin_va_list va_list;
@@ -117,6 +118,24 @@ execve(const char *path, char *const argv[], char *const envp[])
 }
 
 /*
+ * mmap
+ */
+void *
+mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset)
+{
+    return (void * )syscall(SYS_mmap, addr, len, prot, flags, fd, offset);
+}
+
+/*
+ * munmap
+ */
+int
+munmap(void *addr, size_t len)
+{
+    return syscall(SYS_munmap, addr, len);
+}
+
+/*
  * getpid
  */
 pid_t
@@ -141,6 +160,29 @@ off_t
 lseek(int fildes, off_t offset, int whence)
 {
     return syscall(SYS_lseek, fildes, offset, whence);
+}
+
+/*
+ * malloc
+ */
+void *
+malloc(size_t size)
+{
+    void *ptr;
+
+    ptr = NULL;
+    //ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANON, -1, 0);
+
+    return ptr;
+}
+
+/*
+ * free
+ */
+void
+free(void *ptr)
+{
+    //munmap(ptr, len);
 }
 
 /*

@@ -73,6 +73,14 @@ init: servers/init/init.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 pm: servers/pm/pm.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
 
+## tty driver
+tty: drivers/tty/tty.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+
+## shell
+pash: bin/pash/pash.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+
 ## Clean
 clean:
 	find . -name "*.o" | xargs rm -f

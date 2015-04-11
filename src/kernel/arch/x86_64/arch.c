@@ -283,9 +283,11 @@ bsp_init(void)
     syscall_table[SYS_open] = sys_open;
     syscall_table[SYS_close] = sys_close;
     syscall_table[SYS_wait4] = sys_wait4;
-    syscall_table[SYS_execve] = sys_execve;
     syscall_table[SYS_getpid] = sys_getpid;
     syscall_table[SYS_getppid] = sys_getppid;
+    syscall_table[SYS_execve] = sys_execve;
+    syscall_table[SYS_mmap] = sys_mmap;
+    syscall_table[SYS_munmap] = sys_munmap;
     syscall_table[SYS_lseek] = sys_lseek;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
@@ -553,7 +555,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     /* Never reach here but do this to prevent a compiler error */
     return -1;
 }
-void task_restart2(void *);
 int
 arch_exec2(struct arch_task *t, void (*entry)(void), size_t size, int policy)
 {
@@ -691,7 +692,7 @@ arch_exec2(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     __asm__ ( "movq %%rax,%%dr0;movq %%rsp,%%dr1" :: "a"(t->rp) );
 
     /* Restart the task */
-    task_restart2(t);
+    task_replace(t);
 
     /* Never reach here but do this to prevent a compiler error */
     return -1;

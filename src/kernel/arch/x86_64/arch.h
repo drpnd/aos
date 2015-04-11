@@ -232,6 +232,7 @@ void intr_pf(void);
 void intr_apic_loc_tmr(void);
 void intr_crash(void);
 void task_restart(void);
+void task_replace(void *);
 void syscall_setup(void *, u64);
 void pause(void);
 u8 inb(u16);

@@ -21,7 +21,8 @@
  * SOFTWARE.
  */
 
-#include <aos/const.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 /*
  * Entry point for the process manager program
