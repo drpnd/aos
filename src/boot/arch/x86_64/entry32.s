@@ -70,7 +70,7 @@ pg_setup:
 	movl	$KERNEL_PGT,%ebx	/* Low 12 bit must be zero */
 	movl	%ebx,%edi
 	xorl	%eax,%eax
-	movl	$(512*8*34/4),%ecx
+	movl	$(512*8*6/4),%ecx
 	rep	stosl			/* Initialize %ecx*4 bytes from %edi */
 					/*  with %eax */
 	/* Level 4 page map */
@@ -79,16 +79,23 @@ pg_setup:
 	/* Page directory pointers (PDPE) */
 	leal	0x1000(%ebx),%edi
 	leal	0x2007(%ebx),%eax
-	movl	$32,%ecx
-pg_setup.1:
+	movl	$4,%ecx
+pg_setup.1a:
 	movl	%eax,(%edi)
 	addl	$8,%edi
 	addl	$0x1000,%eax
-	loop	pg_setup.1
+	loop	pg_setup.1a
+	movl	$508,%ecx
+	/* PDPE: 4G-512G */
+	movl	$0x183,%eax
+pg_setup.1b:
+	movl	%eax,(%edi)
+	addl	$8,%edi
+	loop	pg_setup.1b
 	/* Page directories (PDE) */
 	leal	0x2000(%ebx),%edi
 	movl	$0x183,%eax
-	movl	$(512*32),%ecx
+	movl	$(512*4),%ecx
 pg_setup.2:
 	movl	%eax,(%edi)
 	addl	$8,%edi
