@@ -175,6 +175,36 @@ _merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
 }
 
 /*
+ * Check the zone of the 2^k pages starting at i-th page
+ */
+static int
+_check_zone(u64 i, int k)
+{
+    int zone;
+
+    /* Check the zone */
+    if ( i * PAGESIZE < 0x1000000ULL ) {
+        if ( (i + (1 << k)) * PAGESIZE > 0x1000000ULL ) {
+            /* Span different zones */
+            return -1;
+        }
+        zone = PHYS_MEM_ZONE_DMA;
+    } else if ( i * PAGESIZE < 0x40000000ULL ) {
+        if ( (i + (1 << k)) * PAGESIZE > 0x40000000ULL ) {
+            /* Span different zones */
+            return -1;
+        }
+        /* Below 1 GiB */
+        zone = PHYS_MEM_ZONE_NORMAL;
+    } else {
+        zone = PHYS_MEM_ZONE_HIGHMEM;
+    }
+
+    return zone;
+}
+
+
+/*
  * Initialize physical memory
  *
  * SYNOPSIS
@@ -203,6 +233,7 @@ phys_mem_init(struct bootinfo *bi)
     u64 j;
     int k;
     int flag;
+    int zone;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
@@ -294,6 +325,10 @@ phys_mem_init(struct bootinfo *bi)
                     /* Error */
                     return -1;
                 }
+                /* FIXME */
+                if ( j * PAGESIZE >= 1024ULL * 1024 * 1024 ) {
+                    continue;
+                }
                 /* Unmark unavailable */
                 phys_mem->pages[j].flags &= ~PHYS_MEM_UNAVAIL;
                 if ( j * PAGESIZE <= PHYS_MEM_FREE_ADDR ) {
@@ -311,8 +346,10 @@ phys_mem_init(struct bootinfo *bi)
     }
 
     /* Initialize buddy system */
-    for ( i = 0; i < PHYS_MEM_MAX_BUDDY_ORDER; i++ ) {
-        phys_mem->buddy.heads[i] = NULL;
+    for ( i = 0; i < PHYS_MEM_NR_ZONES; i++ ) {
+        for ( j = 0; j < PHYS_MEM_MAX_BUDDY_ORDER; j++ ) {
+            phys_mem->zones[i].buddy.heads[j] = NULL;
+        }
     }
 
     /* Add all pages to the buddy system */
@@ -333,16 +370,22 @@ phys_mem_init(struct bootinfo *bi)
                 }
             }
             if ( !flag ) {
+                /* Check the zone */
+                zone = _check_zone(i, k);
+                if ( zone < 0 ) {
+                    continue;
+                }
+
                 /* Append this page to the order k in the buddy system */
-                if ( NULL == phys_mem->buddy.heads[k] ) {
+                if ( NULL == phys_mem->zones[zone].buddy.heads[k] ) {
                     /* Empty list */
-                    phys_mem->buddy.heads[k]
+                    phys_mem->zones[zone].buddy.heads[k]
                         = (struct phys_mem_buddy_list *)(i * PAGESIZE);
-                    phys_mem->buddy.heads[k]->prev = NULL;
-                    phys_mem->buddy.heads[k]->next = NULL;
+                    phys_mem->zones[zone].buddy.heads[k]->prev = NULL;
+                    phys_mem->zones[zone].buddy.heads[k]->next = NULL;
                 } else {
                     /* Search the tail */
-                    list = phys_mem->buddy.heads[k];
+                    list = phys_mem->zones[zone].buddy.heads[k];
                     while ( NULL != list->next ) {
                         list = list->next;
                     }
@@ -394,6 +437,7 @@ phys_mem_alloc_pages(int order)
     size_t i;
     int ret;
     struct phys_mem_buddy_list *a;
+    int zone;
 
     /* Check the argument */
     if ( order < 0 ) {
@@ -410,8 +454,11 @@ phys_mem_alloc_pages(int order)
     /* Lock */
     spin_lock(&phys_mem_lock);
 
+    /* FIXME: Currently it allocates from the normal zone */
+    zone = PHYS_MEM_ZONE_NORMAL;
+
     /* Split first if needed */
-    ret = _split(&phys_mem->buddy, order);
+    ret = _split(&phys_mem->zones[zone].buddy, order);
     if ( ret < 0 ) {
         /* No memory available */
         spin_unlock(&phys_mem_lock);
@@ -419,10 +466,10 @@ phys_mem_alloc_pages(int order)
     }
 
     /* Obtain from the head */
-    a = phys_mem->buddy.heads[order];
-    phys_mem->buddy.heads[order] = a->next;
-    if ( NULL != phys_mem->buddy.heads[order] ) {
-        phys_mem->buddy.heads[order]->prev = NULL;
+    a = phys_mem->zones[zone].buddy.heads[order];
+    phys_mem->zones[zone].buddy.heads[order] = a->next;
+    if ( NULL != phys_mem->zones[zone].buddy.heads[order] ) {
+        phys_mem->zones[zone].buddy.heads[order]->prev = NULL;
     }
 
     /* Mark pages ``allocated'' */
@@ -465,6 +512,7 @@ phys_mem_free_pages(void *a)
     u64 p;
     struct phys_mem_buddy_list *list;
     int order;
+    int zone;
 
     /* Get the index of the page */
     p = (u64)a / PAGESIZE;
@@ -484,6 +532,13 @@ phys_mem_free_pages(void *a)
         return;
     }
 
+    /* Check the zone */
+    zone = _check_zone(p, order);
+    if ( zone < 0 ) {
+        /* Something went wrong... */
+        return;
+    }
+
     /* Lock */
     spin_lock(&phys_mem_lock);
 
@@ -496,17 +551,17 @@ phys_mem_free_pages(void *a)
     }
 
     /* Return it to the buddy system */
-    list = phys_mem->buddy.heads[order];
+    list = phys_mem->zones[zone].buddy.heads[order];
     /* Prepend the returned pages */
-    phys_mem->buddy.heads[order] = a;
-    phys_mem->buddy.heads[order]->prev = NULL;
-    phys_mem->buddy.heads[order]->next = list;
+    phys_mem->zones[zone].buddy.heads[order] = a;
+    phys_mem->zones[zone].buddy.heads[order]->prev = NULL;
+    phys_mem->zones[zone].buddy.heads[order]->next = list;
     if ( NULL != list ) {
         list->prev = a;
     }
 
     /* Merge buddies if possible */
-    _merge(&phys_mem->buddy, a, order);
+    _merge(&phys_mem->zones[zone].buddy, a, order);
 
     /* Unlock */
     spin_unlock(&phys_mem_lock);

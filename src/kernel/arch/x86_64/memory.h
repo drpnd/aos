@@ -36,6 +36,11 @@
 /* 2^16 objects in a cache */
 #define PHYS_MEM_SLAB_NR_OBJ_ORDER      4
 
+#define PHYS_MEM_ZONE_DMA       0
+#define PHYS_MEM_ZONE_NORMAL    1
+#define PHYS_MEM_ZONE_HIGHMEM   2
+#define PHYS_MEM_NR_ZONES       3
+
 /*
  * Buddy system
  */
@@ -60,6 +65,14 @@ struct phys_mem_buddy_list {
 } __attribute__ ((packed));
 
 /*
+ * Zone
+ */
+struct phys_mem_zone {
+    /* Buddy structure */
+    struct phys_mem_buddy buddy;
+};
+
+/*
  * Physical memory
  */
 struct phys_mem {
@@ -67,8 +80,8 @@ struct phys_mem {
     u64 nr;
     /* Pages (flags etc.) */
     struct phys_mem_page *pages;
-    /* Buddy structure */
-    struct phys_mem_buddy buddy;
+    /* Zones */
+    struct phys_mem_zone zones[PHYS_MEM_NR_ZONES];
 };
 
 /*
