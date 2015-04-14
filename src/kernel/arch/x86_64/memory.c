@@ -403,7 +403,8 @@ phys_mem_init(struct bootinfo *bi)
 
     /* Initialize slab */
     nr = (sizeof(struct phys_mem_slab_root) - 1) / PAGESIZE + 1;
-    phys_mem_slab_head = phys_mem_alloc_pages(binorder(nr));
+    phys_mem_slab_head = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
+                                              binorder(nr));
     if ( NULL == phys_mem_slab_head ) {
         /* Cannot allocate pages for the slab allocator */
         return -1;
@@ -422,7 +423,7 @@ phys_mem_init(struct bootinfo *bi)
  *
  * SYNOPSIS
  *      void *
- *      phys_mem_alloc_pages(int order);
+ *      phys_mem_alloc_pages(int zone, int order);
  *
  * DESCRIPTION
  *      The phys_mem_alloc_pages() function allocates 2^order pages.
@@ -432,12 +433,11 @@ phys_mem_init(struct bootinfo *bi)
  *      If there is an error, it returns a NULL pointer.
  */
 void *
-phys_mem_alloc_pages(int order)
+phys_mem_alloc_pages(int zone, int order)
 {
     size_t i;
     int ret;
     struct phys_mem_buddy_list *a;
-    int zone;
 
     /* Check the argument */
     if ( order < 0 ) {
@@ -451,11 +451,15 @@ phys_mem_alloc_pages(int order)
         return NULL;
     }
 
+    /* Check the zone */
+    if ( zone < 0 || zone >= PHYS_MEM_NR_ZONES ) {
+        /* Invalid zone */
+        return NULL;
+    }
+
+
     /* Lock */
     spin_lock(&phys_mem_lock);
-
-    /* FIXME: Currently it allocates from the normal zone */
-    zone = PHYS_MEM_ZONE_NORMAL;
 
     /* Split first if needed */
     ret = _split(&phys_mem->zones[zone].buddy, order);
@@ -665,7 +669,7 @@ kmalloc(size_t size)
             /* Align the page to fit to the buddy system, and get the order */
             nr = binorder(CEIL(s, PAGESIZE) / PAGESIZE);
             /* Allocate pages */
-            hdr = phys_mem_alloc_pages(nr);
+            hdr = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, nr);
             if ( NULL == hdr ) {
                 /* Unlock before return */
                 spin_unlock(&phys_mem_slab_lock);
@@ -714,7 +718,8 @@ kmalloc(size_t size)
         }
     } else {
         /* Large object: Page allocator */
-        ptr = phys_mem_alloc_pages(binorder(CEIL(size, PAGESIZE) / PAGESIZE));
+        ptr = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
+                                   binorder(CEIL(size, PAGESIZE) / PAGESIZE));
     }
 
     /* Unlock */
