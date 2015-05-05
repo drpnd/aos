@@ -739,9 +739,9 @@ read:
 	/* Set number of sectors to be read */
 	movw	%cx,-12(%bp)
 1:
-	movl	-4(%bp),%eax	/* Restore %ax */
+	movl	-4(%bp),%eax	/* Restore %eax */
 	addw	-14(%bp),%ax	/* Current LBA */
-	call	lba2chs		/* Convert LBA (%ax) to CHS (%cx,%dh) */
+	call	lba2chs		/* Convert LBA (%eax) to CHS (%cx,%dh) */
 	call	read_sector	/* Read a sector */
 	addw	$SECTOR_SIZE,%bx
 	movw	-14(%bp),%ax	/* Get */
