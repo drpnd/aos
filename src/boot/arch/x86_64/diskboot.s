@@ -31,9 +31,6 @@
 	.globl	start		/* Entry point */
 
 start:
-	/* Save drive information */
-	movb	%dl,drive
-
 	cld			/* Clear direction flag */
 				/*  (inc di/si for str ops) */
 
@@ -44,6 +41,9 @@ start:
 	movw	%ax,%ds		/* Data segment (%ds=0) */
 	movw	%ax,%es		/* Data segment (%es=0) */
 	sti			/* Disable interrupts */
+
+	/* Save drive information */
+	movb	%dl,drive
 
 	/* Set video mode to 16bit color text mode */
 	movb	VGA_TEXT_COLOR_80x25,%al
