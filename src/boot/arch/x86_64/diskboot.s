@@ -40,7 +40,7 @@ start:
 	movw	%ax,%ss		/* Stack segment (%ss=0) */
 	movw	%ax,%ds		/* Data segment (%ds=0) */
 	movw	%ax,%es		/* Data segment (%es=0) */
-	sti			/* Disable interrupts */
+	sti			/* Enable interrupts */
 
 	/* Save drive information */
 	movb	%dl,drive
