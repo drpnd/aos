@@ -176,6 +176,14 @@ image: bootloader kernel initrd
 #	Use truncate if your system supports: i.e., truncate aos.img 1474560
 	@printf '\000' | dd of=./aos.img bs=1 seek=1474559 conv=notrunc > /dev/null 2>&1
 
+
+## VMDK
+vmdk: image
+	cp aos.img aos.raw.img
+	@printf '\000' | dd of=aos.raw.img bs=1 seek=268435455 conv=notrunc > /dev/null 2>&1
+	qemu-img convert -f raw -O vmdk aos.img aos.vmdk
+	rm -f aos.raw.img
+
 ## Clean
 clean:
 	make -C src clean
