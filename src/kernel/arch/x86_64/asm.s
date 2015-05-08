@@ -35,6 +35,7 @@
 	.globl	_ltr
 	.globl	_sti
 	.globl	_cli
+	.globl	_rdtsc
 	.globl	_inb
 	.globl	_inw
 	.globl	_inl
@@ -43,6 +44,9 @@
 	.globl	_outl
 	.globl	_mfread32
 	.globl	_mfwrite32
+	.globl	_cpuid
+	.globl	_rdmsr
+	.globl	_wrmsr
 	.globl	_kmemset
 	.globl	_kmemcmp
 	.globl	_kmemcpy
@@ -53,7 +57,13 @@
 	.globl	_spin_unlock
 	.globl	_syscall_setup
 	.globl	_asm_ioapic_map_intr
+	.globl	_get_cr0
+	.globl	_set_cr0
+	.globl	_get_cr3
 	.globl	_set_cr3
+	.globl	_get_cr4
+	.globl	_set_cr4
+	.globl	_vmxon
 	.globl	_task_restart
 	.globl	_task_replace
 	.globl	_intr_null
@@ -138,6 +148,15 @@ _cli:
 	cli
 	ret
 
+/* u64 rdtsc(void) */
+_rdtsc:
+	xorq	%rax,%rax
+	movq	%rax,%rdx
+	rdtscp
+	shlq	$32,%rdx
+	addq	%rdx,%rax
+	ret
+
 /* u8 inb(u16 port) */
 _inb:
 	movw	%di,%dx
@@ -190,6 +209,32 @@ _mfread32:
 _mfwrite32:
 	mfence			/* Prevent out-of-order execution */
 	movl	%esi,(%rdi)
+	ret
+
+/* u64 cpuid(u64 rax, u64 *rcx, u64 *rdx) */
+_cpuid:
+	movq	%rdi,%rax
+	movq	%rdx,%rdi
+	cpuid
+	movq	%rcx,(%rsi)
+	movq	%rdx,(%rdi)
+	ret
+
+/* u64 rdmsr(u64 reg) */
+_rdmsr:
+	movq	%rdi,%rcx
+	rdmsr
+	shlq	$32,%rdx
+	addq	%rdx,%rax
+	ret
+
+/* void wrmsr(u64 reg, u64 data) */
+_wrmsr:
+	movq	%rdi,%rcx
+	movq	%rsi,%rax
+	movq	%rax,%rdx
+	shrq	$32,%rdx
+	wrmsr
 	ret
 
 /* void * kmemset(void *b, int c, size_t len) */
@@ -393,12 +438,41 @@ _asm_ioapic_map_intr:
 	movl	%eax,0x10(%rdx)
 	ret
 
+/* u64 get_cr0(void) */
+_get_cr0:
+	movq	%cr0,%rax
+	ret
+
+/* void set_cr0(u64 cr0) */
+_set_cr0:
+	movq	%rdi,%cr0
+	ret
+
+/* void * get_cr3(void) */
+_get_cr3:
+	movq	%cr3,%rax
+	ret
 
 /* void set_cr3(void *) */
 _set_cr3:
 	movq	%rdi,%cr3
 	ret
 
+/* u64 get_cr4(void) */
+_get_cr4:
+	movq	%cr4,%rax
+	ret
+
+/* void set_cr4(u64) */
+_set_cr4:
+	movq	%rdi,%cr4
+	ret
+
+/* int vmxon(void *) */
+_vmxon:
+	vmxon	(%rdi)
+	sbbq	%rax,%rax
+	ret
 
 /* Null function for interrupt handler */
 _intr_null:

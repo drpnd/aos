@@ -165,6 +165,16 @@ struct page_entry {
 } __attribute__ ((packed));
 
 /*
+ * Page table
+ */
+struct page_table {
+    /* Page table (cr3) */
+    void *pgt;
+    /* Reference counter */
+    int refcnt;
+};
+
+/*
  * Process (architecture specific structure)
  */
  struct arch_proc {
@@ -218,6 +228,9 @@ struct p_data * this_cpu(void);
 int arch_exec(struct arch_task *, void (*)(void), size_t, int);
 void arch_idle(void);
 
+/* in vmx.c */
+int vmx_enable(void);
+
 /* in asm.s */
 void lidt(void *);
 void lgdt(void *, u64);
@@ -243,8 +256,17 @@ void outw(u16, u16);
 void outl(u16, u32);
 u32 mfread32(u64);
 void mfwrite32(u64, u32);
+u64 cpuid(u64, u64 *, u64 *);
+u64 rdmsr(u64);
+void wrmsr(u64, u64);
 u64 binorder(u64);
+u64 get_cr0(void);
+void set_cr0(u64);
+void * get_cr3(void);
 void set_cr3(void *);
+u64 get_cr4(void);
+void set_cr4(u64);
+int vmxon(void *);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
