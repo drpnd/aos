@@ -474,6 +474,18 @@ _vmxon:
 	sbbq	%rax,%rax
 	ret
 
+/* int vmclear(void *) */
+_vmclear:
+	vmclear	(%rdi)
+	sbbq	%rax,%rax
+	ret
+
+/* int vmptrld(void *) */
+_vmptrld:
+	vmptrld	(%rdi)
+	sbbq	%rax,%rax
+	ret
+
 /* Null function for interrupt handler */
 _intr_null:
 	pushq	%rax

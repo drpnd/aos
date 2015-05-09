@@ -267,6 +267,8 @@ void set_cr3(void *);
 u64 get_cr4(void);
 void set_cr4(u64);
 int vmxon(void *);
+int vmclear(void *);
+int vmptrld(void *);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
