@@ -67,6 +67,7 @@
 	.globl	_vmclear
 	.globl	_vmptrld
 	.globl	_vmwrite
+	.globl	_vmlaunch
 	.globl	_task_restart
 	.globl	_task_replace
 	.globl	_intr_null
@@ -474,25 +475,51 @@ _set_cr4:
 /* int vmxon(void *) */
 _vmxon:
 	vmxon	(%rdi)
+	jz	1f
 	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
 	ret
 
 /* int vmclear(void *) */
 _vmclear:
 	vmclear	(%rdi)
+	jz	1f
 	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
 	ret
 
 /* int vmptrld(void *) */
 _vmptrld:
 	vmptrld	(%rdi)
+	jz	1f
 	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
 	ret
 
 /* int vmwrite(u64, void *) */
 _vmwrite:
 	vmwrite	(%rsi),%rdi
+	jz	1f
 	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
+	ret
+
+/* int vmlaunch(void) */
+_vmlaunch:
+	vmlaunch
+	jz	1f
+	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
 	ret
 
 /* Null function for interrupt handler */

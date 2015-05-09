@@ -271,6 +271,7 @@ int vmxon(void *);
 int vmclear(void *);
 int vmptrld(void *);
 int vmwrite(u64, void *);
+int vmlaunch(void);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
