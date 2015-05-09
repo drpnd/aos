@@ -26,6 +26,7 @@
 #include "../../kernel.h"
 #include "arch.h"
 #include "memory.h"
+#include "vmx.h"
 
 #define IA32_VMX_BASIC 0x480
 #define IA32_VMX_CR0_FIXED0 0x486
@@ -82,6 +83,24 @@ vmx_enable(void)
     return 0;
 }
 
+/*
+ * Create a new VMCS
+ */
+int
+vmx_initialize_vmcs(void)
+{
+    long i;
+    int ret;
+
+    for ( i = 0; i < sizeof(vmx_vmcs) / sizeof(struct vmx_vmcs); i++ ) {
+        ret = vmwrite(vmx_vmcs[i].index, vmx_vmcs[i].ptr);
+        if ( ret ) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
 
 /*
  * Local variables:

@@ -29,7 +29,7 @@
 
 struct vmx_vmcs {
     u32 index;
-    void *ptr;
+    u64 *ptr;
 };
 
 u64 vmx_control_io_bitmap_a_full;
@@ -96,7 +96,6 @@ u64 vmx_host_sysenter_esp;
 u64 vmx_host_sysenter_eip;
 u64 vmx_host_rsp;
 u64 vmx_host_rip;
-
 
 u64 vmx_guest_es_selector;
 u64 vmx_guest_cs_selector;

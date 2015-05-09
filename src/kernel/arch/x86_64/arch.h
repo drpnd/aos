@@ -230,6 +230,7 @@ void arch_idle(void);
 
 /* in vmx.c */
 int vmx_enable(void);
+int vmx_initialize_vmcs(void);
 
 /* in asm.s */
 void lidt(void *);
@@ -269,6 +270,7 @@ void set_cr4(u64);
 int vmxon(void *);
 int vmclear(void *);
 int vmptrld(void *);
+int vmwrite(u64, void *);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
