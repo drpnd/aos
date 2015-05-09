@@ -270,7 +270,7 @@ void set_cr4(u64);
 int vmxon(void *);
 int vmclear(void *);
 int vmptrld(void *);
-int vmwrite(u64, void *);
+int vmwrite(u64, u64);
 int vmlaunch(void);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);

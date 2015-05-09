@@ -48,6 +48,8 @@ u64 vmx_control_exective_vmcs_pointer_full;
 u64 vmx_control_exective_vmcs_pointer_high;
 u64 vmx_control_tsc_offset_full;
 u64 vmx_control_tsc_offset_high;
+u64 vmx_control_ept_pointer_full;
+u64 vmx_control_ept_pointer_high;
 
 u64 vmx_control_pin_based;
 u64 vmx_control_primary_processor_based;
@@ -64,7 +66,7 @@ u64 vmx_control_vm_entry_interruption_information_field;
 u64 vmx_control_vm_entry_exception_error_code;
 u64 vmx_control_vm_entry_instruction_length;
 u64 vmx_control_tpr_threshold;
-/*u64 vmx_control_secondary_processor_based;*/
+u64 vmx_control_secondary_processor_based;
 /*u64 vmx_control_ple_gap;*/
 /*u64 vmx_control_ple_window;*/
 u64 vmx_control_cr0_mask;
@@ -161,21 +163,23 @@ struct vmx_vmcs vmx_vmcs [] = {
     /* Control fields */
     /* 64-bit */
     { 0x2000, &vmx_control_io_bitmap_a_full },
-    { 0x2001, &vmx_control_io_bitmap_a_high },
+    /*{ 0x2001, &vmx_control_io_bitmap_a_high },*/
     { 0x2002, &vmx_control_io_bitmap_b_full },
-    { 0x2003, &vmx_control_io_bitmap_b_high },
+    /*{ 0x2003, &vmx_control_io_bitmap_b_high },*/
     /*{ 0x2004, &vmx_control_msr_bitmaps_full },*/
     /*{ 0x2005, &vmx_control_msr_bitmaps_high },*/
     { 0x2006, &vmx_control_vm_exit_msr_store_full },
-    { 0x2007, &vmx_control_vm_exit_msr_store_high },
+    /*{ 0x2007, &vmx_control_vm_exit_msr_store_high },*/
     { 0x2008, &vmx_control_vm_exit_msr_load_full },
-    { 0x2009, &vmx_control_vm_exit_msr_load_high },
+    /*{ 0x2009, &vmx_control_vm_exit_msr_load_high },*/
     { 0x200a, &vmx_control_vm_entry_msr_load_full },
-    { 0x200b, &vmx_control_vm_entry_msr_load_high },
+    /*{ 0x200b, &vmx_control_vm_entry_msr_load_high },*/
     { 0x200c, &vmx_control_exective_vmcs_pointer_full },
-    { 0x200d, &vmx_control_exective_vmcs_pointer_high },
+    /*{ 0x200d, &vmx_control_exective_vmcs_pointer_high },*/
     { 0x2010, &vmx_control_tsc_offset_full },
-    { 0x2011, &vmx_control_tsc_offset_high },
+    /*{ 0x2011, &vmx_control_tsc_offset_high },*/
+    { 0x201a, &vmx_control_ept_pointer_full },
+    /*{ 0x201b, &vmx_control_ept_pointer_high },*/
     /* 32-bit */
     { 0x4000, &vmx_control_pin_based },
     { 0x4002, &vmx_control_primary_processor_based },
@@ -192,7 +196,7 @@ struct vmx_vmcs vmx_vmcs [] = {
     { 0x4018, &vmx_control_vm_entry_exception_error_code },
     { 0x401a, &vmx_control_vm_entry_instruction_length },
     { 0x401c, &vmx_control_tpr_threshold },
-    /*{ 0x401e, &vmx_control_secondary_processor_based },*/
+    { 0x401e, &vmx_control_secondary_processor_based },
     /*{ 0x4020, &vmx_control_ple_gap },*/
     /*{ 0x4022, &vmx_control_ple_window },*/
     /* Natural */

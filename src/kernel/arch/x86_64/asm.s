@@ -502,9 +502,9 @@ _vmptrld:
 	movq	$-1,%rax
 	ret
 
-/* int vmwrite(u64, void *) */
+/* int vmwrite(u64, u64) */
 _vmwrite:
-	vmwrite	(%rsi),%rdi
+	vmwrite	%rsi,%rdi
 	jz	1f
 	sbbq	%rax,%rax
 	ret
