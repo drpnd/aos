@@ -64,6 +64,9 @@
 	.globl	_get_cr4
 	.globl	_set_cr4
 	.globl	_vmxon
+	.globl	_vmclear
+	.globl	_vmptrld
+	.globl	_vmwrite
 	.globl	_task_restart
 	.globl	_task_replace
 	.globl	_intr_null
@@ -483,6 +486,12 @@ _vmclear:
 /* int vmptrld(void *) */
 _vmptrld:
 	vmptrld	(%rdi)
+	sbbq	%rax,%rax
+	ret
+
+/* int vmwrite(u64, void *) */
+_vmwrite:
+	vmwrite	(%rsi),%rdi
 	sbbq	%rax,%rax
 	ret
 
