@@ -30,7 +30,9 @@
 	.globl	_halt
 	.globl	_pause
 	.globl	_lgdt
+	.globl	_sgdt
 	.globl	_lidt
+	.globl	_sidt
 	.globl	_lldt
 	.globl	_ltr
 	.globl	_sti
@@ -127,9 +129,19 @@ _lgdt:
 	movq	%rax,%ss
 	ret
 
+/* void sgdt(void *gdtr) */
+_sgdt:
+	sgdt	(%rdi)
+	ret
+
 /* void lidt(void *idtr) */
 _lidt:
 	lidt	(%rdi)
+	ret
+
+/* void sidt(void *idtr) */
+_sidt:
+	sidt	(%rdi)
 	ret
 
 /* void lldt(u16) */

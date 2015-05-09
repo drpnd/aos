@@ -235,6 +235,8 @@ int vmx_initialize_vmcs(void);
 /* in asm.s */
 void lidt(void *);
 void lgdt(void *, u64);
+void sidt(void *);
+void sgdt(void *);
 void lldt(u16);
 void ltr(u16);
 void cli(void);
