@@ -191,7 +191,7 @@ struct vmx_vmcs vmx_vmcs [] = {
     { 0x400c, &vmx_control_vm_exit_controls },
     /*{ 0x400e, &vmx_control_vm_exit_msr_store_count },*/
     /*{ 0x4010, &vmx_control_vm_exit_msr_load_count },*/
-    /*{ 0x4012, &vmx_control_vm_entry_controls },*/
+    { 0x4012, &vmx_control_vm_entry_controls },
     /*{ 0x4014, &vmx_control_vm_entry_msr_load_count },*/
     /*{ 0x4016, &vmx_control_vm_entry_interruption_information_field },*/
     /*{ 0x4018, &vmx_control_vm_entry_exception_error_code },*/
@@ -201,18 +201,18 @@ struct vmx_vmcs vmx_vmcs [] = {
     /*{ 0x4020, &vmx_control_ple_gap },*/
     /*{ 0x4022, &vmx_control_ple_window },*/
     /* Natural */
-    { 0x6000, &vmx_control_cr0_mask },
-    { 0x6002, &vmx_control_cr4_mask },
-    { 0x6004, &vmx_control_cr0_read_shadow },
-    { 0x6006, &vmx_control_cr4_read_shadow },
-    { 0x6008, &vmx_control_cr3_target_value0 },
-    { 0x600a, &vmx_control_cr3_target_value1 },
-    { 0x600c, &vmx_control_cr3_target_value2 },
-    { 0x600e, &vmx_control_cr3_target_value3 },
+    /*{ 0x6000, &vmx_control_cr0_mask },*/
+    /*{ 0x6002, &vmx_control_cr4_mask },*/
+    /*{ 0x6004, &vmx_control_cr0_read_shadow },*/
+    /*{ 0x6006, &vmx_control_cr4_read_shadow },*/
+    /*{ 0x6008, &vmx_control_cr3_target_value0 },*/
+    /*{ 0x600a, &vmx_control_cr3_target_value1 },*/
+    /*{ 0x600c, &vmx_control_cr3_target_value2 },*/
+    /*{ 0x600e, &vmx_control_cr3_target_value3 },*/
 
     /* Host-state fields */
     /* 16-bit */
-    /*{ 0x0c00, &vmx_host_es_selector },*/
+    { 0x0c00, &vmx_host_es_selector },
     { 0x0c02, &vmx_host_cs_selector },
     { 0x0c04, &vmx_host_ss_selector },
     { 0x0c06, &vmx_host_ds_selector },
@@ -249,7 +249,7 @@ struct vmx_vmcs vmx_vmcs [] = {
     { 0x080e, &vmx_guest_tr_selector },
     /*{ 0x0810, &vmx_guest_interrupt_status },*/
     /* 64-bit */
-    /*{ 0x2800, &vmx_guest_vmcs_link_pointer_full },*/
+    { 0x2800, &vmx_guest_vmcs_link_pointer_full },
     /*{ 0x2801, &vmx_guest_vmcs_link_pointer_high },*/
     /*{ 0x2802, &vmx_guest_debugctl_full },*/
     /*{ 0x2803, &vmx_guest_debugctl_high },*/

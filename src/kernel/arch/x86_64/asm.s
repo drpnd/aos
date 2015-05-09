@@ -69,6 +69,7 @@
 	.globl	_vmclear
 	.globl	_vmptrld
 	.globl	_vmwrite
+	.globl	_vmread
 	.globl	_vmlaunch
 	.globl	_task_restart
 	.globl	_task_replace
@@ -523,6 +524,12 @@ _vmwrite:
 1:
 	movq	$-1,%rax
 	ret
+
+/* u64 vmread(u64) */
+_vmread:
+	vmread	%rdi,%rax
+	ret
+
 
 /* int vmlaunch(void) */
 _vmlaunch:

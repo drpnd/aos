@@ -83,6 +83,13 @@ vmx_enable(void)
     return 0;
 }
 
+
+void
+vmx_vm_exit_handler(void)
+{
+    panic("VM exit");
+}
+
 /*
  * Create a new VMCS
  */
@@ -105,6 +112,7 @@ vmx_initialize_vmcs(void)
         return -1;
     }
     mem[0x7c00] = 0xf4;
+    //mem[0x7c00] = 0x90;
     mem[0x7c01] = 0xeb;
     mem[0x7c02] = 0xfd;
     ept = kmalloc(4096 * 3);
@@ -128,21 +136,13 @@ vmx_initialize_vmcs(void)
     vmx_control_vm_entry_controls = 0x000011ff;
     vmx_control_secondary_processor_based = 0x00000082;
 
-    vmx_control_cr0_mask = 0x80000021;
-    vmx_control_cr4_mask = 0x00002000;
-    vmx_control_cr0_read_shadow = 0x80000021;
-    vmx_control_cr4_read_shadow = 0x00002000;
-    vmx_control_cr3_target_value0 = 0;
-    vmx_control_cr3_target_value1 = 0;
-    vmx_control_cr3_target_value2 = 0x00000000;
-    vmx_control_cr3_target_value3 = 0x00000000;
-
+    __asm__ __volatile__ ( "movq %%es,%%rax" : "=a"(vmx_host_es_selector) );
     __asm__ __volatile__ ( "movq %%cs,%%rax" : "=a"(vmx_host_cs_selector) );
     __asm__ __volatile__ ( "movq %%ss,%%rax" : "=a"(vmx_host_ss_selector) );
     __asm__ __volatile__ ( "movq %%ds,%%rax" : "=a"(vmx_host_ds_selector) );
     __asm__ __volatile__ ( "movq %%fs,%%rax" : "=a"(vmx_host_fs_selector) );
     __asm__ __volatile__ ( "movq %%gs,%%rax" : "=a"(vmx_host_gs_selector) );
-    __asm__ __volatile__ ( "xorq %%rax,%%rax; ltr %%ax"
+    __asm__ __volatile__ ( "xorq %%rax,%%rax; str %%ax"
                            : "=a"(vmx_host_tr_selector) );
     vmx_host_efer_full = rdmsr(0x0c0000080); /* EFER MSR */
     vmx_host_cr0 = get_cr0();
@@ -152,8 +152,8 @@ vmx_initialize_vmcs(void)
     vmx_host_gdtr_base = desc.base;
     sidt(&desc);
     vmx_host_idtr_base = desc.base;
-    vmx_host_rsp = 0;
-    vmx_host_rip = 0;
+    vmx_host_rsp = (u64)kmalloc(4096);
+    vmx_host_rip = (u64)vmx_vm_exit_handler;
 
     vmx_guest_es_selector = 0x10;
     vmx_guest_cs_selector = 0x08;
@@ -198,6 +198,8 @@ vmx_initialize_vmcs(void)
     vmx_guest_pending_debug_exceptions = 0x00000000;
     vmx_guest_sysenter_esp = 0x00000000;
     vmx_guest_sysenter_eip = 0x00000000;
+
+    vmx_guest_vmcs_link_pointer_full = 0xffffffffffffffffULL;
 
     for ( i = 0; i < sizeof(vmx_vmcs) / sizeof(struct vmx_vmcs); i++ ) {
         ret = vmwrite(vmx_vmcs[i].index, *(vmx_vmcs[i].ptr));
