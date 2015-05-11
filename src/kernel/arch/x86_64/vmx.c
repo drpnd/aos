@@ -99,7 +99,6 @@ vmx_vm_exit_handler(void)
     } else if ( 12 == rd ) {
         sti();
         halt();
-        __asm__ __volatile__ ( "hlt" );
         vmresume();
     } else if ( 52 == rd ) {
         panic("VM exit (preemption expired)");
@@ -117,6 +116,9 @@ vmx_initialize_vmcs(void)
     long i;
     int ret;
 
+    u32 *vmcs;
+    u64 vmx;
+
     u8 *mem;
     u64 *ept;
 
@@ -124,6 +126,20 @@ vmx_initialize_vmcs(void)
         u16 limit;
         u64 base;
     } __attribute__ ((packed)) desc;
+
+    /* New VMCS */
+    vmcs = kmalloc(4096);
+    vmx = rdmsr(IA32_VMX_BASIC);
+    vmcs[0] = vmx;
+    if ( vmclear(&vmcs) ) {
+        kfree(vmcs);
+        return -1;
+    }
+    if ( vmptrld(&vmcs) ) {
+        kfree(vmcs);
+        return -1;
+    }
+
 
     mem = kmalloc(1024 * 1024 * 256);
     if ( NULL == mem ) {
@@ -228,6 +244,15 @@ vmx_initialize_vmcs(void)
     }
 
     return 0;
+}
+
+/*
+ * Get the error code of the previous instruction
+ */
+u64
+vmx_get_error(void)
+{
+    return vmread(0x4400);
 }
 
 /*
