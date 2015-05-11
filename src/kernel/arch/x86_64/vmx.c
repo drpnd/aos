@@ -96,9 +96,10 @@ vmx_vm_exit_handler(void)
     if ( 1 == rd ) {
         sti();
         vmresume();
-        panic("VM exit (1)");
     } else if ( 12 == rd ) {
-        __asm__ __volatile__ ( "sti;hlt" );
+        sti();
+        halt();
+        __asm__ __volatile__ ( "hlt" );
         vmresume();
     } else if ( 52 == rd ) {
         panic("VM exit (preemption expired)");

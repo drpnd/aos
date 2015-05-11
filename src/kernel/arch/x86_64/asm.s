@@ -104,10 +104,7 @@ apstart64:
 
 /* void halt(void) */
 _halt:
-	nop
 	hlt
-	nop
-	nop
 	ret
 
 /* void pause(void) */
