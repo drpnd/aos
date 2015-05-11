@@ -34,6 +34,25 @@
 #define IA32_VMX_CR4_FIXED0 0x488
 #define IA32_VMX_CR4_FIXED1 0x489
 
+
+#if 0
+/* Code example */
+{
+    /* VMXON: See Vol. 3C, 31.5 */
+    if ( vmx_enable() ) {
+        panic("Failed on vmxon");
+    }
+
+    if ( vmx_initialize_vmcs() ) {
+        panic("Failed on initialization");
+    }
+
+    if ( vmlaunch() ) {
+        panic("Failed on vmlaunch");
+    }
+}
+#endif
+
 /*
  * Enable VMX
  */

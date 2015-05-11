@@ -347,19 +347,6 @@ bsp_init(void)
     /* Initialize local APIC counter */
     lapic_start_timer(HZ, IV_LOC_TMR);
 
-    /* VMXON: See Vol. 3C, 31.5 */
-    if ( vmx_enable() ) {
-        panic("Failed on vmxon");
-    }
-
-    if ( vmx_initialize_vmcs() ) {
-        panic("Failed on initialization");
-    }
-
-    if ( vmlaunch() ) {
-        panic("Failed on vmlaunch");
-    }
-
     /* Launch the `init' server */
     cli();
     _launch_init_server();
