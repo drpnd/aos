@@ -275,6 +275,7 @@ int vmptrld(void *);
 int vmwrite(u64, u64);
 u64 vmread(u64);
 int vmlaunch(void);
+int vmresume(void);
 void spin_lock_intr(u32 *);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);

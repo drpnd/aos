@@ -71,6 +71,7 @@
 	.globl	_vmwrite
 	.globl	_vmread
 	.globl	_vmlaunch
+	.globl	_vmresume
 	.globl	_task_restart
 	.globl	_task_replace
 	.globl	_intr_null
@@ -534,6 +535,16 @@ _vmread:
 /* int vmlaunch(void) */
 _vmlaunch:
 	vmlaunch
+	jz	1f
+	sbbq	%rax,%rax
+	ret
+1:
+	movq	$-1,%rax
+	ret
+
+/* int vmresume(void) */
+_vmresume:
+	vmresume
 	jz	1f
 	sbbq	%rax,%rax
 	ret

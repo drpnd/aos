@@ -87,7 +87,24 @@ vmx_enable(void)
 void
 vmx_vm_exit_handler(void)
 {
-    panic("VM exit");
+    u64 rd;
+
+    /* VM exit reason */
+    rd = vmread(0x4402);
+
+    rd = rd & 0xff;
+    if ( 1 == rd ) {
+        sti();
+        vmresume();
+        panic("VM exit (1)");
+    } else if ( 12 == rd ) {
+        __asm__ __volatile__ ( "sti;hlt" );
+        vmresume();
+    } else if ( 52 == rd ) {
+        panic("VM exit (preemption expired)");
+    } else {
+        panic("VM exit");
+    }
 }
 
 /*
@@ -112,7 +129,6 @@ vmx_initialize_vmcs(void)
         return -1;
     }
     mem[0x7c00] = 0xf4;
-    //mem[0x7c00] = 0x90;
     mem[0x7c01] = 0xeb;
     mem[0x7c02] = 0xfd;
     ept = kmalloc(4096 * 3);
@@ -155,12 +171,12 @@ vmx_initialize_vmcs(void)
     vmx_host_rsp = (u64)kmalloc(4096);
     vmx_host_rip = (u64)vmx_vm_exit_handler;
 
-    vmx_guest_es_selector = 0x10;
-    vmx_guest_cs_selector = 0x08;
-    vmx_guest_ss_selector = 0x10;
-    vmx_guest_ds_selector = 0x10;
-    vmx_guest_fs_selector = 0x10;
-    vmx_guest_gs_selector = 0x10;
+    vmx_guest_es_selector = 0x0;
+    vmx_guest_cs_selector = 0x0;
+    vmx_guest_ss_selector = 0x0;
+    vmx_guest_ds_selector = 0x0;
+    vmx_guest_fs_selector = 0x0;
+    vmx_guest_gs_selector = 0x0;
     vmx_guest_es_limit = 0x0000ffff;
     vmx_guest_cs_limit = 0x0000ffff;
     vmx_guest_ss_limit = 0x0000ffff;
@@ -172,11 +188,13 @@ vmx_initialize_vmcs(void)
     vmx_guest_gdtr_limit = 0x0000ffff;
     vmx_guest_idtr_limit = 0x0000ffff;
     vmx_guest_es_access_rights = 0x00000093;
-    vmx_guest_cs_access_rights = 0x0000009f;
+    vmx_guest_cs_access_rights = 0x0000009b;
     vmx_guest_ss_access_rights = 0x00000093;
     vmx_guest_ds_access_rights = 0x00000093;
     vmx_guest_fs_access_rights = 0x00000093;
     vmx_guest_gs_access_rights = 0x00000093;
+    vmx_guest_ldtr_access_rights = 0x00010000;
+    vmx_guest_tr_access_rights = 0x0000008b;
 
     vmx_guest_cr0 = 0x60000030;
     vmx_guest_cr3 = 0;
