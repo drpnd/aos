@@ -61,10 +61,10 @@ proc_create(void)
 }
 
 /*
- * Schedule
+ * Local APIC timer
  */
 void
-sched(void)
+isr_loc_tmr(void)
 {
     struct ktask *ktask;
 
@@ -86,7 +86,7 @@ kintr_isr(u64 vec)
 {
     switch ( vec ) {
     case IV_LOC_TMR:
-        sched();
+        isr_loc_tmr();
         break;
     default:
         ;

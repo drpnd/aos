@@ -60,7 +60,10 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/trampoline.o \
 	kernel/arch/$(ARCH)/ap_entry32.o \
 	kernel/arch/$(ARCH)/ap_entry64.o \
+	kernel/arch/$(ARCH)/vmx.o \
 	kernel/kernel.o \
+	kernel/sched.o \
+	kernel/mpq.o \
 	kernel/ramfs.o \
 	kernel/syscall.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^

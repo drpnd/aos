@@ -47,6 +47,7 @@
 #define HZ                      100
 #define IV_LOC_TMR              0x50
 #define IV_CRASH                0xfe
+#define NR_IV                   0x100
 #define IV_IRQ(n)               (0x20 + (n))
 
 /*
@@ -101,6 +102,7 @@ enum ktask_state {
     KTASK_STATE_READY,
     KTASK_STATE_RUNNING,
     KTASK_STATE_BLOCKED,
+    KTASK_STATE_TERMINATED,
 };
 
 /*
@@ -115,9 +117,24 @@ struct ktask {
     /* Process */
     struct proc *proc;
 
-    /* Pointers for scheduler */
+    /* Pointers for scheduler (runqueue) */
     struct ktask *next;
     int credit;
+};
+
+/*
+ * Kernel task list
+ */
+struct ktask_list {
+    struct ktask *ktask;
+    struct ktask *next;
+};
+
+/* Kernel event handler */
+typedef void (*kevent_handler_f)(void);
+struct kevent_handlers {
+    /* Interrupt vector table */
+    kevent_handler_f ivt[NR_IV];
 };
 
 /* Global variable */
@@ -133,6 +150,9 @@ int kstrcmp(const char *, const char *);
 void * kmemset(void *, int, size_t);
 int kmemcmp(const void *, const void *, size_t);
 void * kmemcpy(void *__restrict, const void *__restrict, size_t);
+
+/* in sched.c */
+void sched(void);
 
 /* in memory.c */
 void * kmalloc(size_t);
