@@ -54,9 +54,6 @@ sched(void)
 void
 sched_high(void)
 {
-
-
-
 }
 
 /*

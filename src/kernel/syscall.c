@@ -82,6 +82,7 @@ sys_fork(void)
     struct ktask *t;
     struct ktask *nt;
     pid_t pid;
+    struct ktask_list *l;
 
     /* Get the current process */
     t = this_ktask();
@@ -102,14 +103,22 @@ sys_fork(void)
         return -1;
     }
 
+    /* Kernel task list entry */
+    l = kmalloc(sizeof(struct ktask_list));
+    if ( NULL == l ) {
+        return - 1;
+    }
+
     /* Create a new process */
     np = kmalloc(sizeof(struct proc));
     if ( NULL == np ) {
+        kfree(l);
         return -1;
     }
     kmemset(np, 0, sizeof(struct proc));
     nt = task_clone(t);
     if ( NULL == nt ) {
+        kfree(l);
         kfree(np);
         return -1;
     }
@@ -120,6 +129,12 @@ sys_fork(void)
 
     proc_table->procs[pid] = np;
     proc_table->lastpid = pid;
+
+    /* Kernel task */
+    l->ktask = nt;
+    l->next = NULL;
+    l->next = ktask_root->r->next;
+    ktask_root->r = l;
 
     t->next = nt;
 

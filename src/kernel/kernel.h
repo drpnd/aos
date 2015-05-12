@@ -117,6 +117,8 @@ struct ktask {
     /* Process */
     struct proc *proc;
 
+    /* Task type: Tick-full or tickless */
+    int type;
     /* Pointers for scheduler (runqueue) */
     struct ktask *next;
     int credit;
@@ -129,6 +131,12 @@ struct ktask_list {
     struct ktask *ktask;
     struct ktask *next;
 };
+struct ktask_root {
+    /* Running */
+    struct ktask_list *r;
+    /* Blocked (or others) */
+    struct ktask_list *b;
+};
 
 /* Kernel event handler */
 typedef void (*kevent_handler_f)(void);
@@ -139,6 +147,7 @@ struct kevent_handlers {
 
 /* Global variable */
 extern struct proc_table *proc_table;
+extern struct ktask_root *ktask_root;
 
 /* in kernel.c */
 int kstrcmp(const char *, const char *);

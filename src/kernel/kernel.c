@@ -25,6 +25,7 @@
 #include "kernel.h"
 
 struct proc_table *proc_table;
+struct ktask_root *ktask_root;
 
 /*
  * Entry point to the kernel in C for all processors, called from asm.s.

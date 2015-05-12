@@ -123,7 +123,7 @@ _create_idle_task(void)
 }
 
 /*
- * Start
+ * Start the init server
  */
 static void
 _launch_init_server(void)
@@ -132,6 +132,7 @@ _launch_init_server(void)
     u64 offset = 0;
     u64 size;
     struct arch_task *t;
+    struct ktask_list *l;
 
     /* Find the file pointed by path from the initramfs */
     while ( 0 != *initramfs ) {
@@ -164,8 +165,20 @@ _launch_init_server(void)
 
     t->ktask->next = this_cpu()->idle_task->ktask;
 
+    /* Process table */
     proc_table->procs[0] = t->ktask->proc;
     proc_table->lastpid = 0;
+
+    /* Kernel task */
+    l = kmalloc(sizeof(struct ktask_list));
+    if ( NULL == l ) {
+        panic("Cannot allocate a kernel task list entry");
+        return;
+    }
+    l->ktask = t->ktask;
+    l->next = NULL;
+    l->next = ktask_root->r->next;
+    ktask_root->r = l;
 
     arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
 }
@@ -301,6 +314,15 @@ bsp_init(void)
         proc_table->procs[i] = NULL;
     }
     proc_table->lastpid = -1;
+
+    /* Initialize the task lists */
+    ktask_root = kmalloc(sizeof(struct ktask_root));
+    if ( NULL == ktask_root ) {
+        panic("Fatal: Could not initialize the task lists.");
+        return;
+    }
+    ktask_root->r = NULL;
+    ktask_root->b = NULL;
 
     /* Enable this processor */
     pdata = this_cpu();
