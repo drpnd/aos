@@ -55,9 +55,10 @@ main(int argc, char *argv[])
         ;
     }
 
-    pid = waitpid(pid, &stat, 0);
+    //pid = waitpid(pid, &stat, 0);
     while ( 1 ) {
-        __asm__ ("pause");
+        write();
+        //__asm__ ("pause");
     }
 
     return 0;

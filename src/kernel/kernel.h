@@ -129,7 +129,7 @@ struct ktask {
  */
 struct ktask_list {
     struct ktask *ktask;
-    struct ktask *next;
+    struct ktask_list *next;
 };
 struct ktask_root {
     /* Running */
@@ -161,7 +161,7 @@ int kmemcmp(const void *, const void *, size_t);
 void * kmemcpy(void *__restrict, const void *__restrict, size_t);
 
 /* in sched.c */
-void sched(void);
+void sched_high(void);
 
 /* in memory.c */
 void * kmalloc(size_t);
@@ -189,6 +189,7 @@ off_t sys_lseek(int, off_t, int);
    implemented somewhere in arch/<arch_name>/ */
 struct ktask * this_ktask(void);
 void set_next_ktask(struct ktask *);
+void set_next_idle(void);
 void panic(char *);
 void halt(void);
 struct ktask * task_clone(struct ktask *);

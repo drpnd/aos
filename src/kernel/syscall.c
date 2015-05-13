@@ -124,19 +124,18 @@ sys_fork(void)
     }
     nt->proc = np;
     nt->state = KTASK_STATE_CREATED;
-    nt->next = NULL;
-    nt->credit = 100;
+    //nt->next = NULL;
+    //nt->credit = 100;
 
     proc_table->procs[pid] = np;
     proc_table->lastpid = pid;
 
-    /* Kernel task */
+    /* Kernel task (running) */
     l->ktask = nt;
-    l->next = NULL;
-    l->next = ktask_root->r->next;
+    l->next = ktask_root->r;
     ktask_root->r = l;
 
-    t->next = nt;
+    //t->next = nt;
 
     sys_fork_restart(nt->arch, 0, pid);
 
@@ -162,6 +161,23 @@ sys_fork(void)
 ssize_t
 sys_read(int fildes, void *buf, size_t nbyte)
 {
+    u16 *video;
+    int i;
+    char *s;
+    s = "read";
+
+    video = (u16 *)0xb8000;
+    for ( i = 0; i < 80 * 25; i++ ) {
+        //*(video + i) = 0xe000;
+        *(video + i) = 0x2000;
+    }
+    while ( *s ) {
+        //*video = 0xe000 | (u16)*s;
+        *video = 0x2f00 | (u16)*s;
+        s++;
+        video++;
+    }
+
     return -1;
 }
 
@@ -183,6 +199,24 @@ sys_read(int fildes, void *buf, size_t nbyte)
 ssize_t
 sys_write(int fildes, const void *buf, size_t nbyte)
 {
+    u16 *video;
+    int i;
+    char *s;
+
+    s = "write";
+
+    video = (u16 *)0xb8000;
+    for ( i = 0; i < 80 * 25; i++ ) {
+        *(video + i) = 0xe000;
+        //*(video + i) = 0x2000;
+    }
+    while ( *s ) {
+        *video = 0xe000 | (u16)*s;
+        //*video = 0x2f00 | (u16)*s;
+        s++;
+        video++;
+    }
+
     return -1;
 }
 

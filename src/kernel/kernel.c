@@ -63,6 +63,7 @@ proc_create(void)
 
 /*
  * Local APIC timer
+ * Low-level scheduler (just loading run queue)
  */
 void
 isr_loc_tmr(void)
@@ -71,10 +72,17 @@ isr_loc_tmr(void)
 
     ktask = this_ktask();
     if ( ktask ) {
+        /* Decrement the credit */
         ktask->credit--;
-        if ( ktask->next && ktask->credit <= 0 ) {
-            ktask->next->credit = 100;
-            set_next_ktask(ktask->next);
+        if ( ktask->credit <= 0 ) {
+            /* Expires */
+            if ( ktask->next ) {
+                /* Schedule the next task */
+                set_next_ktask(ktask->next);
+            } else {
+                /* Call high-level scheduler */
+                sched_high();
+            }
         }
     }
 }

@@ -25,43 +25,39 @@
 #include "kernel.h"
 
 /*
- * Low-level scheduler (just loading run queue)
- */
-void
-sched(void)
-{
-    struct ktask *ktask;
-
-    ktask = this_ktask();
-    if ( ktask ) {
-        /* Decrement the credit */
-        ktask->credit--;
-        if ( ktask->credit <= 0 ) {
-            /* Expires */
-            if ( ktask->next ) {
-                /* Schedule the next task */
-                set_next_ktask(ktask->next);
-            } else {
-                /* Call high-level scheduler */
-            }
-        }
-    }
-}
-
-/*
  * High-level scheduler
  */
 void
 sched_high(void)
 {
-}
+    struct ktask *ktask;
+    struct ktask *pt;
+    struct ktask_list *l;
 
-/*
- * Reschedule
- */
-void
-sched_kevent(void)
-{
+    /* Schedule from running tasks */
+    l = ktask_root->r;
+
+    if ( NULL == l ) {
+        /* The idle task is to be scheduled */
+        set_next_idle();
+        return;
+    }
+
+    /* Setup a run queue */
+    ktask = l->ktask;
+    pt = ktask;
+    pt->credit = 10;
+    l = l->next;
+    while ( NULL != l ) {
+        pt->next = l->ktask;
+        pt = l->ktask;
+        pt->credit = 10;
+        l = l->next;
+    }
+    pt->next = NULL;
+
+    /* Schedule the next task */
+    set_next_ktask(ktask);
 }
 
 /*

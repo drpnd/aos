@@ -161,9 +161,8 @@ _launch_init_server(void)
     t->kstack = kmalloc(KSTACK_SIZE);
     t->ustack = kmalloc(USTACK_SIZE);
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    t->ktask->credit = 100;
-
-    t->ktask->next = this_cpu()->idle_task->ktask;
+    //t->ktask->credit = 0;
+    //t->ktask->next = this_cpu()->idle_task->ktask;
 
     /* Process table */
     proc_table->procs[0] = t->ktask->proc;
@@ -177,7 +176,7 @@ _launch_init_server(void)
     }
     l->ktask = t->ktask;
     l->next = NULL;
-    l->next = ktask_root->r->next;
+    l->next = ktask_root->r;
     ktask_root->r = l;
 
     arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
@@ -569,8 +568,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
     this_cpu()->cur_task = NULL;
     this_cpu()->next_task = t;
 
-    //__asm__ ( "movq %%rax,%%dr0;movq %%rsp,%%dr1" :: "a"(t->rp) );
-
     /* Restart the task */
     task_restart();
 
@@ -728,11 +725,6 @@ arch_exec2(struct arch_task *t, void (*entry)(void), size_t size, int policy)
 void
 arch_task_swiched(struct arch_task *prev, struct arch_task *next)
 {
-    if ( NULL != prev ) {
-        /* Switched from a task */
-        prev->ktask->state = KTASK_STATE_READY;
-        next->ktask->state = KTASK_STATE_RUNNING;
-    }
 }
 
 /*
@@ -761,6 +753,14 @@ void
 set_next_ktask(struct ktask *ktask)
 {
     this_cpu()->next_task = ktask->arch;
+}
+
+/*
+ * Schedule the idle task as the next
+ */
+void set_next_idle(void)
+{
+    this_cpu()->next_task = this_cpu()->idle_task;
 }
 
 /*
