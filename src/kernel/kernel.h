@@ -100,7 +100,6 @@ struct proc_table {
 enum ktask_state {
     KTASK_STATE_CREATED,
     KTASK_STATE_READY,
-    KTASK_STATE_RUNNING,
     KTASK_STATE_BLOCKED,
     KTASK_STATE_TERMINATED,
 };

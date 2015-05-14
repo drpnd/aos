@@ -102,7 +102,8 @@ _create_idle_task(void)
         return NULL;
     }
     t->ktask->arch = t;
-    t->ktask->state = KTASK_STATE_CREATED;
+    //t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->state = KTASK_STATE_READY;
     t->ktask->proc = NULL;
     t->ktask->next = NULL;
 
@@ -123,10 +124,10 @@ _create_idle_task(void)
 }
 
 /*
- * Start the init server
+ * Create the init server
  */
 static void
-_launch_init_server(void)
+_create_init_server(void)
 {
     u64 *initramfs = (u64 *)INITRAMFS_BASE;
     u64 offset = 0;
@@ -161,8 +162,8 @@ _launch_init_server(void)
     t->kstack = kmalloc(KSTACK_SIZE);
     t->ustack = kmalloc(USTACK_SIZE);
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    //t->ktask->credit = 0;
-    //t->ktask->next = this_cpu()->idle_task->ktask;
+    //t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->state = KTASK_STATE_READY;
 
     /* Process table */
     proc_table->procs[0] = t->ktask->proc;
@@ -180,6 +181,115 @@ _launch_init_server(void)
     ktask_root->r = l;
 
     arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
+}
+
+/*
+ * Create the pm server
+ */
+static void
+_create_pm_server(void)
+{
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
+    u64 offset = 0;
+    u64 size;
+    struct arch_task *t;
+    struct ktask_list *l;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, "/servers/pm") ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find pm */
+        panic("Fatal: Could not find the `pm' server.");
+        return;
+    }
+
+    /* Create a process */
+    t = kmalloc(sizeof(struct arch_task));
+    t->ktask = kmalloc(sizeof(struct ktask));
+    t->ktask->arch = t;
+    t->ktask->proc = kmalloc(sizeof(struct proc));
+    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
+    t->ktask->next = NULL;
+    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
+    t->kstack = kmalloc(KSTACK_SIZE);
+    t->ustack = kmalloc(USTACK_SIZE);
+    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
+    //t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->state = KTASK_STATE_READY;
+
+    /* Process table */
+    proc_table->procs[0] = t->ktask->proc;
+    proc_table->lastpid = 0;
+
+    /* Kernel task */
+    l = kmalloc(sizeof(struct ktask_list));
+    if ( NULL == l ) {
+        panic("Cannot allocate a kernel task list entry");
+        return;
+    }
+    l->ktask = t->ktask;
+    l->next = NULL;
+    l->next = ktask_root->r;
+    ktask_root->r = l;
+
+    arch_exec(t, (void *)(INITRAMFS_BASE + offset), size, KTASK_POLICY_DRIVER);
+}
+
+/*
+ * Start a system task
+ */
+static int
+_launch_system_task(const char *path)
+{
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
+    u64 offset = 0;
+    u64 size;
+    struct arch_task *t;
+    struct ktask_list *l;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, path) ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find init */
+        return -1;
+    }
+
+    /* Create a task */
+    t = kmalloc(sizeof(struct arch_task));
+    t->ktask = kmalloc(sizeof(struct ktask));
+    t->ktask->arch = t;
+    t->ktask->next = NULL;
+    t->kstack = kmalloc(KSTACK_SIZE);
+    t->ustack = kmalloc(USTACK_SIZE);
+    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
+    t->ktask->state = KTASK_STATE_READY;
+
+    /* Kernel task */
+    l = kmalloc(sizeof(struct ktask_list));
+    if ( NULL == l ) {
+        return -1;
+    }
+    l->ktask = t->ktask;
+    l->next = NULL;
+    l->next = ktask_root->r;
+    ktask_root->r = l;
+
+    return 0;
 }
 
 /*
@@ -370,7 +480,8 @@ bsp_init(void)
 
     /* Launch the `init' server */
     cli();
-    _launch_init_server();
+    _create_pm_server();
+    _create_init_server();
 
     panic("Fatal: Could not start the `init' server.");
 }
