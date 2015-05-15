@@ -46,12 +46,12 @@ sched_high(void)
     /* Setup a run queue */
     ktask = l->ktask;
     pt = ktask;
-    pt->credit = 100;
+    pt->credit = 10;
     l = l->next;
     while ( NULL != l ) {
         pt->next = l->ktask;
         pt = l->ktask;
-        pt->credit = 100;
+        pt->credit = 10;
         l = l->next;
     }
     pt->next = NULL;

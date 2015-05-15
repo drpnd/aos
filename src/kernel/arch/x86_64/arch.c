@@ -622,7 +622,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     /* Clean up memory space of the current process */
     kfree(t->kstack);
     kfree(t->ustack);
-    t->rp = kstack = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
+    t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     //kmemset(t->rp, 0, sizeof(struct stackframe64));
 
     /* Replace the current process with the new process */
