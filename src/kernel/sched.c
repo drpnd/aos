@@ -46,20 +46,15 @@ sched_high(void)
     /* Setup a run queue */
     ktask = l->ktask;
     pt = ktask;
-    pt->credit = 10;
+    pt->credit = 100;
     l = l->next;
-    int i = 1;
     while ( NULL != l ) {
         pt->next = l->ktask;
         pt = l->ktask;
-        pt->credit = 10;
+        pt->credit = 100;
         l = l->next;
-        i++;
     }
     pt->next = NULL;
-    if ( i == 4 ) {
-        panic("temp");
-    }
 
     /* Schedule the next task */
     set_next_ktask(ktask);

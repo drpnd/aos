@@ -445,14 +445,6 @@ bsp_init(void)
         panic("Fatal: Cannot create the `init' server.");
         return;
     }
-    if ( _create_pm_server() < 0 ) {
-        panic("Fatal: Cannot create the `pm' server.");
-        return;
-    }
-    if ( _create_pm_server() < 0 ) {
-        panic("Fatal: Cannot create the `pm' server.");
-        return;
-    }
 
     /* Schedule the idle task */
     this_cpu()->cur_task = NULL;
@@ -630,8 +622,8 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     /* Clean up memory space of the current process */
     kfree(t->kstack);
     kfree(t->ustack);
-    //t->rp = kstack;
-    kmemset(t->rp, 0, sizeof(struct stackframe64));
+    t->rp = kstack = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
+    //kmemset(t->rp, 0, sizeof(struct stackframe64));
 
     /* Replace the current process with the new process */
     t->kstack = kstack;
@@ -742,21 +734,14 @@ task_clone(struct ktask *ot)
     if ( NULL == t ) {
         return NULL;
     }
-    t->rp = kmalloc(sizeof(struct stackframe64));
-    if ( NULL == t->rp ) {
-        kfree(t);
-        return NULL;
-    }
     t->kstack = kmalloc(KSTACK_SIZE);
     if ( NULL == t->kstack ) {
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
     t->ustack = kmalloc(USTACK_SIZE);
     if ( NULL == t->ustack ) {
         kfree(t->kstack);
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
@@ -764,12 +749,11 @@ task_clone(struct ktask *ot)
     if ( NULL == t->ktask ) {
         kfree(t->ustack);
         kfree(t->kstack);
-        kfree(t->rp);
         kfree(t);
         return NULL;
     }
     t->ktask->arch = t;
-
+    //t->rp = t->kstack + PAGESIZE - 16 - sizeof(struct stackframe64);
 
     struct page_entry *pgt;
     u64 i;

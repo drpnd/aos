@@ -35,7 +35,7 @@ main(int argc, char *argv[])
     pid_t pid;
     int stat;
 
-#if 0
+#if 1
     /* fork */
     pid = fork();
     switch ( pid ) {
