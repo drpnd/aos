@@ -35,6 +35,7 @@ main(int argc, char *argv[])
     pid_t pid;
     int stat;
 
+#if 0
     /* fork */
     pid = fork();
     switch ( pid ) {
@@ -54,6 +55,7 @@ main(int argc, char *argv[])
         /* The parent process */
         ;
     }
+#endif
 
     //pid = waitpid(pid, &stat, 0);
     while ( 1 ) {

@@ -434,7 +434,7 @@ sys_getppid(void)
  *      it does return to the calling process, an error has occurred; the return
  *      value will be -1.
  */
-int arch_exec2(void *, void (*)(void), size_t, int);
+int arch_exec(void *, void (*)(void), size_t, int);
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
@@ -458,7 +458,7 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
     }
 
     t = this_ktask();
-    arch_exec2(t->arch, (void *)(0x20000ULL + offset), size,
+    arch_exec(t->arch, (void *)(0x20000ULL + offset), size,
                KTASK_POLICY_SERVER);
 
     /* On failure */
