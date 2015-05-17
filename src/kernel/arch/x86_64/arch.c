@@ -706,7 +706,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     narg = arg;
     saved = arg + sizeof(void *) * (argc + 1);
     while ( NULL != *tmp ) {
-        *narg = saved;
+        *narg = saved - arg + 0x7fc00000ULL;
         kmemcpy(saved, *tmp, kstrlen(*tmp));
         saved[kstrlen(*tmp)] = '\0';
         saved += kstrlen(*tmp) + 1;
@@ -714,8 +714,9 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         narg++;
     }
     *narg = NULL;
-    //narg = arg;
-    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(*(u64 *)*(narg + 1)));
+    narg = arg;
+    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(*(u64 *)*(narg + 0)));
+    //__asm__ __volatile__ (" movq %%rax,%%dr1 " :: "a"(*(narg + 0)));
 
     /* Create a process */
     ret = _create_process(t, entry, size, policy, arg);
