@@ -33,22 +33,6 @@ void
 sys_exit(int status)
 {
     struct ktask *t;
-    u16 *video;
-    int i;
-    char *s;
-    s = "exit";
-
-    video = (u16 *)0xb8000;
-    for ( i = 0; i < 80 * 25; i++ ) {
-        //*(video + i) = 0xe000;
-        *(video + i) = 0x2000;
-    }
-    while ( *s ) {
-        //*video = 0xe000 | (u16)*s;
-        *video = 0x2f00 | (u16)*s;
-        s++;
-        video++;
-    }
 
     /* Get the task */
     t = this_ktask();
@@ -57,6 +41,7 @@ sys_exit(int status)
     }
 
     /* Call atexit */
+    while ( 1 ) {}
 }
 
 /*
@@ -131,8 +116,15 @@ sys_fork(void)
 
     /* Kernel task (running) */
     l->ktask = nt;
-    l->next = ktask_root->r;
-    ktask_root->r = l;
+    l->next = NULL;
+    /* Push */
+    if ( NULL == ktask_root->r.head ) {
+        ktask_root->r.head = l;
+        ktask_root->r.tail = l;
+    } else {
+        ktask_root->r.tail->next = l;
+        ktask_root->r.tail = l;
+    }
 
     sys_fork_restart(nt->arch, 0, pid);
 
@@ -151,6 +143,7 @@ sys_fork(void)
  *      The sys_read() function attempts to read nbyte bytes of data from the
  *      object referenced by the descriptor fildes into the buffer pointed by
  *      buf.
+ *
  * RETURN VALUES
  *      If success, the number of bytes actually read is returned.  Upon reading
  *      end-of-file, zero is returned.  Otherwise, a -1 is returned.
@@ -189,6 +182,7 @@ sys_read(int fildes, void *buf, size_t nbyte)
  *      The sys_write() function attempts to write nbyte bytes of data to the
  *      object referenced by the descriptor fildes from the buffer pointed by
  *      buf.
+ *
  * RETURN VALUES
  *      Upon successful completion, the number of bytes which were written is
  *      returned.  Otherwise, a -1 is returned.
@@ -255,6 +249,7 @@ sys_write(int fildes, const void *buf, size_t nbyte)
 int
 sys_open(const char *path, int oflag, ...)
 {
+    panic(path);
     return -1;
 }
 
@@ -377,6 +372,62 @@ sys_getpid(void)
 }
 
 /*
+ * Get user identification
+ *
+ * SYNOPSIS
+ *      uid_t
+ *      sys_getuid(void);
+ *
+ * DESCRIPTION
+ *      The sys_getuid() function returns the real user ID of the calling
+ *      process.
+ *
+ * RETURN VALUES
+ *      The sys_getuid() function is always successful, and no return value is
+ *      reserved to indicate an error.
+ */
+uid_t
+sys_getuid(void)
+{
+    struct ktask *t;
+
+    /* Get the current task information */
+    t = this_ktask();
+    if ( NULL == t ) {
+        /* This error must not occur. */
+        return -1;
+    }
+    if ( NULL == t->proc ) {
+        /* This error must not occur. */
+        return -1;
+    }
+
+    /* Return the user ID */
+    return t->proc->uid;
+}
+
+/*
+ * Send signal to a process
+ *
+ * SYNOPSIS
+ *      int
+ *      sys_kill(pid_t pid, int sig);
+ *
+ * DESCRIPTION
+ *      The sys_kill() function sends the signal specified by sig to pid, a
+ *      process or a group of processes.
+ *
+ * RETURN VALUES
+ *      Upon successful completion, a value of 0 is returned.  Otherwise, a
+ *      value of -1 is returned.
+ */
+int
+sys_kill(pid_t pid, int sig)
+{
+    return -1;
+}
+
+/*
  * Get parent process identification
  *
  * SYNOPSIS
@@ -415,7 +466,42 @@ sys_getppid(void)
 }
 
 /*
- * execute a file
+ * Get group identification
+ *
+ * SYNOPSIS
+ *      gid_t
+ *      sys_getgid(void);
+ *
+ * DESCRIPTION
+ *      The sys_getgid() function returns the real group ID of the calling
+ *      process.
+ *
+ * RETURN VALUES
+ *      The sys_getgid() function is always successful, and no return value is
+ *      reserved to indicate an error.
+ */
+uid_t
+sys_getgid(void)
+{
+    struct ktask *t;
+
+    /* Get the current task information */
+    t = this_ktask();
+    if ( NULL == t ) {
+        /* This error must not occur. */
+        return -1;
+    }
+    if ( NULL == t->proc ) {
+        /* This error must not occur. */
+        return -1;
+    }
+
+    /* Return the group ID */
+    return t->proc->gid;
+}
+
+/*
+ * Execute a file
  *
  * SYNOPSIS
  *      int
@@ -435,7 +521,8 @@ sys_getppid(void)
  *      it does return to the calling process, an error has occurred; the return
  *      value will be -1.
  */
-int arch_exec(void *, void (*)(void), size_t, int);
+int arch_exec(void *, void (*)(void), size_t, int, char *const [],
+              char *const []);
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
@@ -460,7 +547,7 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
 
     t = this_ktask();
     arch_exec(t->arch, (void *)(0x20000ULL + offset), size,
-               KTASK_POLICY_SERVER);
+              KTASK_POLICY_USER, argv, envp);
 
     /* On failure */
     return -1;

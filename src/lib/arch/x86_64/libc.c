@@ -21,7 +21,9 @@
  * SOFTWARE.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -184,6 +186,250 @@ free(void *ptr)
 {
     //munmap(ptr, len);
 }
+
+
+
+
+#define PRINTF_MOD_NONE         0
+#define PRINTF_MOD_LONG         1
+#define PRINTF_MOD_LONGLONG     2
+
+static const char *
+_parse_printf_format(const char *fmt, int *zero, int *pad, int *prec, int *mod)
+{
+    /* Reset */
+    *zero = 0;
+    *pad = 0;
+    *prec = 0;
+    *mod = 0;
+
+    /* Padding with zero? */
+    if ( '0' == *fmt ) {
+        *zero = 1;
+        fmt++;
+    }
+
+    /* Padding length */
+    if ( *fmt >= '1' && *fmt <= '9' ) {
+        *pad += *fmt - '0';
+        fmt++;
+        while ( *fmt >= '0' && *fmt <= '9' ) {
+            *pad *= 10;
+            *pad += *fmt - '0';
+            fmt++;
+        }
+    }
+
+    /* Precision */
+    if ( '.' == *fmt ) {
+        fmt++;
+        while ( *fmt >= '0' && *fmt <= '9' ) {
+            *prec *= 10;
+            *prec += *fmt - '0';
+            fmt++;
+        }
+    }
+
+    /* Modifier */
+    if ( 'l' == *fmt ) {
+        fmt++;
+        if ( 'l' == *fmt ) {
+            *mod = PRINTF_MOD_LONGLONG;
+            fmt++;
+        } else {
+            *mod = PRINTF_MOD_LONG;
+        }
+    }
+
+    return fmt;
+}
+
+
+/*
+ * Put a % character with paddings to the standard output of the kernel
+ */
+static int
+_printf_percent(char * __restrict__ str, size_t size, int pad)
+{
+    if ( pad > size - 1 ) {
+        pad = size - 1;
+    }
+    memset(str, ' ', pad);
+    str[pad] = '%';
+
+    return pad + 1;
+}
+
+/*
+ * Print out a string
+ */
+int
+_printf_string(char * __restrict__ str, size_t size,
+               const char * __restrict__ s)
+{
+    if ( NULL == s ) {
+        s = "(null)";
+    }
+
+    strncpy(str, s, size - 1);
+    str[size - 1] = '\0';
+
+    return strlen(str);
+}
+
+/*
+ * Format
+ */
+static int
+_printf_format(char *__restrict__ str, size_t size,
+               const char *__restrict__ *format, va_list ap)
+{
+    const char *fmt;
+    /* Leading suffix */
+    int zero;
+    /* Minimum length */
+    int pad;
+    /* Precision */
+    int prec;
+    /* Modifier */
+    int mod;
+
+    /* Values */
+    const char *s;
+
+    int ret;
+
+    fmt = *format + 1;
+    fmt = _parse_printf_format(fmt, &zero, &pad, &prec, &mod);
+
+    /* Conversion */
+    if ( '%' == *fmt ) {
+        ret = _printf_percent(str, size, pad);
+        *format = fmt + 1;
+        return ret;
+    } else if ( 's' == *fmt ) {
+        /* String */
+        s = va_arg(ap, char *);
+        ret = _printf_string(str, size, s);
+        *format = fmt + 1;
+        return ret;
+    }
+
+    return 0;
+}
+
+/*
+ * vsnprintf
+ */
+int
+vsnprintf(char *__restrict__ str, size_t size,
+          const char *__restrict__ format, va_list ap)
+{
+    /* Written length */
+    int wr;
+    int ret;
+
+    /* Read the format */
+    wr = 0;
+    while ( '\0' != *format ) {
+        if ( '%' == *format ) {
+            /* % character */
+            ret = _printf_format(&str[wr], size - wr, &format, ap);
+            wr += ret;
+        } else {
+            /* An ordinary character */
+            str[wr] = *format;
+            format++;
+            wr++;
+        }
+        if ( wr >= size - 1 ) {
+            str[wr] = '\0';
+            return wr;
+        }
+    }
+
+    str[wr] = '\0';
+    return wr;
+}
+
+/*
+ * snprintf
+ */
+int
+snprintf(char *__restrict__ str, size_t size, const char *__restrict__ format,
+         ...)
+{
+    int ret;
+    va_list ap;
+
+    va_start(ap, format);
+    ret = vsnprintf(str, size, format, ap);
+    va_end(ap);
+
+    return ret;
+}
+
+/*
+ * Find length of string
+ *
+ * SYNOPSIS
+ *      size_t
+ *      strlen(const char *s);
+ *
+ * DESCRIPTION
+ *      The strlen() function computes the length of the string s.
+ *
+ * RETURN VALUES
+ *      The strlen() function returns the number of characters that precede the
+ *      terminating NULL character.
+ */
+size_t
+strlen(const char *s)
+{
+    size_t len;
+
+    len = 0;
+    while ( '\0' != *s ) {
+        len++;
+        s++;
+    }
+
+    return len;
+}
+
+/*
+ * Copy strings
+ *
+ * SYNOPSIS
+ *      char *
+ *      strncpy(char *restrict dst, const char *restrict src, size_t n);
+ *
+ * DESCRIPTION
+ *      The strncpy() function copies at most n characters from src to dst.  If
+ *      src is less than n characters long, the remainder of dst is filled with
+ *      `\0' characters.  Otherwise, dst is not terminated.
+ *
+ * RETURN VALUES
+ *      The strncpy() function returns dst.
+ *
+ */
+char *
+strncpy(char *__restrict__ dst, const char *__restrict__ src, size_t n)
+{
+    size_t i;
+
+    i = 0;
+    while ( '\0' != src[i] && i < n ) {
+        dst[i] = src[i];
+        i++;
+    }
+    for ( ; i < n; i++ ) {
+        dst[i] = '\0';
+    }
+
+    return dst;
+}
+
 
 /*
  * Local variables:

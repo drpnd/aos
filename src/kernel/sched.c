@@ -35,7 +35,7 @@ sched_high(void)
     struct ktask_list *l;
 
     /* Schedule from running tasks */
-    l = ktask_root->r;
+    l = ktask_root->r.head;
 
     if ( NULL == l ) {
         /* The idle task is to be scheduled */

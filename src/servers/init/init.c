@@ -34,8 +34,8 @@ main(int argc, char *argv[])
     int ret;
     pid_t pid;
     int stat;
+    char *tty_args[] = {"/drivers/tty", "tty0", NULL};
 
-#if 1
     /* fork */
     pid = fork();
     switch ( pid ) {
@@ -45,7 +45,7 @@ main(int argc, char *argv[])
         break;
     case 0:
         /* The child process */
-        ret = execve("/servers/pm", NULL, NULL);
+        ret = execve("/drivers/tty", tty_args, NULL);
         if ( ret < 0 ) {
             /* Error */
             return -1;
@@ -55,11 +55,10 @@ main(int argc, char *argv[])
         /* The parent process */
         ;
     }
-#endif
 
     //pid = waitpid(pid, &stat, 0);
     while ( 1 ) {
-        write();
+        write(0, NULL, NULL);
         //__asm__ ("pause");
     }
 

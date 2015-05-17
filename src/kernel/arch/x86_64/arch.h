@@ -30,6 +30,9 @@
 /* Boot information from the boot loader */
 #define BOOTINFO_BASE           0x8000ULL
 
+/* Color video RAM */
+#define VIDEO_COLOR             0xb8000ULL
+
 /* Lowest memory address managed by memory allocator
  * Note that ISA memory hole (0x00f00000-0x00ffffff) are detected as available
  * in the system memory map obtained from the BIOS, so be carefull if we use
@@ -225,7 +228,9 @@ struct p_data {
 
 /* in arch.c */
 struct p_data * this_cpu(void);
-int arch_exec(struct arch_task *, void (*)(void), size_t, int);
+int
+arch_exec(struct arch_task *, void (*)(void), size_t, int, char *const [],
+          char *const []);
 void arch_idle(void);
 
 /* in vmx.c */

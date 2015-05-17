@@ -21,19 +21,12 @@
  * SOFTWARE.
  */
 
-#ifndef _STDLIB_H
-#define _STDLIB_H
+#ifndef _LIMITS_H
+#define _LIMITS_H
 
-#include <aos/types.h>
+#define PATH_MAX        1024
 
-#ifndef NULL
-#define NULL    ((void *)0)
-#endif
-
-void exit(int) __attribute__ ((__noreturn__));
-void * memset(void *, int, size_t);
-
-#endif /* _STDLIB_H */
+#endif /* _LIMITS_H */
 
 /*
  * Local variables:

@@ -51,11 +51,13 @@ proc_create(void)
     if ( NULL == proc ) {
         return NULL;
     }
+    kmemset(proc, 0, sizeof(struct proc));
     ktask = kmalloc(sizeof(struct ktask));
     if ( NULL == ktask ) {
         kfree(proc);
         return NULL;
     }
+    kmemset(ktask, 0, sizeof(struct ktask));
     ktask->proc = proc;
 
     return proc;

@@ -21,8 +21,11 @@
  * SOFTWARE.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 /*
  * Entry point for the tty driver
@@ -30,6 +33,23 @@
 int
 main(int argc, char *argv[])
 {
+    const char *tty;
+    char path[PATH_MAX];
+    int fd;
+
+    /* Check the arguments */
+    if ( argc != 2 ) {
+        exit(-1);
+    }
+    tty = argv[1];
+
+    /* Open tty file */
+    snprintf(path, PATH_MAX, "/dev/%s", "tty0");
+    fd = open(path, 0);
+    while ( 1 ) {
+        read(fd, NULL, 0);
+    }
+
     exit(0);
 }
 

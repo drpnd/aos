@@ -30,13 +30,9 @@
 int
 main(int argc, char *argv[])
 {
-    //exit(0);
     while ( 1 ) {
-        /* Wait for a message */
-        read();
     }
-
-    return 0;
+    exit(0);
 }
 
 /*

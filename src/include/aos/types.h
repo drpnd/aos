@@ -30,6 +30,8 @@ typedef signed long long ssize_t;
 typedef unsigned long long size_t;
 typedef signed long long off_t;
 typedef signed int pid_t;
+typedef signed int uid_t;
+typedef signed int gid_t;
 
 #else
 #error "Must be LP64"

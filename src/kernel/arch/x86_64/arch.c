@@ -34,7 +34,7 @@
 /* Prototype declarations */
 static int _load_trampoline(void);
 static struct arch_task * _create_idle_task(void);
-int _create_process(struct arch_task *, void (*)(void), size_t, int);
+static int _create_process(struct arch_task *, void (*)(void), size_t, int);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
@@ -156,7 +156,7 @@ _create_init_server(void)
     t->ktask = kmalloc(sizeof(struct ktask));
     t->ktask->arch = t;
     t->ktask->proc = kmalloc(sizeof(struct proc));
-    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    t->ktask->proc->policy = KTASK_POLICY_USER;
     t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
     t->ktask->next = NULL;
     ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
@@ -176,12 +176,19 @@ _create_init_server(void)
         return -1;
     }
     l->ktask = t->ktask;
-    l->next = ktask_root->r;
-    ktask_root->r = l;
+    l->next = NULL;
+    /* Push */
+    if ( NULL == ktask_root->r.head ) {
+        ktask_root->r.head = l;
+        ktask_root->r.tail = l;
+    } else {
+        ktask_root->r.tail->next = l;
+        ktask_root->r.tail = l;
+    }
 
     /* Create a process */
     ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_DRIVER);
+                          KTASK_POLICY_USER);
 
     return ret;
 }
@@ -218,7 +225,7 @@ _create_pm_server(void)
     t->ktask = kmalloc(sizeof(struct ktask));
     t->ktask->arch = t;
     t->ktask->proc = kmalloc(sizeof(struct proc));
-    t->ktask->proc->policy = KTASK_POLICY_DRIVER;
+    t->ktask->proc->policy = KTASK_POLICY_SERVER;
     t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
     t->ktask->next = NULL;
     ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
@@ -238,12 +245,19 @@ _create_pm_server(void)
         return -1;
     }
     l->ktask = t->ktask;
-    l->next = ktask_root->r;
-    ktask_root->r = l;
+    l->next = NULL;
+    /* Push */
+    if ( NULL == ktask_root->r.head ) {
+        ktask_root->r.head = l;
+        ktask_root->r.tail = l;
+    } else {
+        ktask_root->r.tail->next = l;
+        ktask_root->r.tail = l;
+    }
 
     /* Create a process */
     ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_DRIVER);
+                          KTASK_POLICY_SERVER);
 
     return ret;
 }
@@ -266,7 +280,7 @@ panic(char *s)
     lapic_send_fixed_ipi(IV_CRASH);
 
     /* Print out the message string directly */
-    video = (u16 *)0xb8000;
+    video = (u16 *)VIDEO_COLOR;
     for ( i = 0; *s; i++, s++  ) {
         *video = 0x2f00 | *s;
         video++;
@@ -362,7 +376,10 @@ bsp_init(void)
     syscall_table[SYS_close] = sys_close;
     syscall_table[SYS_wait4] = sys_wait4;
     syscall_table[SYS_getpid] = sys_getpid;
+    syscall_table[SYS_getuid] = sys_getuid;
+    syscall_table[SYS_kill] = sys_kill;
     syscall_table[SYS_getppid] = sys_getppid;
+    syscall_table[SYS_getgid] = sys_getgid;
     syscall_table[SYS_execve] = sys_execve;
     syscall_table[SYS_mmap] = sys_mmap;
     syscall_table[SYS_munmap] = sys_munmap;
@@ -386,8 +403,10 @@ bsp_init(void)
         panic("Fatal: Could not initialize the task lists.");
         return;
     }
-    ktask_root->r = NULL;
-    ktask_root->b = NULL;
+    ktask_root->r.head = NULL;
+    ktask_root->r.tail = NULL;
+    ktask_root->b.head = NULL;
+    ktask_root->b.tail = NULL;
 
     /* Enable this processor */
     pdata = this_cpu();
@@ -509,7 +528,7 @@ this_cpu(void)
 /*
  * Create a new process
  */
-int
+static int
 _create_process(struct arch_task *t, void (*entry)(void), size_t size,
                 int policy)
 {
@@ -623,7 +642,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     kfree(t->kstack);
     kfree(t->ustack);
     t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    //kmemset(t->rp, 0, sizeof(struct stackframe64));
+    kmemset(t->rp, 0, sizeof(struct stackframe64));
 
     /* Replace the current process with the new process */
     t->kstack = kstack;
@@ -648,15 +667,29 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
  * Execute a process
  */
 int
-arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy)
+arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
+          char *const argv[], char *const envp[])
 {
     int ret;
+    int argc;
+    char *const *tmp;
+
+    /* Count the number of arguments */
+    tmp = argv;
+    argc = 0;
+    while ( NULL != *tmp ) {
+        argc++;
+        tmp++;
+    }
 
     /* Create a process */
     ret = _create_process(t, entry, size, policy);
     if ( ret < 0 ) {
         return -1;
     }
+    t->rp->di = argc;
+    /* FIXME: copy the arguments and environments */
+    //t->rp->si = argv;
 
     /* Restart the task */
     task_replace(t);

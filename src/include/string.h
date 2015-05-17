@@ -21,19 +21,15 @@
  * SOFTWARE.
  */
 
-#ifndef _STDLIB_H
-#define _STDLIB_H
+#ifndef _STRING_H
+#define _STRING_H
 
 #include <aos/types.h>
 
-#ifndef NULL
-#define NULL    ((void *)0)
-#endif
+size_t strlen(const char *);
+char * strncpy(char *__restrict__, const char *__restrict__, size_t);
 
-void exit(int) __attribute__ ((__noreturn__));
-void * memset(void *, int, size_t);
-
-#endif /* _STDLIB_H */
+#endif /* _STRING_H */
 
 /*
  * Local variables:

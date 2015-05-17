@@ -30,10 +30,21 @@
 #define SEEK_CUR        1
 #define SEEK_END        2
 
+#define STDIN_FILENO    0
+#define STDOUT_FILENO   1
+#define STDERR_FILENO   2
+
 int execve(const char *path, char *const argv[], char *const envp[]);
 pid_t fork(void);
 pid_t getpid(void);
+uid_t getuid(void);
 pid_t getppid(void);
+gid_t getgid(void);
+
+
+int open(const char *path, int oflag, ...);
+ssize_t read(int fildes, void *buf, size_t nbyte);
+ssize_t write(int fildes, const void *buf, size_t nbyte);;
 
 #endif /* _UNISTD_H */
 

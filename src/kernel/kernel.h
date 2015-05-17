@@ -74,6 +74,10 @@ struct proc {
     /* Parent process */
     struct proc *parent;
 
+    /* User information */
+    uid_t uid;
+    gid_t gid;
+
     /* Architecture specific structure; i.e., (struct arch_proc) */
     void *arch;
 
@@ -120,7 +124,7 @@ struct ktask {
     int type;
     /* Pointers for scheduler (runqueue) */
     struct ktask *next;
-    int credit;
+    int credit;                 /* quantum */
 };
 
 /*
@@ -132,9 +136,15 @@ struct ktask_list {
 };
 struct ktask_root {
     /* Running */
-    struct ktask_list *r;
+    struct {
+        struct ktask_list *head;
+        struct ktask_list *tail;
+    } r;
     /* Blocked (or others) */
-    struct ktask_list *b;
+    struct {
+        struct ktask_list *head;
+        struct ktask_list *tail;
+    } b;
 };
 
 /* Kernel event handler */
@@ -149,6 +159,7 @@ extern struct proc_table *proc_table;
 extern struct ktask_root *ktask_root;
 
 /* in kernel.c */
+void kernel(void);
 int kstrcmp(const char *, const char *);
 
 /* in asm.s */
@@ -178,7 +189,10 @@ int sys_open(const char *, int, ...);
 int sys_close(int);
 pid_t sys_wait4(pid_t, int *, int, struct rusage *);
 pid_t sys_getpid(void);
+uid_t sys_getuid(void);
+int sys_kill(pid_t, int);
 pid_t sys_getppid(void);
+gid_t sys_getgid(void);
 int sys_execve(const char *, char *const [], char *const []);
 void * sys_mmap(void *, size_t, int, int, int, off_t);
 int sys_munmap(void *, size_t);
