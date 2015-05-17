@@ -166,6 +166,23 @@ kmemcpy(void *__restrict dst, const void *__restrict src, size_t n)
 #endif
 
 /*
+ * kstrlen
+ */
+size_t
+kstrlen(const char *s)
+{
+    size_t len;
+
+    len = 0;
+    while ( '\0' != *s ) {
+        len++;
+        s++;
+    }
+
+    return len;
+}
+
+/*
  * kstrcmp
  */
 int

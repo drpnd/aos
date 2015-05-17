@@ -161,6 +161,7 @@ extern struct ktask_root *ktask_root;
 /* in kernel.c */
 void kernel(void);
 int kstrcmp(const char *, const char *);
+size_t kstrlen(const char *);
 
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in asm.s. */

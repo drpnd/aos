@@ -44,7 +44,9 @@ main(int argc, char *argv[])
     tty = argv[1];
 
     /* Open tty file */
-    snprintf(path, PATH_MAX, "/dev/%s", "tty0");
+    //snprintf(path, PATH_MAX, "/dev/%s", tty);
+    //strncpy(path, "/dev/", PATH_MAX);
+    strncpy(path, tty, PATH_MAX);
     fd = open(path, 0);
     while ( 1 ) {
         read(fd, NULL, 0);

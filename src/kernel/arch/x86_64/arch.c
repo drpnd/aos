@@ -34,7 +34,8 @@
 /* Prototype declarations */
 static int _load_trampoline(void);
 static struct arch_task * _create_idle_task(void);
-static int _create_process(struct arch_task *, void (*)(void), size_t, int);
+static int
+_create_process(struct arch_task *, void (*)(void), size_t, int, void *);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
@@ -188,7 +189,7 @@ _create_init_server(void)
 
     /* Create a process */
     ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_USER);
+                          KTASK_POLICY_USER, NULL);
 
     return ret;
 }
@@ -257,7 +258,7 @@ _create_pm_server(void)
 
     /* Create a process */
     ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_SERVER);
+                          KTASK_POLICY_SERVER, NULL);
 
     return ret;
 }
@@ -530,7 +531,7 @@ this_cpu(void)
  */
 static int
 _create_process(struct arch_task *t, void (*entry)(void), size_t size,
-                int policy)
+                int policy, void *argpg)
 {
     u64 cs;
     u64 ss;
@@ -566,6 +567,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
         }
     }
     pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;//
     pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
     for ( i = 2; i < 3; i++ ) {
         pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
@@ -620,6 +622,8 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
             = ((u64)ustack + i * PAGESIZE) | 0x087;
     }
+    /* Arguments */
+    pgt[516].entries[0] = (u64)argpg | 0x087;
 
     /* Configure the ring protection by the policy */
     switch ( policy ) {
@@ -673,23 +677,55 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     int ret;
     int argc;
     char *const *tmp;
+    size_t len;
 
     /* Count the number of arguments */
     tmp = argv;
     argc = 0;
+    len = 0;
     while ( NULL != *tmp ) {
         argc++;
+        len += kstrlen(*tmp);
         tmp++;
     }
 
+    /* Prepare arguments */
+    u8 *arg;
+    len += argc + (argc + 1) * sizeof(void *);
+    if ( len < PAGESIZE ) {
+        arg = kmalloc(PAGESIZE);
+    } else {
+        arg = kmalloc(len);
+    }
+    if ( NULL == arg ) {
+        return -1;
+    }
+    char **narg;
+    u8 *saved;
+    tmp = argv;
+    narg = arg;
+    saved = arg + sizeof(void *) * (argc + 1);
+    while ( NULL != *tmp ) {
+        *narg = saved;
+        kmemcpy(saved, *tmp, kstrlen(*tmp));
+        saved[kstrlen(*tmp)] = '\0';
+        saved += kstrlen(*tmp) + 1;
+        tmp++;
+        narg++;
+    }
+    *narg = NULL;
+    //narg = arg;
+    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(*(u64 *)*(narg + 1)));
+
     /* Create a process */
-    ret = _create_process(t, entry, size, policy);
+    ret = _create_process(t, entry, size, policy, arg);
     if ( ret < 0 ) {
+        kfree(arg);
         return -1;
     }
     t->rp->di = argc;
     /* FIXME: copy the arguments and environments */
-    //t->rp->si = argv;
+    t->rp->si = 0x7fc00000ULL;
 
     /* Restart the task */
     task_replace(t);
