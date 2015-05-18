@@ -750,6 +750,23 @@ _task_replace:
 	/* Change page table */
 	movq	TASK_CR3(%rdi),%rax
 	movq	%rax,%cr3
+	/* Get the APIC ID */
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
+	xorq	%rax,%rax
+	movl	APIC_LAPIC_ID(%rdx),%eax
+	/* Calculate the processor data space from the APIC ID */
+	movq	$P_DATA_SIZE,%rbx
+	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
+	addq	$P_DATA_BASE,%rax
+	movq	%rax,%rbp
+	/* Setup sp0 in TSS */
+	movq	TASK_SP0(%rdi),%rdx
+	leaq	P_TSS_OFFSET(%rbp),%rax
+	movq	%rdx,TSS_SP0(%rax)
 	intr_lapic_isr_done
 	iretq
 
