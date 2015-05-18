@@ -168,16 +168,6 @@ struct page_entry {
 } __attribute__ ((packed));
 
 /*
- * Page table
- */
-struct page_table {
-    /* Page table (cr3) */
-    void *pgt;
-    /* Reference counter */
-    int refcnt;
-};
-
-/*
  * Process (architecture specific structure)
  */
  struct arch_proc {

@@ -109,7 +109,7 @@ sys_fork(void)
     }
     nt->proc = np;
     nt->state = KTASK_STATE_CREATED;
-    //nt->next = NULL;
+    nt->next = NULL;
 
     proc_table->procs[pid] = np;
     proc_table->lastpid = pid;
@@ -128,7 +128,7 @@ sys_fork(void)
 
     sys_fork_restart(nt->arch, 0, pid);
 
-    /* To prevent compiler error */
+    /* To prevent compiler errors */
     return -1;
 }
 
@@ -249,7 +249,31 @@ sys_write(int fildes, const void *buf, size_t nbyte)
 int
 sys_open(const char *path, int oflag, ...)
 {
-    panic(path);
+    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 offset = 0;
+    u64 size;
+    struct ktask *t;
+
+    /* Find the file pointed by path from the initramfs */
+    while ( 0 != *initramfs ) {
+        if ( 0 == kstrcmp((char *)initramfs, path) ) {
+            offset = *(initramfs + 2);
+            size = *(initramfs + 3);
+            break;
+        }
+        initramfs += 4;
+    }
+    if ( 0 == offset ) {
+        /* Could not find the file */
+        return -1;
+    }
+
+    /* Get the task */
+    t = this_ktask();
+    if ( NULL == t ) {
+        return -1;
+    }
+
     return -1;
 }
 

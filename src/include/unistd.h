@@ -41,8 +41,6 @@ uid_t getuid(void);
 pid_t getppid(void);
 gid_t getgid(void);
 
-
-int open(const char *path, int oflag, ...);
 ssize_t read(int fildes, void *buf, size_t nbyte);
 ssize_t write(int fildes, const void *buf, size_t nbyte);;
 

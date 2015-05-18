@@ -21,38 +21,27 @@
  * SOFTWARE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <limits.h>
-#include <fcntl.h>
+#ifndef _FCNTL_H
+#define _FCNTL_H
 
-/*
- * Entry point for the tty driver
- */
-int
-main(int argc, char *argv[])
-{
-    const char *tty;
-    char path[PATH_MAX];
-    int fd;
+#include <aos/types.h>
 
-    /* Check the arguments */
-    if ( argc != 2 ) {
-        exit(-1);
-    }
-    tty = argv[1];
+#define O_RDONLY        0x0000
+#define O_WRONLY        0x0001
+#define O_RDWR          0x0002
 
-    /* Open tty file */
-    snprintf(path, PATH_MAX, "/dev/%s", tty);
-    fd = open(path, O_RDWR);
-    while ( 1 ) {
-        read(fd, NULL, 0);
-    }
+#define O_NONBLOCK      0x0004
+#define O_APPEND        0x0008
+#define O_SHLOCK        0x0010
+#define O_EXLOCK        0x0020
+#define O_NOFOLLOW      0x0100
+#define O_CREAT         0x0200
+#define O_TRUNC         0x0400
+#define O_EXCL          0x0800
 
-    exit(0);
-}
+int open(const char *, int, ...);
+
+#endif /* _FCNTL_H */
 
 /*
  * Local variables:

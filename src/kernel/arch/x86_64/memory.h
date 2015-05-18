@@ -54,6 +54,7 @@ struct phys_mem_buddy {
 struct phys_mem_page {
     u64 flags;
     int order;
+    int refcnt;
 };
 
 /*

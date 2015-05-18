@@ -33,8 +33,9 @@ main(int argc, char *argv[])
 {
     int ret;
     pid_t pid;
-    int stat;
+    //int stat;
     char *tty_args[] = {"/drivers/tty", "tty0", NULL};
+    char *e1000_args[] = {"/drivers/e1000", NULL};
 
     /* fork */
     pid = fork();
@@ -56,10 +57,29 @@ main(int argc, char *argv[])
         ;
     }
 
+    /* fork */
+    pid = fork();
+    switch ( pid ) {
+    case -1:
+        /* Error */
+        exit(-1);
+        break;
+    case 0:
+        /* The child process */
+        ret = execve("/drivers/e1000", e1000_args, NULL);
+        if ( ret < 0 ) {
+            /* Error */
+            return -1;
+        }
+        break;
+    default:
+        /* The parent process */
+        ;
+    }
+
     //pid = waitpid(pid, &stat, 0);
     while ( 1 ) {
-        write(0, NULL, NULL);
-        //__asm__ ("pause");
+        write(0, NULL, 0);
     }
 
     return 0;

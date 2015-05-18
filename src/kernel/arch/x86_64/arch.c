@@ -567,7 +567,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
         }
     }
     pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
-    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;//
+    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;
     pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
     for ( i = 2; i < 3; i++ ) {
         pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
@@ -643,8 +643,8 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
 
     /* Clean up memory space of the current process */
-    kfree(t->kstack);
-    kfree(t->ustack);
+    //kfree(t->kstack);
+    //kfree(t->ustack);
     t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
 
@@ -703,10 +703,10 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     char **narg;
     u8 *saved;
     tmp = argv;
-    narg = arg;
+    narg = (char **)arg;
     saved = arg + sizeof(void *) * (argc + 1);
     while ( NULL != *tmp ) {
-        *narg = saved - arg + 0x7fc00000ULL;
+        *narg = (char *)(saved - arg + 0x7fc00000ULL);
         kmemcpy(saved, *tmp, kstrlen(*tmp));
         saved[kstrlen(*tmp)] = '\0';
         saved += kstrlen(*tmp) + 1;
@@ -714,7 +714,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         narg++;
     }
     *narg = NULL;
-    narg = arg;
+    //narg = arg;
     //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(*(u64 *)*(narg + 0)));
     //__asm__ __volatile__ (" movq %%rax,%%dr1 " :: "a"(*(narg + 0)));
 
@@ -725,7 +725,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         return -1;
     }
     t->rp->di = argc;
-    /* FIXME: copy the arguments and environments */
     t->rp->si = 0x7fc00000ULL;
 
     /* Restart the task */
@@ -793,6 +792,18 @@ arch_idle(void)
 }
 
 /*
+ * Page fault handler
+ */
+void
+isr_page_fault(void *addr, u64 error)
+{
+    //__asm__ __volatile__ (" movq %%rax,%%dr0" :: "a"(addr) );
+    //__asm__ __volatile__ (" movq %%rax,%%dr1" :: "a"(error) );
+    panic("page fault");
+}
+
+
+/*
  * Clone the task
  */
 struct ktask *
@@ -800,21 +811,25 @@ task_clone(struct ktask *ot)
 {
     struct arch_task *t;
 
+    /* Allocate the architecture-specific task structure of a new task */
     t = kmalloc(sizeof(struct arch_task));
     if ( NULL == t ) {
         return NULL;
     }
+    /* Allocate the kernel task structure of a new task */
     t->kstack = kmalloc(KSTACK_SIZE);
     if ( NULL == t->kstack ) {
         kfree(t);
         return NULL;
     }
+    /* Allocate the user stack of a new task */
     t->ustack = kmalloc(USTACK_SIZE);
     if ( NULL == t->ustack ) {
         kfree(t->kstack);
         kfree(t);
         return NULL;
     }
+    /* Allocate the kernel stack of a new task */
     t->ktask = kmalloc(sizeof(struct ktask));
     if ( NULL == t->ktask ) {
         kfree(t->ustack);
@@ -823,8 +838,19 @@ task_clone(struct ktask *ot)
         return NULL;
     }
     t->ktask->arch = t;
-    //t->rp = t->kstack + PAGESIZE - 16 - sizeof(struct stackframe64);
 
+    /* Copy the kernel and user stacks */
+    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
+            KSTACK_SIZE);
+    kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
+            USTACK_SIZE);
+
+    /* Setup the restart point */
+    t->rp = (struct stackframe64 *)
+        ((u64)((struct arch_task *)ot->arch)->rp + (u64)t->kstack
+         - (u64)((struct arch_task *)ot->arch)->kstack);
+
+    /* Copy the user memory space */
     struct page_entry *pgt;
     u64 i;
     u64 j;
@@ -834,7 +860,7 @@ task_clone(struct ktask *ot)
         return NULL;
     }
     kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* PML4 */
+    /* Kernel */
     pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
     /* PDPT */
     for ( i = 0; i < 1; i++ ) {
@@ -852,6 +878,7 @@ task_clone(struct ktask *ot)
         }
     }
     pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
+    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;
     pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
     for ( i = 2; i < 3; i++ ) {
         pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
@@ -868,6 +895,7 @@ task_clone(struct ktask *ot)
             pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
         }
     }
+    /* Executable */
     for ( i = 0; i < 512; i++ ) {
         /* Mapping */
         pgt[6].entries[i] = ((struct page_entry *)((struct arch_task *)ot->arch)
@@ -878,15 +906,14 @@ task_clone(struct ktask *ot)
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
             = ((u64)t->ustack + i * PAGESIZE) | 0x087;
     }
+    /* Arguments */
+    pgt[516].entries[0] = ((struct page_entry *)((struct arch_task *)ot->arch)
+                           ->cr3)[516].entries[0];
 
     t->cr3 = (u64)pgt;
 
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 
-    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
-            KSTACK_SIZE);
-    kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
-            USTACK_SIZE);
 
     return t->ktask;
 }

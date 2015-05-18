@@ -610,16 +610,17 @@ _intr_gpf:
 	iretq
 
 
-/* void intr_pf(void) */
+/* Interrupt handler for page fault */
 _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
-	pushq	%rbx
-	movq	16(%rbp),%rbx
-	//movq	%rbx,%dr0       /* rip */
-	movq	8(%rbp),%rbx
-	//movq	%rbx,%dr1       /* error code */
-1:	popq	%rbx
+	pushq	%rdi
+	pushq	%rsi
+	movq	%cr2,%rdi	/* virtual address */
+	movq	8(%rbp),%rsi	/* error code */
+	call	_isr_page_fault
+	popq	%rsi
+	popq	%rdi
 	popq	%rbp
 	addq	$0x8,%rsp
 	iretq
