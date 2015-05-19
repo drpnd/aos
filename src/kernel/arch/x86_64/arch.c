@@ -341,6 +341,8 @@ bsp_init(void)
     idt_setup_intr_gate(6, intr_iof);
     idt_setup_intr_gate(13, intr_gpf);
     idt_setup_intr_gate(14, intr_pf);
+    idt_setup_intr_gate(16, intr_x87_fpe);
+    idt_setup_intr_gate(19, intr_simd_fpe);
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
@@ -792,14 +794,21 @@ arch_idle(void)
 }
 
 /*
+ * General protection fault
+ */
+void
+isr_general_protection_fault(u64 error)
+{
+
+}
+
+/*
  * Page fault handler
  */
 void
 isr_page_fault(void *addr, u64 error)
 {
-    //__asm__ __volatile__ (" movq %%rax,%%dr0" :: "a"(addr) );
-    //__asm__ __volatile__ (" movq %%rax,%%dr1" :: "a"(error) );
-    panic("page fault");
+    panic("FIXME: page fault");
 }
 
 

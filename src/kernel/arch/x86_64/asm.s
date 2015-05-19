@@ -78,6 +78,8 @@
 	.globl	_intr_iof
 	.globl	_intr_gpf
 	.globl	_intr_pf
+	.globl	_intr_x87_fpe
+	.globl	_intr_simd_fpe
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
 	.globl	_sys_fork_restart
@@ -610,7 +612,8 @@ _intr_gpf:
 	iretq
 
 
-/* Interrupt handler for page fault */
+/* Interrupt handler for page fault
+ * Error code, RIP, CS, RFLAGS, (RSP, SS) */
 _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
@@ -623,6 +626,16 @@ _intr_pf:
 	popq	%rdi
 	popq	%rbp
 	addq	$0x8,%rsp
+	iretq
+
+/* x87 floating point exception
+ * RIP, CS, RFLAGS, (RSP, SS): without error code */
+_intr_x87_fpe:
+	iretq
+
+/* SIMD floating point exception
+ * RIP, CS, RFLAGS, (RSP, SS): without error code */
+_intr_simd_fpe:
 	iretq
 
 

@@ -240,6 +240,8 @@ void intr_null(void);
 void intr_iof(void);
 void intr_gpf(void);
 void intr_pf(void);
+void intr_x87_fpe(void);
+void intr_simd_fpe(void);
 void intr_apic_loc_tmr(void);
 void intr_crash(void);
 void task_restart(void);
