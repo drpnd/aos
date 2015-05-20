@@ -430,6 +430,42 @@ strncpy(char *__restrict__ dst, const char *__restrict__ src, size_t n)
     return dst;
 }
 
+/*
+ * Compare strings
+ *
+ * SYNOPSIS
+ *      int
+ *      strcmp(const char *s1, const char *s2);
+ *
+ * DESCRIPTION
+ *      The strcmp() function lexicographically compare the null-terminated
+ *      strings s1 and s2.
+ *
+ * RETURN VALUES
+ *      The strcmp() function returns an integer greater than, equal to, or less
+ *      than 0, according as the string s1 is greater than, equal to, or less
+ *      than the string s2.  The comparison is done using unsigned characters,
+ *      so that '\200' is greater than '\0'.
+ *
+ */
+int
+strcmp(const char *s1, const char *s2)
+{
+    size_t i;
+    int diff;
+
+    i = 0;
+    while ( s1[i] != '\0' || s2[i] != '\0' ) {
+        diff = (int)s1[i] - (int)s2[i];
+        if ( diff ) {
+            return diff;
+        }
+        i++;
+    }
+
+    return 0;
+}
+
 
 /*
  * Local variables:
