@@ -466,6 +466,23 @@ strcmp(const char *s1, const char *s2)
     return 0;
 }
 
+/*
+ * Write zeros to a byte string
+ *
+ * SYNOPSIS
+ *      void
+ *      bzero(void *s, size_t n);
+ *
+ * DESCRIPTION
+ *      The bzero() function writes n zeroed bytes to the string s.  If n is
+ *      zero, bzero() does nothing.
+ *
+ */
+void
+bzero(void *s, size_t n)
+{
+    memset(s, 0, n);
+}
 
 /*
  * Local variables:
