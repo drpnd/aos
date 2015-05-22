@@ -402,6 +402,36 @@ strlen(const char *s)
  *
  * SYNOPSIS
  *      char *
+ *      strcpy(char *dst, const char *src);
+ *
+ * DESCRIPTION
+ *      The strcpy() function copies the string src to dst (including the
+ *      terminating '\0' character).
+ *
+ * RETURN VALUES
+ *      The strcpy() function returns dst.
+ *
+ */
+char *
+strcpy(char *dst, const char *src)
+{
+    size_t i;
+
+    i = 0;
+    while ( '\0' != src[i] ) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = src[i];
+
+    return dst;
+}
+
+/*
+ * Copy strings
+ *
+ * SYNOPSIS
+ *      char *
  *      strncpy(char *restrict dst, const char *restrict src, size_t n);
  *
  * DESCRIPTION
