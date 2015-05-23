@@ -251,10 +251,12 @@ _parse_printf_format(const char *fmt, int *zero, int *pad, int *prec, int *mod)
 static int
 _printf_percent(char * __restrict__ str, size_t size, int pad)
 {
-    if ( pad > size - 1 ) {
+    if ( size > 0 && pad > size - 1 ) {
         pad = size - 1;
     }
-    memset(str, ' ', pad);
+    if ( pad > 0 ) {
+        memset(str, ' ', pad);
+    }
     str[pad] = '%';
 
     return pad + 1;
