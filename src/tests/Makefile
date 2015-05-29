@@ -17,7 +17,7 @@ libc.o: ../lib/arch/$(ARCH)/libc.c
 
 libcasm.o: ../lib/arch/$(ARCH)/libcasm.s
 	$(CC) -nostdinc -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libcasm.s
-	objcopy -K _main --prefix-symbols=aos_stdc $@
+	objcopy --prefix-symbols=aos_stdc $@
 
 test-libc: test-libc.o libc.o libcasm.o
 	$(CC) -o $@ $?

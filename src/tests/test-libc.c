@@ -23,8 +23,39 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 size_t aos_stdc_strlen(const char *);
+
+
+int
+test_strlen(void)
+{
+    const char *str[] = {"test", "", "testing"};
+    size_t len;
+    int i;
+
+    /* Test */
+    if ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
+        if ( strlen(str[i]) != aos_stdc_strlen(str[i]) ) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+#define TEST_FUNC(str, func, ret)               \
+    do {                                        \
+        printf("%s: ", str);                    \
+        if ( func() ) {                         \
+            printf("passed");                   \
+        } else {                                \
+            printf("failed");                   \
+            ret = -1;                           \
+        }                                       \
+        printf("\n");                           \
+    } while ( 0 )
 
 /*
  * Main routine
@@ -32,13 +63,10 @@ size_t aos_stdc_strlen(const char *);
 int
 main(int argc, const char *const argv[])
 {
-    size_t len;
+    int ret;
 
-    /* Test */
-    len = aos_stdc_strlen("test");
-    if ( len != 4 ) {
-        return -1;
-    }
+    ret = 0;
+    TEST_FUNC("strlen", test_strlen, ret);
 
     return 0;
 }
