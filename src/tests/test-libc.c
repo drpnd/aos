@@ -32,11 +32,10 @@ int
 test_strlen(void)
 {
     const char *str[] = {"test", "", "testing"};
-    size_t len;
     int i;
 
     /* Test */
-    if ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
+    for ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
         if ( strlen(str[i]) != aos_stdc_strlen(str[i]) ) {
             return -1;
         }
