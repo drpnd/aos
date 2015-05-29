@@ -198,6 +198,10 @@ vmdk: image
 	qemu-img convert -f raw -O vmdk aos.img aos.vmdk
 	rm -f aos.raw.img
 
+## Test
+test:
+	exit 1
+
 ## Clean
 clean:
 	make -C src clean
