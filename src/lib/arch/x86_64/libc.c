@@ -518,6 +518,14 @@ bzero(void *s, size_t n)
 
 /*
  * Convert ASCII string to integer
+ *
+ * SYNOPSIS
+ *      int
+ *      atoi(const char *str);
+ *
+ * DESCRIPTION
+ *      The atoi() function converts the initial portion of the string pointed
+ *      to by str to int representation.
  */
 int
 atoi(const char *str)
