@@ -10,7 +10,7 @@ ARCH=x86_64
 
 ## Global flags
 ASFLAGS=-nostdlib -I./kernel/arch/$(ARCH)/
-CFLAGS=-I./include -Wall -fleading-underscore -nostdlib -O3 -m64
+CFLAGS=-I./include -Wall -fleading-underscore -nostdinc -nostdlib -O3 -m64
 
 ## Override the flags
 diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
