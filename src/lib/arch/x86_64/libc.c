@@ -517,6 +517,24 @@ bzero(void *s, size_t n)
 }
 
 /*
+ * Convert ASCII string to integer
+ */
+int
+atoi(const char *str)
+{
+    int ret;
+
+    ret = 0;
+    while  ( *str >= '0' && *str <= '9' ) {
+        ret *= 10;
+        ret += *str - '0';
+        str++;
+    }
+
+    return ret;
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4
