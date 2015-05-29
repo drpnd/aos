@@ -13,7 +13,7 @@ CFLAGS=-Wall -O3
 
 libc.o: ../lib/arch/$(ARCH)/libc.c
 	$(CC) -nostdinc -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libc.c
-	objcopy --prefix-symbols=aos_stdc_
+	objcopy --prefix-symbols=aos_stdc_ libc.o
 
 test-libc: test-libc.o libc.o
 	$(CC) -o $@ $?
