@@ -34,8 +34,11 @@ main(int argc, const char *const argv[])
 {
     size_t len;
 
+    /* Test */
     len = aos_stdc_strlen("test");
-    printf("%d\n", len);
+    if ( len != 4 ) {
+        return -1;
+    }
 
     return 0;
 }
