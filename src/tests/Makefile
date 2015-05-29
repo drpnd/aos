@@ -12,7 +12,7 @@ ARCH=x86_64
 CFLAGS=-Wall -O3
 
 libc.o: ../lib/arch/$(ARCH)/libc.c
-	$(CC) -nostdlib -c -o $@ ../lib/arch/$(ARCH)/libc.c
+	$(CC) -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libc.c
 	objcopy --prefix-symbols=aos_stdc_
 
 test-libc: test-libc.o libc.o
