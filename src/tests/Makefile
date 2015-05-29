@@ -20,7 +20,7 @@ libcasm.o: ../lib/arch/$(ARCH)/libcasm.s
 	objcopy --prefix-symbols=aos_stdc $@
 
 test-libc: test-libc.o libc.o libcasm.o
-	$(CC) -o $@ $^
+	$(CC) -o $@ test-libc.o libc.o libcasm.o
 
 test-all: test-libc
 	./test-libc
