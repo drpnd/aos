@@ -10,7 +10,7 @@
 CFLAGS=-Wall -O3
 
 test-libc: test-libc.o
-	$(CC) -o $@ $^
+	$(CC) -o $@ $?
 
 test-all: test-libc
 	./test-libc
