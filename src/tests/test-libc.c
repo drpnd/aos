@@ -47,7 +47,7 @@ test_strlen(void)
 #define TEST_FUNC(str, func, ret)               \
     do {                                        \
         printf("%s: ", str);                    \
-        if ( func() ) {                         \
+        if ( 0 == func() ) {                    \
             printf("passed");                   \
         } else {                                \
             printf("failed");                   \
