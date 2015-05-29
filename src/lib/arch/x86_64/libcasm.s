@@ -32,7 +32,7 @@
 
 /* starting point */
 _start:
-	jmp	_main
+	//jmp	_main
 
 /* int syscall(arg0, ..., arg5) */
 _syscall:

@@ -35,6 +35,7 @@ main(int argc, const char *const argv[])
     size_t len;
 
     len = aos_stdc_strlen("test");
+    printf("%d\n", len);
 
     return 0;
 }
