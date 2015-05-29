@@ -25,9 +25,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Prototype declarations */
 size_t aos_stdc_strlen(const char *);
+int aos_stdc_atoi(const char *);
 
 
+/*
+ * Test strlen
+ */
 int
 test_strlen(void)
 {
@@ -44,6 +49,26 @@ test_strlen(void)
     return 0;
 }
 
+/*
+ * Test atoi
+ */
+int
+test_atoi(void)
+{
+    const char *str[] = {"10", "0d", "31.a"};
+    int i;
+
+    /* Test */
+    for ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
+        if ( atoi(str[i]) != aos_stdc_atoi(str[i]) ) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/* Macro for testing */
 #define TEST_FUNC(str, func, ret)               \
     do {                                        \
         printf("%s: ", str);                    \
@@ -66,8 +91,9 @@ main(int argc, const char *const argv[])
 
     ret = 0;
     TEST_FUNC("strlen", test_strlen, ret);
+    TEST_FUNC("atoi", test_atoi, ret);
 
-    return 0;
+    return ret;
 }
 
 /*
