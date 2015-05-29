@@ -22,7 +22,7 @@ kpack: CFLAGS=-I./include \
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o
-	$(LD) -N -e start -Ttext=0x7c00 --oformat binary -o $@ $^
+	$(LD) -N -e start -Ttext=0x7c00 --oformat binary -o $@ $?
 
 ## Boot monitor
 bootmon: boot/arch/$(ARCH)/bootmon.o \
@@ -31,7 +31,7 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	boot/arch/$(ARCH)/entry32.o \
 	boot/arch/$(ARCH)/entry64.o \
 	boot/arch/$(ARCH)/boot.o
-	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
+	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $?
 
 ## Kernel
 kernel/arch/$(ARCH)/arch.o: include/aos/const.h kernel/kernel.h \
@@ -67,31 +67,31 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/mpq.o \
 	kernel/ramfs.o \
 	kernel/syscall.o
-	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
+	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $?
 
 ## init server
 init: servers/init/init.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## process manager
 pm: servers/pm/pm.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## file system
 fs: servers/fs/fs.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## tty driver
 tty: drivers/tty/tty.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## shell
 pash: bin/pash/pash.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## e1000 driver
 e1000: drivers/e1000/e1000.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $?
 
 ## Clean
 clean:
