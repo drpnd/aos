@@ -24,12 +24,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+size_t aos_stdc_strlen(const char *);
+
 /*
  * Main routine
  */
 int
 main(int argc, const char *const argv[])
 {
+    size_t len;
+
+    len = aos_stdc_strlen("test");
+
     return 0;
 }
 

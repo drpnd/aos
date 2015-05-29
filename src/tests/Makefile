@@ -6,10 +6,16 @@
 #      Hirochika Asai  <asai@jar.jp>
 #
 
+ARCH=x86_64
+
 ## Global flags
 CFLAGS=-Wall -O3
 
-test-libc: test-libc.o
+libc.o: ../lib/arch/$(ARCH)/libc.c
+	$(CC) -nostdinc -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libc.c
+	objcopy --prefix-symbols=aos_stdc_
+
+test-libc: test-libc.o libc.o
 	$(CC) -o $@ $?
 
 test-all: test-libc
