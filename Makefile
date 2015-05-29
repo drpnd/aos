@@ -200,7 +200,7 @@ vmdk: image
 
 ## Test
 test:
-	exit 1
+	make -C src/tests test-all
 
 ## Clean
 clean:
