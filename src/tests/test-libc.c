@@ -49,7 +49,7 @@ test_bzero(void)
     if ( 0 != memcmp(zero, buf0, 10) ) {
         return -1;
     }
-    if ( 0 != memcmp(zero, buf1, 256) ) {
+    if ( 0 != memcmp(zero, buf1, 128) ) {
         return -1;
     }
     if ( 0 != memcmp(zero, buf2, 256) ) {
