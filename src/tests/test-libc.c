@@ -26,8 +26,38 @@
 #include <string.h>
 
 /* Prototype declarations */
+void aos_stdc_bzero(void *, size_t);
 size_t aos_stdc_strlen(const char *);
 int aos_stdc_atoi(const char *);
+
+/*
+ * Test bzero()
+ */
+int
+test_bzero(void)
+{
+    char zero[256];
+    char buf0[256];
+    char buf1[256];
+    char buf2[256];
+
+    /* Test */
+    bzero(zero, 256);
+    aos_stdc_bzero(buf0, 10);
+    aos_stdc_bzero(buf1, 128);
+    aos_stdc_bzero(buf2, 256);
+    if ( 0 != memcmp(zero, buf0, 10) ) {
+        return -1;
+    }
+    if ( 0 != memcmp(zero, buf1, 256) ) {
+        return -1;
+    }
+    if ( 0 != memcmp(zero, buf2, 256) ) {
+        return -1;
+    }
+
+    return 0;
+}
 
 
 /*
