@@ -122,6 +122,7 @@ main(int argc, const char *const argv[])
     ret = 0;
     TEST_FUNC("strlen", test_strlen, ret);
     TEST_FUNC("atoi", test_atoi, ret);
+    TEST_FUNC("bzero", test_bzero, ret);
 
     return ret;
 }
