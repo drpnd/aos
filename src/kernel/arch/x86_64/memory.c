@@ -309,7 +309,6 @@ phys_mem_init(struct bootinfo *bi)
         /* Mark as unavailable */
         phys_mem->pages[i].flags = PHYS_MEM_UNAVAIL;
         phys_mem->pages[i].order = -1;
-        phys_mem->pages[i].refcnt = 0;
     }
 
     /* Check system address map obitaned from BIOS */
