@@ -457,7 +457,6 @@ phys_mem_alloc_pages(int zone, int order)
         return NULL;
     }
 
-
     /* Lock */
     spin_lock(&phys_mem_lock);
 
