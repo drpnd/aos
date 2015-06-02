@@ -51,6 +51,9 @@ struct acpi arch_acpi;
 #define USTACK_INIT     0x80000000ULL - 16
 #define CODE_INIT       0x40000000ULL
 
+#define FLOOR(val, base)        ((val) / (base)) * (base)
+#define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
+
 /*
  * Relocate the trampoline code to a 4 KiB page alined space
  */
@@ -541,6 +544,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     struct page_entry *pgt;
     u64 i;
     u64 j;
+    u64 pg;
     void *exec;
     void *kstack;
     void *ustack;
@@ -588,37 +592,33 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
 
     /* Program */
-    if ( size < PAGESIZE ) {
-        /* Alignment */
-        exec = kmalloc(PAGESIZE);
-    } else {
-        exec = kmalloc(size);
-    }
-    if ( NULL == exec ) {
-        kfree(pgt);
-        return -1;
+    pg = CEIL(size, PAGESIZE) / PAGESIZE;
+    for ( i = 0; i < pg; i++ ) {
+        exec = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+        if ( NULL == exec ) {
+            /* FIXME: free */
+            kfree(pgt);
+            return -1;
+        }
+        /* Copy the executable memory */
+        (void)kmemcpy(exec, entry + i * PAGESIZE, PAGESIZE);
+        pgt[6].entries[i] = ((u64)exec) | 0x087;
     }
     /* Stack */
-    kstack = kmalloc(KSTACK_SIZE);
+    pg = CEIL(KSTACK_SIZE, PAGESIZE) / PAGESIZE;
+    kstack = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(pg));
     if ( NULL == kstack ) {
         kfree(pgt);
-        kfree(exec);
         return -1;
     }
-    ustack = kmalloc(USTACK_SIZE);
+    pg = CEIL(USTACK_SIZE, PAGESIZE) / PAGESIZE;
+    ustack = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(pg));
     if ( NULL == ustack ) {
         kfree(pgt);
-        kfree(exec);
-        kfree(kstack);
+        phys_mem_free_pages(kstack);
         return -1;
     }
 
-    /* Copy the executable memory */
-    (void)kmemcpy(exec, entry, size);
-    for ( i = 0; i < (size - 1) / 4096 + 1; i++ ) {
-        /* Mapping */
-        pgt[6].entries[i] = ((u64)exec + i * PAGESIZE) | 0x087;
-    }
     /* Setup the page table for user stack */
     for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
@@ -645,8 +645,8 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
 
     /* Clean up memory space of the current process */
-    kfree(t->kstack);
-    kfree(t->ustack);
+    phys_mem_free_pages(t->kstack);
+    phys_mem_free_pages(t->ustack);
     t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
 

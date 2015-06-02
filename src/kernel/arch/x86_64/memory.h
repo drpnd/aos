@@ -131,6 +131,7 @@ struct phys_mem_slab_root {
 /* in memory.c */
 int phys_mem_init(struct bootinfo *);
 void * phys_mem_alloc_pages(int, int);
+void * phys_mem_alloc_page(int);
 void phys_mem_free_pages(void *);
 
 #endif /* _KERNEL_MEMORY_H */

@@ -496,6 +496,26 @@ phys_mem_alloc_pages(int zone, int order)
 }
 
 /*
+ * Allocate a physical page
+ *
+ * SYNOPSIS
+ *      void *
+ *      phys_mem_alloc_page(int zone);
+ *
+ * DESCRIPTION
+ *      The phys_mem_alloc_page() function allocates one page.
+ *
+ * RETURN VALUES
+ *      The phys_mem_alloc_page() function returns a pointer to the allocated
+ *      page.  If there is an error, it returns a NULL pointer.
+ */
+void *
+phys_mem_alloc_page(int zone)
+{
+    return phys_mem_alloc_pages(zone, 0);
+}
+
+/*
  * Free allocated 2^order pages
  *
  * SYNOPSIS
