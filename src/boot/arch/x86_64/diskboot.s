@@ -34,12 +34,14 @@ start:
 	cld			/* Clear direction flag */
 				/*  (inc di/si for str ops) */
 
-	/* Setup stack */
 	cli			/* Disable interrupts */
 	xorw	%ax,%ax
+	/* Setup stack */
 	movw	%ax,%ss		/* Stack segment (%ss=0) */
-	movw	%ax,%ds		/* Data segment (%ds=0) */
-	movw	%ax,%es		/* Data segment (%es=0) */
+	movw	$start,%sp	/* Stack pointer */
+	/* Reset data segment registers */
+	movw	%ax,%ds		/* %ds=0 */
+	movw	%ax,%es		/* %es=0 */
 	sti			/* Enable interrupts */
 
 	/* Save drive information */
