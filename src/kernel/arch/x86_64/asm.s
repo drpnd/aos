@@ -83,7 +83,6 @@
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
 	.globl	_sys_fork
-	.globl	_sys_fork_restart
 
 	.set	APIC_LAPIC_ID,0x020
 	.set	APIC_EOI,0x0b0
@@ -401,14 +400,15 @@ _sys_fork:
 	movq	%rsi,%dr1
 	movq	-24(%rsp),%rdx
 	movq	%rdx,%dr2
-	call	_sys_fork_restart
+	call	sys_fork_restart
 1:
+	/* Return upon error */
+	leaveq
 	ret
 
 /* void sys_fork_restart(u64 task, u64 ret0, u64, ret1) */
-_sys_fork_restart:
+sys_fork_restart:
 	movq	%rdx,%rax
-	//addq	$8,%rsp		/* Pop the return point */
 	leaveq			/* Restore the stack */
 	addq	$8,%rsp		/* Pop the return point */
 
@@ -440,8 +440,8 @@ _sys_fork_restart:
 	movq	0(%rbp),%rcx
 	movq	%rcx,-152(%rdx)	/* rbp */
 	movw	$(GDT_RING3_DATA_SEL+3),%cx
-	movw	%cx,-162(%rdx)
-	movw	%cx,-164(%rdx)
+	movw	%cx,-162(%rdx)	/* fs */
+	movw	%cx,-164(%rdx)	/* gs */
 
 	/* Restore */
 	popq	%rbx
