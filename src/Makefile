@@ -18,7 +18,7 @@ bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: CFLAGS=-I./include \
 	-Wall -fleading-underscore -nostdlib -O3 -m64
 kpack: CFLAGS=-I./include \
-	-Wall -fleading-underscore -nostdlib -O0 -m64
+	-Wall -fleading-underscore -nostdlib -O3 -m64
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o

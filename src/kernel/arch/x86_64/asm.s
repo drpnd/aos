@@ -82,6 +82,7 @@
 	.globl	_intr_simd_fpe
 	.globl	_intr_apic_loc_tmr
 	.globl	_intr_crash
+	.globl	_sys_fork
 	.globl	_sys_fork_restart
 
 	.set	APIC_LAPIC_ID,0x020
@@ -380,6 +381,30 @@ syscall_entry:
 	popq	%rbp
 	sysretq
 
+/* pid_t sys_fork(void) */
+_sys_fork:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	subq	$8,%rsp
+	movq	%rsp,%rdi
+	subq	$8,%rsp
+	movq	%rsp,%rsi
+	subq	$8,%rsp
+	movq	%rsp,%rdx
+	call	_sys_fork_c
+	addq	$24,%rsp
+	cmpl	$0,%eax
+	jne	1f
+	movq	-8(%rsp),%rdi
+	movq	%rdi,%dr0
+	movq	-16(%rsp),%rsi
+	movq	%rsi,%dr1
+	movq	-24(%rsp),%rdx
+	movq	%rdx,%dr2
+	call	_sys_fork_restart
+1:
+	ret
+
 /* void sys_fork_restart(u64 task, u64 ret0, u64, ret1) */
 _sys_fork_restart:
 	movq	%rdx,%rax
@@ -618,6 +643,7 @@ _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rdi
+	movq	16(%rbp),%rdi
 	pushq	%rsi
 	movq	%cr2,%rdi	/* virtual address */
 	movq	8(%rbp),%rsi	/* error code */

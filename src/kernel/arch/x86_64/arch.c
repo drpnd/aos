@@ -36,6 +36,8 @@ static int _load_trampoline(void);
 static struct arch_task * _create_idle_task(void);
 static int
 _create_process(struct arch_task *, void (*)(void), size_t, int, void *);
+static struct page_entry * _create_page_table(void);
+static void _free_page_table(struct page_entry *);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
@@ -350,7 +352,10 @@ bsp_init(void)
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
     /* Initialize memory manager */
-    (void)phys_mem_init(bi);
+    if ( phys_mem_init(bi) < 0 ) {
+        panic("Fatal: Could not initialize the physical memory.");
+        return;
+    }
 
     /* Initialize I/O APIC */
     ioapic_init();
@@ -531,6 +536,81 @@ this_cpu(void)
     return pdata;
 }
 
+
+/*
+ * Add PDPE
+ */
+static int
+_add_page_pdpe(struct page_entry *pml4, u64 addr)
+{
+    struct phys_mem_page *page;
+    struct page_entry *ent;
+    int idx;
+
+    page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+    if ( NULL == page ) {
+        return -1;
+    }
+    ent = phys_mem_page_address(page);
+    kmemset(ent, 0, PAGESIZE);
+
+    idx = addr >> 39;
+    pml4->entries[idx] = (u64)ent | 0x007;
+
+    return 0;
+}
+
+/*
+ * Create a page table
+ */
+static struct page_entry *
+_create_page_table(void)
+{
+    struct phys_mem_page *page;
+    struct page_entry *pte;
+    int i;
+    int ret;
+
+    /* PML4 */
+    page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+    if ( NULL == page ) {
+        return NULL;
+    }
+    pte = phys_mem_page_address(page);
+    kmemset(pte, 0, PAGESIZE);
+
+    /* PDPE */
+    for ( i = 0; i < 4; i++ ) {
+        ret = _add_page_pdpe(pte, (u64)i << 39);
+        if ( ret < 0 ) {
+            _free_page_table(pte);
+            return NULL;
+        }
+    }
+
+    return pte;
+}
+
+/*
+ * Free the page table
+ */
+static void
+_free_page_table(struct page_entry *pte)
+{
+    int i;
+    u64 addr;
+
+    for ( i = 0; i < 512; i++ ) {
+        addr = pte->entries[0] & ~(u64)0xfffULL;
+        if ( addr ) {
+            _free_page_table((struct page_entry *)addr);
+        }
+    }
+
+    phys_mem_free_pages(pte);
+}
+
+
 /*
  * Create a new process
  */
@@ -542,6 +622,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     u64 ss;
     u64 flags;
     struct page_entry *pgt;
+    struct phys_mem_page *page;
     u64 i;
     u64 j;
     u64 pg;
@@ -594,28 +675,27 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     /* Program */
     pg = CEIL(size, PAGESIZE) / PAGESIZE;
     for ( i = 0; i < pg; i++ ) {
-        exec = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
-        if ( NULL == exec ) {
+        page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+        if ( NULL == page ) {
             /* FIXME: free */
             kfree(pgt);
             return -1;
         }
+        exec = phys_mem_page_address(page);
         /* Copy the executable memory */
         (void)kmemcpy(exec, entry + i * PAGESIZE, PAGESIZE);
         pgt[6].entries[i] = ((u64)exec) | 0x087;
     }
     /* Stack */
-    pg = CEIL(KSTACK_SIZE, PAGESIZE) / PAGESIZE;
-    kstack = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(pg));
+    kstack = kmalloc(KSTACK_SIZE);
     if ( NULL == kstack ) {
         kfree(pgt);
         return -1;
     }
-    pg = CEIL(USTACK_SIZE, PAGESIZE) / PAGESIZE;
-    ustack = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(pg));
+    ustack = kmalloc(USTACK_SIZE);
     if ( NULL == ustack ) {
         kfree(pgt);
-        phys_mem_free_pages(kstack);
+        kfree(kstack);
         return -1;
     }
 
@@ -645,8 +725,8 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
 
     /* Clean up memory space of the current process */
-    phys_mem_free_pages(t->kstack);
-    phys_mem_free_pages(t->ustack);
+    kfree(t->kstack);
+    kfree(t->ustack);
     t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
 

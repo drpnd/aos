@@ -48,8 +48,8 @@ sys_exit(int status)
  * Create a new process
  *
  * SYNOPSIS
- *      pid_t
- *      sys_fork(void);
+ *      int
+ *      sys_fork_c(u64 *task, u64 *ret0, u64 *ret1);
  *
  * DESCRIPTION
  *
@@ -59,8 +59,8 @@ sys_exit(int status)
  *      the parent process.  Otherwise, a value of -1 is returned to the parent
  *      process and no child process is created.
  */
-pid_t
-sys_fork(void)
+int
+sys_fork_c(u64 *task, u64 *ret0, u64 *ret1)
 {
     int i;
     struct proc *np;
@@ -126,10 +126,11 @@ sys_fork(void)
         ktask_root->r.tail = l;
     }
 
-    sys_fork_restart(nt->arch, 0, pid);
+    *task = (u64)nt->arch;
+    *ret0 = 0;
+    *ret1 = pid;
 
-    /* To prevent compiler errors */
-    return -1;
+    return 0;
 }
 
 /*

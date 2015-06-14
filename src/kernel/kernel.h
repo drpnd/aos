@@ -183,7 +183,6 @@ int ramfs_init(u64 *);
 
 /* in syscall.c */
 void sys_exit(int);
-pid_t sys_fork(void);
 ssize_t sys_read(int, void *, size_t);
 ssize_t sys_write(int, const void *, size_t);
 int sys_open(const char *, int, ...);
@@ -208,6 +207,7 @@ void panic(char *);
 void halt(void);
 struct ktask * task_clone(struct ktask *);
 void task_set_return(struct ktask *, unsigned long long);
+pid_t sys_fork(void);
 void sys_fork_restart(void *, u64, u64);
 
 #endif /* _KERNEL_H */

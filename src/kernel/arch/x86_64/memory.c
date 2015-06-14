@@ -224,6 +224,7 @@ phys_mem_init(struct bootinfo *bi)
 {
     struct bootinfo_sysaddrmap_entry *bse;
     struct phys_mem_buddy_list *list;
+    struct phys_mem_page *page;
     u64 nr;
     u64 addr;
     u64 sz;
@@ -325,10 +326,6 @@ phys_mem_init(struct bootinfo *bi)
                     /* Error */
                     return -1;
                 }
-                /* FIXME */
-                if ( j * PAGESIZE >= 1024ULL * 1024 * 1024 ) {
-                    continue;
-                }
                 /* Unmark unavailable */
                 phys_mem->pages[j].flags &= ~PHYS_MEM_UNAVAIL;
                 if ( j * PAGESIZE <= PHYS_MEM_FREE_ADDR ) {
@@ -403,12 +400,12 @@ phys_mem_init(struct bootinfo *bi)
 
     /* Initialize slab */
     nr = (sizeof(struct phys_mem_slab_root) - 1) / PAGESIZE + 1;
-    phys_mem_slab_head = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
-                                              binorder(nr));
-    if ( NULL == phys_mem_slab_head ) {
+    page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(nr));
+    if ( NULL == page ) {
         /* Cannot allocate pages for the slab allocator */
         return -1;
     }
+    phys_mem_slab_head = phys_mem_page_address(page);
     for ( i = 0; i < PHYS_MEM_SLAB_ORDER; i++ ) {
         phys_mem_slab_head->gslabs[i].partial = NULL;
         phys_mem_slab_head->gslabs[i].full = NULL;
@@ -422,7 +419,7 @@ phys_mem_init(struct bootinfo *bi)
  * Allocate 2^order physical pages
  *
  * SYNOPSIS
- *      void *
+ *      struct phys_mem_page *
  *      phys_mem_alloc_pages(int zone, int order);
  *
  * DESCRIPTION
@@ -432,7 +429,7 @@ phys_mem_init(struct bootinfo *bi)
  *      The phys_mem_alloc_pages() function returns a pointer to allocated page.
  *      If there is an error, it returns a NULL pointer.
  */
-void *
+struct phys_mem_page *
 phys_mem_alloc_pages(int zone, int order)
 {
     size_t i;
@@ -492,14 +489,19 @@ phys_mem_alloc_pages(int zone, int order)
     /* Unlock */
     spin_unlock(&phys_mem_lock);
 
-    return a;
+    /* Testing... */
+    if ( phys_mem_page_address(&phys_mem->pages[(u64)a / PAGESIZE]) != a ) {
+        panic("Error!!!!");
+    }
+
+    return &phys_mem->pages[(u64)a / PAGESIZE];
 }
 
 /*
  * Allocate a physical page
  *
  * SYNOPSIS
- *      void *
+ *      struct phys_mem_page *
  *      phys_mem_alloc_page(int zone);
  *
  * DESCRIPTION
@@ -509,10 +511,35 @@ phys_mem_alloc_pages(int zone, int order)
  *      The phys_mem_alloc_page() function returns a pointer to the allocated
  *      page.  If there is an error, it returns a NULL pointer.
  */
-void *
+struct phys_mem_page *
 phys_mem_alloc_page(int zone)
 {
     return phys_mem_alloc_pages(zone, 0);
+}
+
+/*
+ * Resolve the physical address of the specified page structure
+ *
+ * SYNOPSIS
+ *      void *
+ *      phys_mem_page_address(struct phys_mem_page *page);
+ *
+ * DESCRIPTION
+ *      The phys_mem_page_address() function returns the physical memory address
+ *      corresponding to the specified page structure.
+ *
+ * RETURN VALUES
+ *      The phys_mem_page_address() function returns a pointer to the physical
+ *      memory address corresponding to the page.  If there is an error, it
+ *      returns a NULL pointer.
+ */
+void *
+phys_mem_page_address(struct phys_mem_page *page)
+{
+    if ( NULL == page ) {
+        return NULL;
+    }
+    return (void *)(PAGESIZE * (u64)(page - phys_mem->pages));
 }
 
 /*
@@ -609,6 +636,7 @@ phys_mem_free_pages(void *a)
 void *
 kmalloc(size_t size)
 {
+    struct phys_mem_page *page;
     size_t o;
     void *ptr;
     int nr;
@@ -688,12 +716,13 @@ kmalloc(size_t size)
             /* Align the page to fit to the buddy system, and get the order */
             nr = binorder(CEIL(s, PAGESIZE) / PAGESIZE);
             /* Allocate pages */
-            hdr = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, nr);
-            if ( NULL == hdr ) {
+            page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, nr);
+            if ( NULL == page ) {
                 /* Unlock before return */
                 spin_unlock(&phys_mem_slab_lock);
                 return NULL;
             }
+            hdr = phys_mem_page_address(page);
             /* Calculate the number of slab objects in this block; N.B., + 1 in
                the denominator is the `marks' for each objects. */
             hdr->nr = ((1 << nr) * PAGESIZE - sizeof(struct phys_mem_slab))
@@ -737,8 +766,13 @@ kmalloc(size_t size)
         }
     } else {
         /* Large object: Page allocator */
-        ptr = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
-                                   binorder(CEIL(size, PAGESIZE) / PAGESIZE));
+        page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
+                                    binorder(CEIL(size, PAGESIZE) / PAGESIZE));
+        if ( NULL != page ) {
+            ptr = phys_mem_page_address(page);
+        } else {
+            ptr = NULL;
+        }
     }
 
     /* Unlock */
