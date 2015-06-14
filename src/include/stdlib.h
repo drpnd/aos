@@ -30,6 +30,9 @@
 #define NULL    ((void *)0)
 #endif
 
+#define EXIT_SUCCESS    0
+#define EXIT_FAILURE    -1
+
 void exit(int) __attribute__ ((__noreturn__));
 void * memset(void *, int, size_t);
 
