@@ -79,7 +79,7 @@ main(int argc, char *argv[])
 
     //pid = waitpid(pid, &stat, 0);
     while ( 1 ) {
-        write(0, NULL, 0);
+        //write(0, NULL, 0);
     }
 
     return 0;

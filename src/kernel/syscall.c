@@ -45,7 +45,7 @@ sys_exit(int status)
 }
 
 /*
- * Create a new process
+ * Create a new process (called from the assembly entry code)
  *
  * SYNOPSIS
  *      int

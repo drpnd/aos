@@ -48,7 +48,7 @@ main(int argc, char *argv[])
     snprintf(path, PATH_MAX, "/dev/%s", tty);
     fd = open(path, O_RDWR);
     while ( 1 ) {
-        read(fd, NULL, 0);
+        //read(fd, NULL, 0);
     }
 
     exit(0);
