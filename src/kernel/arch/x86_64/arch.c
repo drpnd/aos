@@ -879,7 +879,7 @@ arch_idle(void)
 void
 isr_general_protection_fault(u64 error)
 {
-
+    panic("FIXME: general protection fault");
 }
 
 /*
