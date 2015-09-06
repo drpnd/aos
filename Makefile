@@ -75,3 +75,9 @@ image:
 	@dd if=src/kpack of=./aos.img bs=1 seek=90624 conv=notrunc > /dev/null 2>&1
 #	Use truncate if your system supports: i.e., truncate aos.img 1474560
 	@printf '\000' | dd of=./aos.img bs=1 seek=1474559 conv=notrunc > /dev/null 2>&1
+
+## Clean
+clean:
+	make -C src clean
+	rm -f initramfs
+	rm -f aos.img
