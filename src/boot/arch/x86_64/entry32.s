@@ -61,6 +61,28 @@ entry32:
 	subl	$P_STACK_GUARD,%eax
 	movl	%eax,%esp
 
+	/* CPU feature check */
+	pushfl
+	popl	%eax
+	btl	$21,%eax		/* CPUID supported? */
+	jz	1f
+	movl	$1,%eax
+	cpuid
+	btl	$25,%ecx		/* SSE supported? */
+	jz	1f
+	btl	$26,%ecx		/* SSE2 supported? */
+	jz	1f
+	btl	$5,%edx			/* PAE supported? */
+	jz	1f
+
+	/* Valid CPU */
+	jmp	2f
+1:
+	movl	$error_msg,%esi
+	call	display_error
+	hlt
+2:
+
 	/* Enable PAE and SSE */
 	movl	$0x00000220,%eax	/* CR4[bit 5] = PAE */
 	movl	%eax,%cr4		/* CR4[bit 9] = OSFXSR */
@@ -119,3 +141,42 @@ pg_setup.2:
 	pushl	$0x08
 	pushl	$entry64
 	lret
+
+/* Display error message */
+display_error:
+	/* Clear screen */
+	movl	$0xb8000,%edi
+	movw	$0x2f20,%ax
+	movl	$80*25,%ecx
+	rep	stosw
+
+	movl	$0xb8000,%edi
+	movb	$0x2f,%ah
+	xorl	%ecx,%ecx
+1:
+	movb	(%esi),%al
+	testb	%al,%al
+	jz	2f
+	movw	%ax,(%edi)
+	incl	%esi
+	addl	$2,%edi
+	incl	%ecx
+	jmp	1b
+2:
+	movw	%cx,%ax
+	andw	$0xff,%ax
+	shlw	$8,%ax
+	orw	$0xf,%ax
+	movw	$0x3d4,%dx
+	outw	%ax,%dx
+	movw	%cx,%ax
+	andw	$0xff00,%ax
+	orw	$0xe,%ax
+	movw	$0x3d4,%dx
+	outw	%ax,%dx
+	ret
+
+	.align	16
+	.data
+error_msg:
+	.asciz	"Unsupported CPU"
