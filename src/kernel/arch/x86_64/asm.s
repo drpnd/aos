@@ -57,6 +57,23 @@
 
 /* Entry point to the 64-bit kernel */
 kstart64:
+	/* Re-configure the stack pointer (for alignment) */
+	/* Obtain APIC ID */
+	xorq	%rax,%rax
+	movl	$0xfee00000,%edx
+	movl	0x20(%edx),%eax		/* APIC ID */
+	shrl	$24,%eax
+	/* P6 family and Pentium processors: [27:24] */
+	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
+
+	/* Setup stack with 16 byte guard */
+	addl	$1,%eax
+	movl	$P_DATA_SIZE,%ebx
+	mull	%ebx			/* [%edx|%eax] = %eax * %ebx */
+	addq	$P_DATA_BASE,%rax
+	subq	$P_STACK_GUARD,%rax
+	movq	%rax,%rsp
+
 	/* Initialize the bootstrap processor */
 	call	_bsp_init
 	/* Start the kernel code */
@@ -65,6 +82,23 @@ kstart64:
 
 /* Entry point for the application processors */
 apstart64:
+	/* Re-configure the stack pointer (for alignment) */
+	/* Obtain APIC ID */
+	xorq	%rax,%rax
+	movl	$0xfee00000,%edx
+	movl	0x20(%edx),%eax		/* APIC ID */
+	shrl	$24,%eax
+	/* P6 family and Pentium processors: [27:24] */
+	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
+
+	/* Setup stack with 16 byte guard */
+	addl	$1,%eax
+	movl	$P_DATA_SIZE,%ebx
+	mull	%ebx			/* [%edx|%eax] = %eax * %ebx */
+	addq	$P_DATA_BASE,%rax
+	subq	$P_STACK_GUARD,%rax
+	movq	%rax,%rsp
+
 	/* Initialize the application processor */
 	call	_ap_init
 	/* Start the kernel code */
