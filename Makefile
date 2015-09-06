@@ -6,9 +6,6 @@
 #      Hirochika Asai  <asai@jar.jp>
 #
 
-KERNEL_SIZE = $(shell stat -f "%z" src/kpack)
-KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
-
 all:
 	@echo "make all is not currently supported."
 
@@ -73,7 +70,7 @@ image:
 	else \
 		printf 'KERNEL     \001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\002\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc > /dev/null 2>&1; \
 	fi
-	@printf "0: %.8x" ${KERNEL_SIZE} | sed -E 's/0: (..)(..)(..)(..)/0: \4\3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=74300 conv=notrunc > /dev/null 2>&1
+	@printf "0: %.8x" `stat -f "%z" src/kpack` | sed -E 's/0: (..)(..)(..)(..)/0: \4\3\2\1/'| xxd -r | dd of=./aos.img bs=1 seek=74300 conv=notrunc > /dev/null 2>&1
 	@dd if=src/kpack of=./aos.img bs=1 seek=90624 conv=notrunc > /dev/null 2>&1
 #	Use truncate if your system supports: i.e., truncate aos.img 1474560
 	@printf '\000' | dd of=./aos.img bs=1 seek=1474559 conv=notrunc > /dev/null 2>&1
