@@ -6,10 +6,6 @@
 #      Hirochika Asai  <asai@jar.jp>
 #
 
-KERNEL_SIZE = $(shell stat -f "%z" src/kpack)
-KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
-
-
 all:
 	@echo "make all is not currently supported."
 
