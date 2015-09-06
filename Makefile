@@ -9,7 +9,6 @@
 KERNEL_SIZE = $(shell stat -f "%z" src/kpack)
 KERNEL_CLS = $(shell expr \( ${KERNEL_SIZE} + 4095 \) / 4096)
 
-
 all:
 	@echo "make all is not currently supported."
 
@@ -30,7 +29,8 @@ image:
 	@printf '\364\353\375' | dd of=./aos.img bs=1 seek=65600 conv=notrunc > /dev/null 2>&1 # 1: hlt; jmp 1b
 	@printf '\125\252' | dd of=./aos.img bs=1 seek=66046 conv=notrunc > /dev/null 2>&1
 	@printf '\370\377\377' | dd of=./aos.img bs=1 seek=66048 conv=notrunc > /dev/null 2>&1
-	@s=2; c=66051; cls=${KERNEL_CLS}; \
+	@s=2; c=66051; ksz=`stat -f "%z" src/kpack`; \
+	cls=`expr \( $$ksz + 4095 \) / 4096`; \
 	if [ $$cls -gt 0 ]; then \
 		i=0; \
 		while [ $$i -lt $$cls ]; do \
@@ -48,7 +48,8 @@ image:
 		done; \
 	fi
 	@printf '\370\377\377' | dd of=./aos.img bs=1 seek=70144 conv=notrunc > /dev/null 2>&1
-	@s=2; c=70147; cls=${KERNEL_CLS}; \
+	@s=2; c=70147; ksz=`stat -f "%z" src/kpack`; \
+	cls=`expr \( $$ksz + 4095 \) / 4096`; \
 	if [ $$cls -gt 0 ]; then \
 		i=0; \
 		while [ $$i -lt $$cls ]; do \
@@ -66,7 +67,8 @@ image:
 		done; \
 	fi
 	@printf 'NO NAME    \010\000\000\000\000\000\000\000\000\000\000\000\000\000\000' | dd of=./aos.img bs=1 seek=74240 conv=notrunc > /dev/null 2>&1
-	@if [ ${KERNEL_CLS} -eq 0 ]; then \
+	@ksz=`stat -f "%z" src/kpack`; cls=`expr \( $$ksz + 4095 \) / 4096`; \
+	if [ $$cls -eq 0 ]; then \
 		printf 'KERNEL     \001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc > /dev/null 2>&1; \
 	else \
 		printf 'KERNEL     \001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\002\000' | dd of=./aos.img bs=1 seek=74272 conv=notrunc > /dev/null 2>&1; \
