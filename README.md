@@ -25,6 +25,7 @@ Hirochika Asai
 | checkpoint 7 | kernload | release/kernload |
 | checkpoint 8 | memmap   | release/memmap   |
 | checkpoint 9 | bspinit  | release/bspinit  |
+| checkpoint a | apinit   | release/apinit  |
 
 ## Checkpoint 0
 The BIOS loads the first sector, first 512 bytes (a.k.a. master boot record)
