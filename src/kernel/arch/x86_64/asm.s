@@ -45,6 +45,11 @@
 
 /* Entry point to the 64-bit kernel */
 kstart64:
+	/* Make the stack pointer alignmented */
+	movq	%rsp,%rax
+	andl	$0xfffffff0,%eax
+	movq	%rax,%rsp
+
 	/* Initialize the bootstrap processor */
 	call	_bsp_init
 	/* Start the kernel code */
@@ -53,6 +58,11 @@ kstart64:
 
 /* Entry point for the application processors */
 apstart64:
+	/* Make the stack pointer alignmented */
+	movq	%rsp,%rax
+	andl	$0xfffffff0,%eax
+	movq	%rax,%rsp
+
 	call	_ap_init
 	jmp	_halt
 
