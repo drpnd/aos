@@ -428,7 +428,7 @@ phys_mem_alloc_pages(int order)
     /* Mark pages ``allocated'' */
     for ( i = (u64)a / PAGESIZE; i < (u64)a / PAGESIZE + (1 << order); i++ ) {
         if ( phys_mem->pages[i].flags & PHYS_MEM_ALLOC ) {
-            panic("Fatal: Invalid operation in phys_mem_alloc_pages().");
+            return -1;
         }
         phys_mem->pages[i].flags |= PHYS_MEM_ALLOC;
     }
