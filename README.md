@@ -25,7 +25,7 @@ Hirochika Asai
 | checkpoint 7 | kernload | release/kernload |
 | checkpoint 8 | memmap   | release/memmap   |
 | checkpoint 9 | bspinit  | release/bspinit  |
-| checkpoint a | bspinit  | release/apinit   |
+| checkpoint a | apinit   | release/apinit   |
 | checkpoint b | lapictmr | release/lapictmr |
 
 ## Checkpoint 0
