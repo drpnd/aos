@@ -76,13 +76,15 @@ entry32:
 	jz	1f
 
 	/* Valid CPU */
-	jmp	2f
+	jmp	3f
 1:
 	movl	$error_msg,%esi
 	call	display_error
-	hlt
 2:
+	hlt
+	jmp	2b
 
+3:
 	/* Enable PAE and SSE */
 	movl	$0x00000220,%eax	/* CR4[bit 5] = PAE */
 	movl	%eax,%cr4		/* CR4[bit 9] = OSFXSR */
