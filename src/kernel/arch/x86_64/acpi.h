@@ -249,6 +249,8 @@ struct acpi {
     u32 acpi_smi_cmd_port;
     u8 acpi_enable_val;
     u8 acpi_cmos_century;
+    /* SRAT */
+    struct acpi_sdt_hdr *srat;
 };
 
 int acpi_load(struct acpi *);
@@ -256,6 +258,9 @@ void acpi_busy_usleep(struct acpi *, u64);
 u32 acpi_get_timer(struct acpi *);
 u64 acpi_get_timer_period(struct acpi *);
 u64 acpi_get_timer_hz(void);
+
+int acpi_lapic_prox_domain(struct acpi *, int);
+int acpi_memory_prox_domain(struct acpi *, u64, u64 *, u64 *);
 
 extern struct acpi arch_acpi;
 

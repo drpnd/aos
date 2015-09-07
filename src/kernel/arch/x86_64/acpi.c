@@ -273,14 +273,17 @@ _parse_srat(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
         case 0:
             /* Local APIC */
             srat_lapic = (struct acpi_sdt_srat_lapic *)srat;
+            (void)srat_lapic;
             break;
         case 1:
             /* Memory */
             srat_memory = (struct acpi_sdt_srat_memory *)srat;
+            (void)srat_memory;
             break;
         case 2:
             /* Local x2APIC */
             srat_lapicx2 = (struct acpi_sdt_srat_lapicx2 *)srat;
+            (void)srat_lapicx2;
             break;
         default:
             /* Unknown */
@@ -344,6 +347,7 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
             }
         } else if ( 0 == kmemcmp((u8 *)tmp->signature, (u8 *)"SRAT ", 4) ) {
             /* SRAT */
+            acpi->srat = tmp;
             if ( !_parse_srat(acpi, tmp) ) {
                 return 0;
             }
@@ -397,6 +401,109 @@ acpi_load(struct acpi *acpi)
 
     /* If not found in the EDBA, check main BIOS area */
     return _rsdp_search_range(acpi, 0xe0000, 0x100000);
+}
+
+/*
+ * Resolve the proximity domain of a local APIC
+ */
+int
+acpi_lapic_prox_domain(struct acpi *acpi, int apicid)
+{
+    u64 addr;
+    struct acpi_sdt_srat_common *srat;
+    struct acpi_sdt_srat_lapic *srat_lapic;
+    u32 len;
+
+    /* Check the pointer to the SRAT */
+    if ( NULL == acpi->srat ) {
+        return -1;
+    }
+
+    len = 0;
+    addr = (u64)acpi->srat;
+    len += sizeof(struct acpi_sdt_hdr) + sizeof(struct acpi_sdt_srat_hdr);
+
+    while ( len < acpi->srat->length ) {
+        srat = (struct acpi_sdt_srat_common *)(addr + len);
+        if ( len + srat->length > acpi->srat->length ) {
+            /* Oversized */
+            break;
+        }
+        switch ( srat->type ) {
+        case 0:
+            /* Local APIC */
+            srat_lapic = (struct acpi_sdt_srat_lapic *)srat;
+            if ( srat_lapic->apic_id == apicid ) {
+                return (u32)srat_lapic->proximity_domain
+                    | ((u32)srat_lapic->proximity_domain2[0] << 8)
+                    | ((u32)srat_lapic->proximity_domain2[1] << 8)
+                    | ((u32)srat_lapic->proximity_domain2[2] << 8);
+            }
+            break;
+        default:
+            /* Other or unknown */
+            ;
+        }
+
+        /* Next entry */
+        len += srat->length;
+    }
+
+    return -1;
+}
+
+/*
+ * Resolve the proximity domain of the physical memory address
+ */
+int
+acpi_memory_prox_domain(struct acpi *acpi, u64 m, u64 *rbase, u64 *rlen)
+{
+    u64 addr;
+    struct acpi_sdt_srat_common *srat;
+    struct acpi_sdt_srat_memory *srat_memory;
+    u32 len;
+    u64 tbase;
+    u64 tlen;
+
+    /* Check the pointer to the SRAT */
+    if ( NULL == acpi->srat ) {
+        return -1;
+    }
+
+    len = 0;
+    addr = (u64)acpi->srat;
+    len += sizeof(struct acpi_sdt_hdr) + sizeof(struct acpi_sdt_srat_hdr);
+
+    while ( len < acpi->srat->length ) {
+        srat = (struct acpi_sdt_srat_common *)(addr + len);
+        if ( len + srat->length > acpi->srat->length ) {
+            /* Oversized */
+            break;
+        }
+        switch ( srat->type ) {
+        case 1:
+            /* Memory */
+            srat_memory = (struct acpi_sdt_srat_memory *)srat;
+            tbase = (u64)srat_memory->base_addr_low |
+                ((u64)srat_memory->base_addr_high << 32);
+            tlen = (u64)srat_memory->length_low |
+                ((u64)srat_memory->length_high << 32);
+            if ( m >= tbase && m < tbase + tlen ) {
+                *rbase = tbase;
+                *rlen = tlen;
+                return srat_memory->proximity_domain;
+            }
+            break;
+        default:
+            /* Other or unknown */
+            ;
+        }
+
+        /* Next entry */
+        len += srat->length;
+    }
+
+    return -1;
 }
 
 /*
