@@ -25,6 +25,7 @@
 #define _KERNEL_MEMORY_H
 
 #include <aos/const.h>
+#include "acpi.h"
 #include "arch.h"
 
 /* Maximum order of buddy system */
@@ -54,6 +55,7 @@ struct phys_mem_buddy {
 struct phys_mem_page {
     u64 flags;
     int order;
+    int prox_domain;
 };
 
 /*
@@ -129,7 +131,7 @@ struct phys_mem_slab_root {
 
 
 /* in memory.c */
-int phys_mem_init(struct bootinfo *);
+int phys_mem_init(struct bootinfo *, struct acpi *);
 struct phys_mem_page * phys_mem_alloc_pages(int, int);
 struct phys_mem_page * phys_mem_alloc_page(int);
 void * phys_mem_page_address(struct phys_mem_page *);

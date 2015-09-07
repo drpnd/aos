@@ -209,18 +209,20 @@ _check_zone(u64 i, int k)
  *
  * SYNOPSIS
  *      int
- *      phys_mem_init(struct bootinfo *bi);
+ *      phys_mem_init(struct bootinfo *bi, struct acpi *acpi);
  *
  * DESCRIPTION
  *      The phys_mem_init() function initializes the page allocator with the
- *      memory map information inherited from the boot monitor.
+ *      memory map information bi inherited from the boot monitor.  The second
+ *      argument acpi is used to determine the proximity domain of the memory
+ *      spaces.
  *
  * RETURN VALUES
  *      If successful, the phys_mem_init() function returns 0.  It returns -1 on
  *      failure.
  */
 int
-phys_mem_init(struct bootinfo *bi)
+phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct bootinfo_sysaddrmap_entry *bse;
     struct phys_mem_buddy_list *list;
@@ -235,6 +237,9 @@ phys_mem_init(struct bootinfo *bi)
     int k;
     int flag;
     int zone;
+    int prox;
+    u64 pxbase;
+    u64 pxlen;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
@@ -306,10 +311,29 @@ phys_mem_init(struct bootinfo *bi)
     phys_mem->pages = (struct phys_mem_page *)addr;
 
     /* Reset flags */
+    pxbase = 0;
+    pxlen = 0;
+    prox = -1;
     for ( i = 0; i < phys_mem->nr; i++ ) {
         /* Mark as unavailable */
         phys_mem->pages[i].flags = PHYS_MEM_UNAVAIL;
         phys_mem->pages[i].order = -1;
+        phys_mem->pages[i].prox_domain = -1;
+
+        /* Check the proximity domain */
+        if ( (u64)i * PAGESIZE >= pxbase
+             && (u64)(i + 1) * PAGESIZE <= pxbase + pxlen ) {
+            phys_mem->pages[i].prox_domain = prox;
+        } else {
+            prox = acpi_memory_prox_domain(acpi, (u64)i * PAGESIZE, &pxbase,
+                                           &pxlen);
+            if ( prox >= 0 ) {
+                phys_mem->pages[i].prox_domain = prox;
+            } else {
+                pxbase = 0;
+                pxlen = 0;
+            }
+        }
     }
 
     /* Check system address map obitaned from BIOS */
@@ -346,6 +370,11 @@ phys_mem_init(struct bootinfo *bi)
     for ( i = 0; i < PHYS_MEM_NR_ZONES; i++ ) {
         for ( j = 0; j < PHYS_MEM_MAX_BUDDY_ORDER; j++ ) {
             phys_mem->zones[i].buddy.heads[j] = NULL;
+        }
+    }
+    for ( i = 0; i < /*1024 * 1024 + 1*/phys_mem->nr; i++ ) {
+        if ( PHYS_MEM_IS_FREE(&phys_mem->pages[i]) ) {
+            *(u64 *)((u64)i * PAGESIZE) = 0;
         }
     }
 
