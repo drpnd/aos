@@ -246,6 +246,53 @@ _parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
     return 1;
 }
 
+/*
+ * Parse ACPI Static Resource Affinity Table (SRAT)
+ */
+static int
+_parse_srat(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
+{
+    u64 addr;
+    struct acpi_sdt_srat_common *srat;
+    struct acpi_sdt_srat_lapic *srat_lapic;
+    struct acpi_sdt_srat_memory *srat_memory;
+    struct acpi_sdt_srat_lapicx2 *srat_lapicx2;
+    u32 len;
+
+    len = 0;
+    addr = (u64)sdt;
+    len += sizeof(struct acpi_sdt_hdr) + sizeof(struct acpi_sdt_srat_hdr);
+
+    while ( len < sdt->length ) {
+        srat = (struct acpi_sdt_srat_common *)(addr + len);
+        if ( len + srat->length > sdt->length ) {
+            /* Oversized */
+            break;
+        }
+        switch ( srat->type ) {
+        case 0:
+            /* Local APIC */
+            srat_lapic = (struct acpi_sdt_srat_lapic *)srat;
+            break;
+        case 1:
+            /* Memory */
+            srat_memory = (struct acpi_sdt_srat_memory *)srat;
+            break;
+        case 2:
+            /* Local x2APIC */
+            srat_lapicx2 = (struct acpi_sdt_srat_lapicx2 *)srat;
+            break;
+        default:
+            /* Unknown */
+            ;
+        }
+
+        /* Next entry */
+        len += srat->length;
+    }
+
+    return 1;
+}
 
 /*
  * Parse Root System Description Table (RSDT/XSDT) in RSDP
@@ -293,6 +340,11 @@ _parse_rsdt(struct acpi *acpi, struct acpi_rsdp *rsdp)
         } else if ( 0 == kmemcmp((u8 *)tmp->signature, (u8 *)"FACP", 4) ) {
             /* FADT */
             if ( !_parse_fadt(acpi, tmp) ) {
+                return 0;
+            }
+        } else if ( 0 == kmemcmp((u8 *)tmp->signature, (u8 *)"SRAT ", 4) ) {
+            /* SRAT */
+            if ( !_parse_srat(acpi, tmp) ) {
                 return 0;
             }
         }

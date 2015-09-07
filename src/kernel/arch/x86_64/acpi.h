@@ -188,6 +188,56 @@ struct acpi_sdt_fadt {
 } __attribute__ ((packed));
 
 /*
+ * SRAT
+ * - acpi_sdt_hdr
+ * - reserved[4+8]
+ * - Static Resource Allocation Structure[n]
+ */
+struct acpi_sdt_srat_common {
+    u8 type;
+    u8 length;
+} __attribute__ ((packed));
+struct acpi_sdt_srat_lapic {
+    u8 type;                    /* 0: Local APIC */
+    u8 length;                  /* 16 */
+    u8 proximity_domain;
+    u8 apic_id;
+    u32 flags;
+    u8 local_sapic_eid;
+    u8 proximity_domain2[3];
+    u32 clock_domain;
+} __attribute__ ((packed));
+struct acpi_sdt_srat_memory {
+    u8 type;                    /* 1: Memory */
+    u8 length;                  /* 40 */
+    u32 proximity_domain;
+    u8 reserved1[2];
+    u32 base_addr_low;
+    u32 base_addr_high;
+    u32 length_low;
+    u32 length_high;
+    u32 reserved2;
+    u32 flags;
+    u8 reserved3[8];
+} __attribute__ ((packed));
+struct acpi_sdt_srat_lapicx2 {
+    u8 type;                    /* 2: Local x2APIC */
+    u8 length;                  /* 24 */
+    u16 reserved1;
+    u32 proximity_domain;
+    u32 x2apic_id;
+    u32 flags;
+    u32 clock_domain;
+    u32 reserved2;
+} __attribute__ ((packed));
+struct acpi_sdt_srat_hdr {
+    /* acpi_sdt_hdr */
+    u8 reserved1[4];
+    u8 reserved2[8];
+    /* acpi_sdt_srat_*[n] */
+} __attribute__ ((packed));
+
+/*
  * ACPI configuration
  */
 struct acpi {
