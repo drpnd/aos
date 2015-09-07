@@ -203,7 +203,8 @@ struct p_data {
     u32 flags;          /* bit 0: enabled (working); bit 1- reserved */
     u32 cpu_id;
     u64 freq;           /* Frequency */
-    u32 reserved[4];
+    int prox_domain;
+    u32 reserved[3];
     u64 stats[IDT_NR];  /* Interrupt counter */
     /* P_TSS_OFFSET */
     struct tss tss;

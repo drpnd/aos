@@ -340,6 +340,7 @@ bsp_init(void)
     idt_load();
 
     /* Load ACPI */
+    kmemset(&arch_acpi, 0, sizeof(struct acpi));
     acpi_load(&arch_acpi);
 
     /* Set up interrupt vector */
@@ -352,7 +353,7 @@ bsp_init(void)
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
     /* Initialize memory manager */
-    if ( phys_mem_init(bi) < 0 ) {
+    if ( phys_mem_init(bi, &arch_acpi) < 0 ) {
         panic("Fatal: Could not initialize the physical memory.");
         return;
     }
@@ -422,6 +423,7 @@ bsp_init(void)
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
+    pdata->prox_domain = acpi_lapic_prox_domain(&arch_acpi, pdata->cpu_id);
     pdata->flags |= 1;
 
     /* Estimate the frequency */
@@ -501,6 +503,7 @@ ap_init(void)
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
+    pdata->prox_domain = acpi_lapic_prox_domain(&arch_acpi, pdata->cpu_id);
     pdata->flags |= 1;
 
     /* Estimate the frequency */
@@ -888,123 +891,15 @@ isr_general_protection_fault(u64 error)
 void
 isr_page_fault(void *addr, u64 error)
 {
+    char buf[512];
+    int i;
+    for ( i = 0; i < 10; i++ ) {
+        buf[i] = '0' + (error % 10);
+        error /= 10;
+    }
+    buf[i] = 0;
+    panic(buf);
     panic("FIXME: page fault");
-}
-
-
-/*
- * Clone the task
- */
-struct ktask *
-task_clone(struct ktask *ot)
-{
-    struct arch_task *t;
-
-    /* Allocate the architecture-specific task structure of a new task */
-    t = kmalloc(sizeof(struct arch_task));
-    if ( NULL == t ) {
-        return NULL;
-    }
-    /* Allocate the kernel task structure of a new task */
-    t->kstack = kmalloc(KSTACK_SIZE);
-    if ( NULL == t->kstack ) {
-        kfree(t);
-        return NULL;
-    }
-    /* Allocate the user stack of a new task */
-    t->ustack = kmalloc(USTACK_SIZE);
-    if ( NULL == t->ustack ) {
-        kfree(t->kstack);
-        kfree(t);
-        return NULL;
-    }
-    /* Allocate the kernel stack of a new task */
-    t->ktask = kmalloc(sizeof(struct ktask));
-    if ( NULL == t->ktask ) {
-        kfree(t->ustack);
-        kfree(t->kstack);
-        kfree(t);
-        return NULL;
-    }
-    t->ktask->arch = t;
-
-    /* Copy the kernel and user stacks */
-    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
-            KSTACK_SIZE);
-    kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
-            USTACK_SIZE);
-
-    /* Setup the restart point */
-    t->rp = (struct stackframe64 *)
-        ((u64)((struct arch_task *)ot->arch)->rp + (u64)t->kstack
-         - (u64)((struct arch_task *)ot->arch)->kstack);
-
-    /* Copy the user memory space */
-    struct page_entry *pgt;
-    u64 i;
-    u64 j;
-    /* Setup page table */
-    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
-    if ( NULL == pgt ) {
-        return NULL;
-    }
-    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* Kernel */
-    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
-    /* PDPT */
-    for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
-    }
-    /* PT (1GB-- +2MiB) */
-    for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
-    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;
-    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
-    for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            /* Not present */
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    /* Kernel */
-    for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
-    }
-    /* Executable */
-    for ( i = 0; i < 512; i++ ) {
-        /* Mapping */
-        pgt[6].entries[i] = ((struct page_entry *)((struct arch_task *)ot->arch)
-                             ->cr3)[6].entries[i];
-    }
-    /* Setup the page table for user stack */
-    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
-        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = ((u64)t->ustack + i * PAGESIZE) | 0x087;
-    }
-    /* Arguments */
-    pgt[516].entries[0] = ((struct page_entry *)((struct arch_task *)ot->arch)
-                           ->cr3)[516].entries[0];
-
-    t->cr3 = (u64)pgt;
-
-    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
-
-
-    return t->ktask;
 }
 
 /*
