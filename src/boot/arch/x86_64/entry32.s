@@ -104,24 +104,11 @@ pg_setup:
 	leal	0x1000(%ebx),%edi
 	leal	0x2007(%ebx),%eax
 	movl	$4,%ecx
-pg_setup.1a:
+pg_setup.1:
 	movl	%eax,(%edi)
 	addl	$8,%edi
 	addl	$0x1000,%eax
-	loop	pg_setup.1a
-	/* PDPE: 4G-512G */
-	movl	$508,%ecx
-	movl	$0x083,%eax
-	movl	$1,%edx
-pg_setup.1b:
-	movl	%edx,4(%edi)
-	movl	%eax,(%edi)
-	addl	$8,%edi
-	addl	$0x40000000,%eax
-	jnc	pg_setup.1c
-	incl	%edx
-pg_setup.1c:
-	loop	pg_setup.1b
+	loop	pg_setup.1
 	/* Page directories (PDE) */
 	leal	0x2000(%ebx),%edi
 	movl	$0x083,%eax
