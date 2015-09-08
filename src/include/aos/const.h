@@ -35,6 +35,8 @@ typedef unsigned int u32;
 typedef unsigned long u64;
 
 typedef u64 reg_t;
+typedef void * ptr_t;
+typedef u32 spinlock_t;
 
 #if !defined(NULL)
 #define NULL    ((void *)0)
