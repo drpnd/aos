@@ -53,6 +53,8 @@ entry64:
 	movw	$0x3d4,%dx
 	outw	%ax,%dx
 
+	sti
+
 	/* Get into the C code */
 	call	_centry		/* Won't return */
 
