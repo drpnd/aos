@@ -416,7 +416,7 @@ acpi_lapic_prox_domain(struct acpi *acpi, int apicid)
 
     /* Check the pointer to the SRAT */
     if ( NULL == acpi->srat ) {
-        return -1;
+        return 0;
     }
 
     len = 0;
@@ -467,7 +467,7 @@ acpi_memory_prox_domain(struct acpi *acpi, u64 m, u64 *rbase, u64 *rlen)
 
     /* Check the pointer to the SRAT */
     if ( NULL == acpi->srat ) {
-        return -1;
+        return 0;
     }
 
     len = 0;
