@@ -61,6 +61,27 @@ bootmon:
 	movb	$0x00,%ah
 	int	$0x10
 
+	/* Get drive parameters */
+get_drive_params:
+	xorw	%ax,%ax
+	movw	%ax,%es		/* Set %es:%di */
+	movw	%ax,%di		/*  to 0x0000:0x0000 */
+	movb	$0x08,%ah	/* Function: Read drive parameter */
+	int	$0x13
+	jc	read_error	/* Error on read */
+	/* Save the sector information */
+	incb	%dh		/* Get # of heads (%dh: last index of heads) */
+	movb	%dh,heads	/* Store */
+	movb	%cl,%al		/* %cl[5:0]: last index of sectors per track */
+	andb	$0x3f,%al	/*  N.B., sector starting with 1 */
+	movb	%al,sectors	/* Store */
+	movb	%ch,%al		/* %cx[7:6]%cx[15:8]: last index of cylinders */
+				/*  then copy %cx[15:8] to %al */
+	movb	%cl,%ah		/* Lower byte to higher byte */
+	shrb	$6,%ah		/* Pick most significant two bits */
+	incw	%ax		/*  N.B., cylinder starting with 0 */
+	movw	%ax,cylinders
+
 	/* Enable A20 */
 	call	enable_a20
 
