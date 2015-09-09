@@ -125,13 +125,16 @@ task_clone(struct ktask *ot)
             = (kmem_paddr((u64)t->ustack) + i * PAGESIZE) | 0x087;
     }
     /* Arguments */
-    pgt[516].entries[0] = ((struct page_entry *)((struct arch_task *)ot->arch)
-                           ->cr3)[516].entries[0];
+    pgt[516].entries[0] = ((struct page_entry *)
+                           ((struct arch_proc *)ot->proc->arch)
+                           ->pgt)[516].entries[0];
 
     t->cr3 = kmem_paddr((u64)pgt);
 
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 
+    /* Set the page table for the process */
+    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     return t->ktask;
 }

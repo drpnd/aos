@@ -896,7 +896,7 @@ isr_page_fault(void *addr, u64 error)
 {
     char buf[512];
     int i;
-    u64 x = (u64)addr;
+    u64 x = (u64)error;
     for ( i = 0; i < 16; i++ ) {
         buf[15 - i] = '0' + (x % 10);
         x /= 10;

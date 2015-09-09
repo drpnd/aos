@@ -660,7 +660,7 @@ kmem_init(void)
     /* First region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
         if ( i < pmem->nr
-             && pmem->superpages[i].flags & (PMEM_WIRED | PMEM_UNAVAIL) ) {
+             && (pmem->superpages[i].flags & (PMEM_WIRED | PMEM_UNAVAIL)) ) {
             kmem->region1[i].address = (size_t)i * SUPERPAGESIZE;
             kmem->region1[i].type = 1;
         } else {
@@ -672,8 +672,8 @@ kmem_init(void)
     /* Second region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
         if ( i + 1536 < pmem->nr
-             && pmem->superpages[1536 + i].flags
-             & (PMEM_WIRED | PMEM_UNAVAIL) ) {
+             && (pmem->superpages[1536 + i].flags
+                 & (PMEM_WIRED | PMEM_UNAVAIL)) ) {
             kmem->region2[i].address = (size_t)(i + 1536) * SUPERPAGESIZE;
             kmem->region2[i].type = 1;
         } else {
@@ -780,7 +780,7 @@ kmem_alloc_pages(int order)
         return NULL;
     }
     for ( i = 0; i < (1LL << order); i++ ) {
-        region[off + i].address = (size_t)paddr + i * SUPERPAGESIZE;
+        region[off + i].address = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
         region[off + i].type = 1;
         ret = kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE,
                          (u64)paddr + (u64)i * SUPERPAGESIZE, 1);

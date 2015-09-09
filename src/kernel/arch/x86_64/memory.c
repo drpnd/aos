@@ -26,15 +26,6 @@
 #include "memory.h"
 #include "../../kernel.h"
 
-/* Flags */
-#define PHYS_MEM_USED           1ULL            /* Managed by buddy system */
-#define PHYS_MEM_WIRED          (1ULL<<1)       /* Wired (kernel use) */
-#define PHYS_MEM_ALLOC          (1ULL<<2)       /* Allocated */
-#define PHYS_MEM_SLAB           (1ULL<<3)       /* For slab */
-#define PHYS_MEM_UNAVAIL        (1ULL<<16)      /* Unavailable space */
-
-#define PHYS_MEM_IS_FREE(x)     (0 == (x)->flags ? 1 : 0)
-
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
