@@ -76,16 +76,13 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         return NULL;
     }
 
-    /* Obtain usable memory size */
+    /* Obtain memory size */
     addr = 0;
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
-        if ( 1 == bse->type ) {
-            /* Usable */
-            if ( bse->base + bse->len > addr ) {
-                /* Get the highest address */
-                addr = bse->base + bse->len;
-            }
+        if ( bse->base + bse->len > addr ) {
+            /* Get the highest address */
+            addr = bse->base + bse->len;
         }
     }
 
@@ -281,7 +278,7 @@ kmem_paddr(u64 vaddr)
         return -1;
     }
 
-    return ent[pd];
+    return (ent[pd] & 0xffffffffffe00000ULL) | (vaddr & 0x1fffffULL);
 }
 
 
