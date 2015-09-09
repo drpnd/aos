@@ -30,6 +30,28 @@
 
 /* Page size */
 #define PAGESIZE                4096
+#define SUPERPAGESIZE           (1ULL << 21)
+
+#define PMEM_USED               1ULL            /* Managed by buddy system */
+#define PMEM_WIRED              (1ULL<<1)       /* Wired (kernel use) */
+#define PMEM_ALLOC              (1ULL<<2)       /* Allocated */
+#define PMEM_SLAB               (1ULL<<3)       /* For slab */
+#define PMEM_UNAVAIL            (1ULL<<16)      /* Unavailable space */
+#define PMEM_IS_FREE(x)         (0 == (x)->flags ? 1 : 0)
+
+#define PMEM_NUMA_MAX_DOMAINS   256
+#define PMEM_MAX_BUDDY_ORDER    9
+
+/* 32 (2^5) byte is the minimum object size of a slab object */
+#define KMEM_SLAB_BASE_ORDER    5
+/* 1024 (2^(5 + 6 - 1)) byte is the maximum object size of a slab object */
+#define KMEM_SLAB_ORDER         6
+/* 2^16 objects in a cache */
+#define KMEM_SLAB_NR_OBJ_ORDER  4
+
+#define KMEM_MAX_BUDDY_ORDER    9
+#define KMEM_REGION_SIZE        512
+
 
 /* Process table size */
 #define PROC_NR                 65536
@@ -59,6 +81,170 @@ struct fildes {
     ssize_t (*read)(struct fildes *, void *, size_t);
     ssize_t (*write)(struct fildes *, const void *, size_t);
     off_t (*lseek)(struct fildes *, off_t, int);
+};
+
+/*
+ * Virtual page
+ */
+struct vmem_page {
+    reg_t addr;
+    int type;
+    struct vmem_page *next;
+};
+
+/*
+ * Virtual memory region
+ */
+struct vmem_region {
+    /* Region */
+    ptr_t start;
+    size_t n;
+
+    /* Pages belonging to this region */
+    struct vmem_page *pages;
+
+    /* Pointer to the next region */
+    struct vmem_region *next;
+};
+
+/*
+ * Virtual memory space
+ */
+struct vmem_space {
+    /* Page table */
+    reg_t *pgt;
+
+    /* Virtual memory region */
+    struct vmem_region *first_region;
+};
+
+/*
+ * Physical page structure (superpage)
+ */
+struct pmem_superpage {
+    u32 flags;
+    int prox_domain;
+    int refcnt;
+    /* Buddy system */
+    int order;
+    struct pmem_superpage *prev;
+    struct pmem_superpage *next;
+};
+
+/*
+ * Buddy system
+ */
+struct pmem_buddy {
+    struct pmem_superpage *heads[PMEM_MAX_BUDDY_ORDER];
+};
+
+/*
+ * NUMA domain
+ */
+struct pmem_numa_domain {
+    struct pmem_buddy buddy;
+};
+
+/*
+ * Physical memory
+ */
+struct pmem {
+    /* Lock */
+    spinlock_t lock;
+    /* The number of superpages */
+    size_t nr;
+    /* Superpages (maintaining flags, proximity domain etc.) */
+    struct pmem_superpage *superpages;
+    /* NUMA domains */
+    struct pmem_numa_domain domains[PMEM_NUMA_MAX_DOMAINS];
+};
+
+/*
+ * A slab object
+ */
+struct kmem_slab_obj {
+    void *addr;
+} __attribute__ ((packed));
+
+/*
+ * Slab objects
+ *  slab_hdr
+ *    object 0
+ *    object 1
+ *    ...
+ */
+struct kmem_slab {
+    /* slab_hdr */
+    struct kmem_slab *next;
+    int nr;
+    int nused;
+    int free;
+    void *obj_head;
+    /* Free marks follows (nr byte) */
+    u8 marks[1];
+    /* Objects follows */
+} __attribute__ ((packed));
+
+/*
+ * Free list of slab objects
+ */
+struct kmem_slab_free_list {
+    struct kmem_slab *partial;
+    struct kmem_slab *full;
+    struct kmem_slab *free;
+} __attribute__ ((packed));
+
+/*
+ * Root data structure of slab objects
+ */
+struct kmem_slab_root {
+    /* Generic slabs */
+    struct kmem_slab_free_list gslabs[KMEM_SLAB_ORDER];
+};
+
+/*
+ * Kernel memory page
+ */
+struct kmem_page {
+    reg_t address;
+    int type;
+    /* Buddy system */
+    struct kmem_page *next;
+};
+
+/*
+ * Kernel memory
+ */
+struct kmem {
+    /* Lock */
+    spinlock_t lock;
+    spinlock_t slab_lock;
+    /* Regions */
+    struct kmem_page region1[KMEM_REGION_SIZE];
+    struct kmem_page region2[KMEM_REGION_SIZE];
+    /* Buddy system */
+    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER];
+
+    /* Slab allocator */
+    struct kmem_slab_root slab;
+};
+
+
+
+
+
+
+
+
+
+/*
+ * Pager
+ */
+typedef void * (*page_alloc_f)(void);
+typedef void (*page_free_f)(void *);
+struct pager {
+    page_alloc_f *alloc_page;
+    page_free_f *free_page;
 };
 
 /*
@@ -155,6 +341,7 @@ struct kevent_handlers {
 };
 
 /* Global variable */
+extern struct pmem *pmem;
 extern struct proc_table *proc_table;
 extern struct ktask_root *ktask_root;
 
@@ -175,6 +362,12 @@ void * kmemcpy(void *__restrict, const void *__restrict, size_t);
 void sched_high(void);
 
 /* in memory.c */
+int pmem_init(struct pmem *);
+struct pmem_superpage * pmem_alloc_superpages(int, int);
+struct pmem_superpage * pmem_alloc_superpage(int);
+void * pmem_superpage_address(struct pmem_superpage *);
+void pmem_free_superpages(struct pmem_superpage *);
+int kmem_init(void);
 void * kmalloc(size_t);
 void kfree(void *);
 
@@ -208,6 +401,8 @@ void halt(void);
 struct ktask * task_clone(struct ktask *);
 void task_set_return(struct ktask *, unsigned long long);
 pid_t sys_fork(void);
+void spin_lock(u32 *);
+void spin_unlock(u32 *);
 
 #endif /* _KERNEL_H */
 

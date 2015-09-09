@@ -16,9 +16,9 @@ CFLAGS=-I./include -Wall -fleading-underscore -nostdinc -nostdlib -O3 -m64
 diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: CFLAGS=-I./include \
-	-Wall -fleading-underscore -nostdlib -O3 -m64
+	-Wall -fleading-underscore -nostdlib -nodefaultlibs -fno-builtin -O3 -m64
 kpack: CFLAGS=-I./include \
-	-Wall -fleading-underscore -nostdlib -O3 -m64
+	-Wall -fleading-underscore -nostdlib -nodefaultlibs -fno-builtin -O3 -m64
 
 ## IPL
 diskboot: boot/arch/$(ARCH)/diskboot.o
@@ -47,7 +47,6 @@ kernel/arch/$(ARCH)/i8254.o: include/aos/const.h kernel/kernel.h \
 	kernel/arch/$(ARCH)/arch.h \
 	kernel/arch/$(ARCH)/i8254.h
 kernel/kernel.o: include/aos/const.h kernel/kernel.h
-kernel/memory.o: include/aos/const.h kernel/kernel.h kernel/memory.h
 kernel/ramfs.o: include/aos/const.h kernel/kernel.h
 kernel/syscall.o: include/aos/const.h kernel/kernel.h
 kpack: kernel/arch/$(ARCH)/asm.o \
@@ -61,7 +60,9 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/ap_entry32.o \
 	kernel/arch/$(ARCH)/ap_entry64.o \
 	kernel/arch/$(ARCH)/vmx.o \
+	kernel/arch/$(ARCH)/task.o \
 	kernel/kernel.o \
+	kernel/memory.o \
 	kernel/sched.o \
 	kernel/rbtree.o \
 	kernel/mpq.o \

@@ -352,9 +352,20 @@ bsp_init(void)
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
-    /* Initialize memory manager */
-    if ( phys_mem_init(bi, &arch_acpi) < 0 ) {
+    /* Initialize the physical memory manager */
+    pmem = arch_pmem_init(bi, &arch_acpi);
+    if ( NULL == pmem ) {
+        panic("Fatal: Could not initialize the machine-specific physical "
+              "memory.");
+        return;
+    }
+    if ( pmem_init(pmem) < 0 ) {
         panic("Fatal: Could not initialize the physical memory.");
+        return;
+    }
+    /* Initialize the kernel memory manager */
+    if ( kmem_init() < 0 ) {
+        panic("Fatal: Could not initialize the kernel memory.");
         return;
     }
 
@@ -539,7 +550,7 @@ this_cpu(void)
     return pdata;
 }
 
-
+#if 0
 /*
  * Add PDPE
  */
@@ -593,7 +604,9 @@ _create_page_table(void)
 
     return pte;
 }
+#endif
 
+#if 0
 /*
  * Free the page table
  */
@@ -612,7 +625,7 @@ _free_page_table(struct page_entry *pte)
 
     phys_mem_free_pages(pte);
 }
-
+#endif
 
 /*
  * Create a new process
@@ -678,13 +691,21 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     /* Program */
     pg = CEIL(size, PAGESIZE) / PAGESIZE;
     for ( i = 0; i < pg; i++ ) {
-        page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+        //page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
+#if 0
         if ( NULL == page ) {
             /* FIXME: free */
             kfree(pgt);
             return -1;
         }
-        exec = phys_mem_page_address(page);
+#endif
+        //exec = phys_mem_page_address(page);
+        exec = kmalloc(PAGESIZE);
+        if ( NULL == exec ) {
+            /* FIXME: free */
+            kfree(pgt);
+            return -1;
+        }
         /* Copy the executable memory */
         (void)kmemcpy(exec, entry + i * PAGESIZE, PAGESIZE);
         pgt[6].entries[i] = ((u64)exec) | 0x087;

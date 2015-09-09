@@ -27,6 +27,7 @@
 #include <aos/const.h>
 #include "acpi.h"
 #include "arch.h"
+#include "../../kernel.h"
 
 /* Maximum order of buddy system */
 #define PHYS_MEM_MAX_BUDDY_ORDER        18
@@ -41,6 +42,9 @@
 #define PHYS_MEM_ZONE_NORMAL    1
 #define PHYS_MEM_ZONE_HIGHMEM   2
 #define PHYS_MEM_NR_ZONES       3
+
+/* Page size for the physical page management */
+#define PHYS_MEM_PAGESIZE       (1ULL << 21)
 
 /*
  * Buddy system
@@ -131,6 +135,7 @@ struct phys_mem_slab_root {
 
 
 /* in memory.c */
+struct pmem * arch_pmem_init(struct bootinfo *, struct acpi *);
 int phys_mem_init(struct bootinfo *, struct acpi *);
 struct phys_mem_page * phys_mem_alloc_pages(int, int);
 struct phys_mem_page * phys_mem_alloc_page(int);

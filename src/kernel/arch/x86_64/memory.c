@@ -38,195 +38,28 @@
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
-static u32 phys_mem_lock;
-static u32 phys_mem_slab_lock;
-static struct phys_mem *phys_mem;
-struct phys_mem_slab_root *phys_mem_slab_head;
-
-/*
- * Split the buddies so that we get at least one buddy at the order o
- */
-static int
-_split(struct phys_mem_buddy *buddy, int o)
-{
-    int ret;
-    struct phys_mem_buddy_list *next;
-
-    /* Check the head of the current order */
-    if ( NULL != buddy->heads[o] ) {
-        /* At least one memory block (buddy) is available in this order. */
-        return 0;
-    }
-
-    /* Check the order */
-    if ( o + 1 >= PHYS_MEM_MAX_BUDDY_ORDER ) {
-        /* No space available */
-        return -1;
-    }
-
-    /* Check the upper order */
-    if ( NULL == buddy->heads[o + 1] ) {
-        /* The upper order is also empty, then try to split one more upper. */
-        ret = _split(buddy, o + 1);
-        if ( ret < 0 ) {
-            /* Cannot get any */
-            return ret;
-        }
-    }
-
-    /* Save next at the upper order */
-    next = buddy->heads[o + 1]->next;
-    /* Split into two */
-    buddy->heads[o] = buddy->heads[o + 1];
-    buddy->heads[o]->prev = NULL;
-    buddy->heads[o]->next
-        = (struct phys_mem_buddy_list *)((u64)buddy->heads[o]
-                                         + (1 << o) * PAGESIZE);
-    buddy->heads[o]->next->prev = buddy->heads[o];
-    buddy->heads[o]->next->next = NULL;
-    /* Remove the split one from the upper order */
-    buddy->heads[o + 1] = next;
-    if ( NULL != buddy->heads[o + 1] ) {
-        buddy->heads[o + 1]->prev = NULL;
-    }
-
-    return 0;
-}
-
-/*
- * Merge buddies onto the upper order on if possible
- */
-static void
-_merge(struct phys_mem_buddy *buddy, struct phys_mem_buddy_list *off, int o)
-{
-    int found;
-    struct phys_mem_buddy_list *p0;
-    struct phys_mem_buddy_list *p1;
-    struct phys_mem_buddy_list *list;
-
-    if ( o + 1 >= PHYS_MEM_MAX_BUDDY_ORDER ) {
-        /* Reached the maximum order */
-        return;
-    }
-
-    /* Get the first page of the upper order */
-    p0 = (struct phys_mem_buddy_list *)((u64)off / (1 << (o + 1)) / PAGESIZE
-                                        * (1 << (o + 1)) * PAGESIZE);
-    /* Get the neighboring buddy */
-    p1 = (struct phys_mem_buddy_list *)((u64)p0 + (1 << o) * PAGESIZE);
-
-    /* Check the current level and remove the pairs */
-    list = buddy->heads[o];
-    found = 0;
-    while ( NULL != list ) {
-        if ( p0 == list || p1 == list ) {
-            /* Found */
-            found++;
-            if ( 2 == found ) {
-                /* Found both */
-                break;
-            }
-        }
-        /* Go to the next one */
-        list = list->next;
-    }
-    if ( 2 != found ) {
-        /* Either of the buddy is not free */
-        return;
-    }
-
-    /* Remove both from the list */
-    if ( p0->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p0->prev;
-        list->next = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = list;
-        }
-    }
-    if ( p1->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p1->prev;
-        list->next = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = list;
-        }
-    }
-
-    /* Prepend it to the upper order */
-    p0->prev = NULL;
-    p0->next = buddy->heads[o + 1];
-    buddy->heads[o + 1] = p0;
-
-    /* Try to merge the upper order of buddies */
-    _merge(buddy, p0, o + 1);
-}
-
-/*
- * Check the zone of the 2^k pages starting at i-th page
- */
-static int
-_check_zone(u64 i, int k)
-{
-    int zone;
-
-    /* Check the zone */
-    if ( i * PAGESIZE < 0x1000000ULL ) {
-        if ( (i + (1 << k)) * PAGESIZE > 0x1000000ULL ) {
-            /* Span different zones */
-            return -1;
-        }
-        zone = PHYS_MEM_ZONE_DMA;
-    } else if ( i * PAGESIZE < 0x40000000ULL ) {
-        if ( (i + (1 << k)) * PAGESIZE > 0x40000000ULL ) {
-            /* Span different zones */
-            return -1;
-        }
-        /* Below 1 GiB */
-        zone = PHYS_MEM_ZONE_NORMAL;
-    } else {
-        zone = PHYS_MEM_ZONE_HIGHMEM;
-    }
-
-    return zone;
-}
-
-
 /*
  * Initialize physical memory
  *
  * SYNOPSIS
- *      int
- *      phys_mem_init(struct bootinfo *bi, struct acpi *acpi);
+ *      struct pmem *
+ *      arch_pmem_init(struct bootinfo *bi, struct acpi *acpi);
  *
  * DESCRIPTION
- *      The phys_mem_init() function initializes the page allocator with the
- *      memory map information bi inherited from the boot monitor.  The second
- *      argument acpi is used to determine the proximity domain of the memory
- *      spaces.
+ *      The arch_pmem_init() function initializes the physical memory manager
+ *      with the memory map information bi inherited from the boot monitor.
+ *      The third argument acpi is used to determine the proximity domain of the
+ *      memory spaces.
  *
  * RETURN VALUES
- *      If successful, the phys_mem_init() function returns 0.  It returns -1 on
- *      failure.
+ *      If successful, the arch_pmem_init() function returns the pointer to the
+ *      physical memory manager.  It returns NULL on failure.
  */
-int
-phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
+struct pmem *
+arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 {
+    struct pmem *pm;
     struct bootinfo_sysaddrmap_entry *bse;
-    struct phys_mem_buddy_list *list;
-    struct phys_mem_page *page;
     u64 nr;
     u64 addr;
     u64 sz;
@@ -234,21 +67,14 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
     u64 b;
     u64 i;
     u64 j;
-    int k;
-    int flag;
-    int zone;
     int prox;
     u64 pxbase;
     u64 pxlen;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
-        return -1;
+        return NULL;
     }
-
-    /* Initialize the lock variable */
-    phys_mem_lock = 0;
-    phys_mem_slab_lock = 0;
 
     /* Obtain usable memory size */
     addr = 0;
@@ -264,8 +90,8 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Calculate required memory size for pages */
-    nr  = CEIL(addr, PAGESIZE) / PAGESIZE;
-    sz = nr * sizeof(struct phys_mem_page) + sizeof(struct phys_mem);
+    nr  = CEIL(addr, SUPERPAGESIZE) / SUPERPAGESIZE;
+    sz = nr * sizeof(struct pmem_superpage) + sizeof(struct pmem);
 
     /* Search free space system address map obitaned from BIOS for the memory
        allocator (calculated above) */
@@ -273,19 +99,21 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
         if ( 1 == bse->type ) {
-            /* Available */
-            a = CEIL(bse->base, PAGESIZE);
-            b = FLOOR(bse->base + bse->len, PAGESIZE);
+            /* Available space from a to b */
+            a = CEIL(bse->base, SUPERPAGESIZE);
+            b = FLOOR(bse->base + bse->len, SUPERPAGESIZE);
 
-            if ( b < PHYS_MEM_FREE_ADDR ) {
-                /* Skip */
+            if ( b < PMEM_LBOUND ) {
+                /* Skip below the lower bound */
                 continue;
-            } else if ( a < PHYS_MEM_FREE_ADDR ) {
-                if ( b - PHYS_MEM_FREE_ADDR >= sz ) {
+            } else if ( a < PMEM_LBOUND ) {
+                /* Check the space from the lower bound to b */
+                if ( b - PMEM_LBOUND >= sz ) {
                     /* Found */
-                    addr = PHYS_MEM_FREE_ADDR;
+                    addr = PMEM_LBOUND;
                     break;
                 } else {
+                    /* Not found, then search another space */
                     continue;
                 }
             } else {
@@ -294,6 +122,7 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
                     addr = a;
                     break;
                 } else {
+                    /* Not found, then search another space */
                     continue;
                 }
             }
@@ -302,33 +131,35 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
 
     /* Could not find available pages for the management structure */
     if ( 0 == addr ) {
-        return -1;
+        return NULL;
     }
 
     /* Setup the memory page management structure */
-    phys_mem = (struct phys_mem *)(addr + nr * sizeof(struct phys_mem_page));
-    phys_mem->nr = nr;
-    phys_mem->pages = (struct phys_mem_page *)addr;
+    pm = (struct pmem *)(addr + nr * sizeof(struct pmem_superpage));
+    kmemset(pm, 0, sizeof(struct pmem));
+    pm->nr = nr;
+    pm->superpages = (struct pmem_superpage *)addr;
 
     /* Reset flags */
     pxbase = 0;
     pxlen = 0;
     prox = -1;
-    for ( i = 0; i < phys_mem->nr; i++ ) {
+    for ( i = 0; i < pm->nr; i++ ) {
         /* Mark as unavailable */
-        phys_mem->pages[i].flags = PHYS_MEM_UNAVAIL;
-        phys_mem->pages[i].order = -1;
-        phys_mem->pages[i].prox_domain = -1;
+        pm->superpages[i].flags = PMEM_UNAVAIL;
+        pm->superpages[i].order = -1;
+        pm->superpages[i].prox_domain = -1;
+        pm->superpages[i].refcnt = 0;
 
         /* Check the proximity domain */
-        if ( (u64)i * PAGESIZE >= pxbase
-             && (u64)(i + 1) * PAGESIZE <= pxbase + pxlen ) {
-            phys_mem->pages[i].prox_domain = prox;
+        if ( i * SUPERPAGESIZE >= pxbase
+             && (i + 1) * SUPERPAGESIZE <= pxbase + pxlen ) {
+            pm->superpages[i].prox_domain = prox;
         } else {
-            prox = acpi_memory_prox_domain(acpi, (u64)i * PAGESIZE, &pxbase,
+            prox = acpi_memory_prox_domain(acpi, i * SUPERPAGESIZE, &pxbase,
                                            &pxlen);
             if ( prox >= 0 ) {
-                phys_mem->pages[i].prox_domain = prox;
+                pm->superpages[i].prox_domain = prox;
             } else {
                 pxbase = 0;
                 pxlen = 0;
@@ -341,582 +172,115 @@ phys_mem_init(struct bootinfo *bi, struct acpi *acpi)
         bse = &bi->sysaddrmap.entries[i];
         if ( 1 == bse->type ) {
             /* Available */
-            a = CEIL(bse->base, PAGESIZE) / PAGESIZE;
-            b = FLOOR(bse->base + bse->len, PAGESIZE) / PAGESIZE;
+            a = CEIL(bse->base, SUPERPAGESIZE) / SUPERPAGESIZE;
+            b = FLOOR(bse->base + bse->len, SUPERPAGESIZE) / SUPERPAGESIZE;
 
             /* Mark as unallocated */
             for ( j = a; j < b; j++ ) {
-                if ( j >= phys_mem->nr ) {
+                if ( j >= pm->nr ) {
                     /* Error */
-                    return -1;
+                    return NULL;
                 }
                 /* Unmark unavailable */
-                phys_mem->pages[j].flags &= ~PHYS_MEM_UNAVAIL;
-                if ( j * PAGESIZE <= PHYS_MEM_FREE_ADDR ) {
+                pm->superpages[j].flags &= ~PMEM_UNAVAIL;
+                if ( j * SUPERPAGESIZE <= PMEM_LBOUND ) {
                     /* Wired by kernel */
-                    phys_mem->pages[j].flags |= PHYS_MEM_WIRED;
+                    pm->superpages[j].flags |= PMEM_WIRED;
                 }
             }
         }
     }
 
     /* Mark self (used by phys_mem and phys_mem->pages) */
-    for ( i = addr / PAGESIZE; i <= CEIL(addr + sz, PAGESIZE) / PAGESIZE;
-          i++ ) {
-        phys_mem->pages[i].flags |= PHYS_MEM_WIRED;
+    for ( i = addr / SUPERPAGESIZE;
+          i <= CEIL(addr + sz, SUPERPAGESIZE) / SUPERPAGESIZE; i++ ) {
+        pm->superpages[i].flags |= PMEM_WIRED;
     }
 
-    /* Initialize buddy system */
-    for ( i = 0; i < PHYS_MEM_NR_ZONES; i++ ) {
-        for ( j = 0; j < PHYS_MEM_MAX_BUDDY_ORDER; j++ ) {
-            phys_mem->zones[i].buddy.heads[j] = NULL;
-        }
-    }
-    for ( i = 0; i < /*1024 * 1024 + 1*/phys_mem->nr; i++ ) {
-        if ( PHYS_MEM_IS_FREE(&phys_mem->pages[i]) ) {
-            *(u64 *)((u64)i * PAGESIZE) = 0;
-        }
-    }
+    return pm;
+}
 
-    /* Add all pages to the buddy system */
-    for ( k = PHYS_MEM_MAX_BUDDY_ORDER - 1; k >= 0; k-- ) {
-        for ( i = 0; i < phys_mem->nr; i += (1 << k) ) {
-            /* Check whether all pages are free */
-            flag = 0;
-            for ( j = 0; j < (1 << k); j++ ) {
-                if ( i + j >= phys_mem->nr ) {
-                    /* Exceeds the upper limit */
-                    flag = 1;
-                    break;
-                }
-                if ( !PHYS_MEM_IS_FREE(&phys_mem->pages[i + j]) ) {
-                    /* Used page */
-                    flag = 1;
-                    break;
-                }
-            }
-            if ( !flag ) {
-                /* Check the zone */
-                zone = _check_zone(i, k);
-                if ( zone < 0 ) {
-                    continue;
-                }
+/*
+ * Remap kernel memory space in the page table
+ */
+int
+kmem_remap(u64 vaddr, u64 paddr, int flag)
+{
+    int pml4;
+    int pdpt;
+    int pd;
+    u64 *ent;
 
-                /* Append this page to the order k in the buddy system */
-                if ( NULL == phys_mem->zones[zone].buddy.heads[k] ) {
-                    /* Empty list */
-                    phys_mem->zones[zone].buddy.heads[k]
-                        = (struct phys_mem_buddy_list *)(i * PAGESIZE);
-                    phys_mem->zones[zone].buddy.heads[k]->prev = NULL;
-                    phys_mem->zones[zone].buddy.heads[k]->next = NULL;
-                } else {
-                    /* Search the tail */
-                    list = phys_mem->zones[zone].buddy.heads[k];
-                    while ( NULL != list->next ) {
-                        list = list->next;
-                    }
-                    list->next = (struct phys_mem_buddy_list *)(i * PAGESIZE);
-                    list->next->prev = list;
-                    list->next->next = NULL;
-                }
-                /* Mark these pages as used (by the buddy system) */
-                for ( j = 0; j < (1 << k); j++ ) {
-                    phys_mem->pages[i + j].flags |= PHYS_MEM_USED;
-                }
-            }
-        }
-    }
+    pml4 = (vaddr >> 39);
+    pdpt = (vaddr >> 30) & 0x1ff;
+    pd = (vaddr >> 21) & 0x1ff;
 
-    /* Initialize slab */
-    nr = (sizeof(struct phys_mem_slab_root) - 1) / PAGESIZE + 1;
-    page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, binorder(nr));
-    if ( NULL == page ) {
-        /* Cannot allocate pages for the slab allocator */
+    /* PML4 */
+    ent = (u64 *)KERNEL_PGT;
+    if ( !(ent[pml4] & 0x1) ) {
+        /* Not present */
         return -1;
     }
-    phys_mem_slab_head = phys_mem_page_address(page);
-    for ( i = 0; i < PHYS_MEM_SLAB_ORDER; i++ ) {
-        phys_mem_slab_head->gslabs[i].partial = NULL;
-        phys_mem_slab_head->gslabs[i].full = NULL;
-        phys_mem_slab_head->gslabs[i].free = NULL;
+    /* PDPT */
+    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
+    if ( 0x1 != (ent[pdpt] & 0x81) ) {
+        /* Not present, or 1-Gbyte page */
+        return -1;
     }
+    /* PD */
+    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
+    if ( 0x81 != (ent[pd] & 0x81) ) {
+        /* Not present, or 4-Kbyte page */
+        return -1;
+    }
+
+    /* Update the entry */
+    if ( flag ) {
+        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x183;
+    } else {
+        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x000;
+    }
+
+    /* Invalidate the TLB cache for this entry */
+    invlpg((void *)(vaddr & 0xffffffffffe00000ULL));
 
     return 0;
 }
 
-/*
- * Allocate 2^order physical pages
- *
- * SYNOPSIS
- *      struct phys_mem_page *
- *      phys_mem_alloc_pages(int zone, int order);
- *
- * DESCRIPTION
- *      The phys_mem_alloc_pages() function allocates 2^order pages.
- *
- * RETURN VALUES
- *      The phys_mem_alloc_pages() function returns a pointer to allocated page.
- *      If there is an error, it returns a NULL pointer.
- */
-struct phys_mem_page *
-phys_mem_alloc_pages(int zone, int order)
+u64
+kmem_paddr(u64 vaddr)
 {
-    size_t i;
-    int ret;
-    struct phys_mem_buddy_list *a;
+    int pml4;
+    int pdpt;
+    int pd;
+    u64 *ent;
 
-    /* Check the argument */
-    if ( order < 0 ) {
-        /* Invalid argument */
-        return NULL;
+    pml4 = (vaddr >> 39);
+    pdpt = (vaddr >> 30) & 0x1ff;
+    pd = (vaddr >> 21) & 0x1ff;
+
+    /* PML4 */
+    ent = (u64 *)KERNEL_PGT;
+    if ( !(ent[pml4] & 0x1) ) {
+        /* Not present */
+        return -1;
+    }
+    /* PDPT */
+    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
+    if ( 0x1 != (ent[pdpt] & 0x81) ) {
+        /* Not present, or 1-Gbyte page */
+        return -1;
+    }
+    /* PD */
+    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
+    if ( 0x81 != (ent[pd] & 0x81) ) {
+        /* Not present, or 4-Kbyte page */
+        return -1;
     }
 
-    /* Check the size */
-    if ( order >= PHYS_MEM_MAX_BUDDY_ORDER ) {
-        /* Oversized request */
-        return NULL;
-    }
-
-    /* Check the zone */
-    if ( zone < 0 || zone >= PHYS_MEM_NR_ZONES ) {
-        /* Invalid zone */
-        return NULL;
-    }
-
-    /* Lock */
-    spin_lock(&phys_mem_lock);
-
-    /* Split first if needed */
-    ret = _split(&phys_mem->zones[zone].buddy, order);
-    if ( ret < 0 ) {
-        /* No memory available */
-        spin_unlock(&phys_mem_lock);
-        return NULL;
-    }
-
-    /* Obtain from the head */
-    a = phys_mem->zones[zone].buddy.heads[order];
-    phys_mem->zones[zone].buddy.heads[order] = a->next;
-    if ( NULL != phys_mem->zones[zone].buddy.heads[order] ) {
-        phys_mem->zones[zone].buddy.heads[order]->prev = NULL;
-    }
-
-    /* Mark pages ``allocated'' */
-    for ( i = (u64)a / PAGESIZE; i < (u64)a / PAGESIZE + (1 << order); i++ ) {
-        if ( phys_mem->pages[i].flags & PHYS_MEM_ALLOC ) {
-            panic("Fatal: Invalid operation in phys_mem_alloc_pages().");
-        }
-        phys_mem->pages[i].flags |= PHYS_MEM_ALLOC;
-    }
-
-    /* Save the order */
-    phys_mem->pages[(u64)a / PAGESIZE].order = order;
-
-    /* Clear the memory for security */
-    kmemset(a, 0, (1 << order) * PAGESIZE);
-
-    /* Unlock */
-    spin_unlock(&phys_mem_lock);
-
-    /* Testing... */
-    if ( phys_mem_page_address(&phys_mem->pages[(u64)a / PAGESIZE]) != a ) {
-        panic("Error!!!!");
-    }
-
-    return &phys_mem->pages[(u64)a / PAGESIZE];
+    return ent[pd];
 }
 
-/*
- * Allocate a physical page
- *
- * SYNOPSIS
- *      struct phys_mem_page *
- *      phys_mem_alloc_page(int zone);
- *
- * DESCRIPTION
- *      The phys_mem_alloc_page() function allocates one page.
- *
- * RETURN VALUES
- *      The phys_mem_alloc_page() function returns a pointer to the allocated
- *      page.  If there is an error, it returns a NULL pointer.
- */
-struct phys_mem_page *
-phys_mem_alloc_page(int zone)
-{
-    return phys_mem_alloc_pages(zone, 0);
-}
-
-/*
- * Resolve the physical address of the specified page structure
- *
- * SYNOPSIS
- *      void *
- *      phys_mem_page_address(struct phys_mem_page *page);
- *
- * DESCRIPTION
- *      The phys_mem_page_address() function returns the physical memory address
- *      corresponding to the specified page structure.
- *
- * RETURN VALUES
- *      The phys_mem_page_address() function returns a pointer to the physical
- *      memory address corresponding to the page.  If there is an error, it
- *      returns a NULL pointer.
- */
-void *
-phys_mem_page_address(struct phys_mem_page *page)
-{
-    if ( NULL == page ) {
-        return NULL;
-    }
-    return (void *)(PAGESIZE * (u64)(page - phys_mem->pages));
-}
-
-/*
- * Free allocated 2^order pages
- *
- * SYNOPSIS
- *      void
- *      phys_mem_free_pages(void *a);
- *
- * DESCRIPTION
- *      The phys_mem_free_pages() function deallocates pages pointed by a.
- *
- * RETURN VALUES
- *      The phys_mem_free_pages() function does not return a value.
- */
-void
-phys_mem_free_pages(void *a)
-{
-    size_t i;
-    u64 p;
-    struct phys_mem_buddy_list *list;
-    int order;
-    int zone;
-
-    /* Get the index of the page */
-    p = (u64)a / PAGESIZE;
-    if ( p >= phys_mem->nr ) {
-        /* Invalid page number */
-        return;
-    }
-    /* Ensure to be aligned */
-    a = (void *)(p * PAGESIZE);
-
-    /* Get the order */
-    order = phys_mem->pages[p].order;
-
-    /* If the order exceeds its maximum, that's something wrong. */
-    if ( order >= PHYS_MEM_MAX_BUDDY_ORDER || order < 0 ) {
-        /* Something is wrong... */
-        return;
-    }
-
-    /* Check the zone */
-    zone = _check_zone(p, order);
-    if ( zone < 0 ) {
-        /* Something went wrong... */
-        return;
-    }
-
-    /* Lock */
-    spin_lock(&phys_mem_lock);
-
-    /* Reset the order */
-    phys_mem->pages[p].order = -1;
-
-    /* Unmark pages ``allocated'' */
-    for ( i = p; i < p + (1 << order); i++ ) {
-        phys_mem->pages[i].flags &= ~PHYS_MEM_ALLOC;
-    }
-
-    /* Return it to the buddy system */
-    list = phys_mem->zones[zone].buddy.heads[order];
-    /* Prepend the returned pages */
-    phys_mem->zones[zone].buddy.heads[order] = a;
-    phys_mem->zones[zone].buddy.heads[order]->prev = NULL;
-    phys_mem->zones[zone].buddy.heads[order]->next = list;
-    if ( NULL != list ) {
-        list->prev = a;
-    }
-
-    /* Merge buddies if possible */
-    _merge(&phys_mem->zones[zone].buddy, a, order);
-
-    /* Unlock */
-    spin_unlock(&phys_mem_lock);
-}
-
-/*
- * Allocate memory space
- * Note that the current implementation does not protect the slab header, so
- * the allocated memory must be carefully used.
- *
- * SYNOPSIS
- *      void *
- *      kmalloc(size_t size);
- *
- * DESCRIPTION
- *      The kmalloc() function allocates size bytes of contiguous memory.
- *
- * RETURN VALUES
- *      The kmalloc() function returns a pointer to allocated memory.  If there
- *      is an error, it returns NULL.
- */
-void *
-kmalloc(size_t size)
-{
-    struct phys_mem_page *page;
-    size_t o;
-    void *ptr;
-    int nr;
-    size_t s;
-    int i;
-    struct phys_mem_slab *hdr;
-
-    /* Get the binary order */
-    o = binorder(size);
-
-    /* Align the order */
-    if ( o < PHYS_MEM_SLAB_BASE_ORDER ) {
-        o = 0;
-    } else {
-        o -= PHYS_MEM_SLAB_BASE_ORDER;
-    }
-
-    /* Lock */
-    spin_lock(&phys_mem_slab_lock);
-
-    if ( o < PHYS_MEM_SLAB_ORDER ) {
-        /* Small object: Slab allocator */
-        if ( NULL != phys_mem_slab_head->gslabs[o].partial ) {
-            /* Partial list is available. */
-            hdr = phys_mem_slab_head->gslabs[o].partial;
-            ptr = (void *)((u64)hdr->obj_head + hdr->free
-                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
-            hdr->marks[hdr->free] = 1;
-            hdr->nused++;
-            if ( hdr->nr <= hdr->nused ) {
-                /* Becomes full */
-                hdr->free = -1;
-                phys_mem_slab_head->gslabs[o].partial = hdr->next;
-                /* Prepend to the full list */
-                hdr->next = phys_mem_slab_head->gslabs[o].full;
-                phys_mem_slab_head->gslabs[o].full = hdr;
-            } else {
-                /* Search free space for the next allocation */
-                for ( i = 0; i < hdr->nr; i++ ) {
-                    if ( 0 == hdr->marks[i] ) {
-                        hdr->free = i;
-                        break;
-                    }
-                }
-            }
-        } else if ( NULL != phys_mem_slab_head->gslabs[o].free ) {
-            /* Partial list is empty, but free list is available. */
-            hdr = phys_mem_slab_head->gslabs[o].free;
-            ptr = (void *)((u64)hdr->obj_head + hdr->free
-                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
-            hdr->marks[hdr->free] = 1;
-            hdr->nused++;
-            if ( hdr->nr <= hdr->nused ) {
-                /* Becomes full */
-                hdr->free = -1;
-                phys_mem_slab_head->gslabs[o].partial = hdr->next;
-                /* Prepend to the full list */
-                hdr->next = phys_mem_slab_head->gslabs[o].full;
-                phys_mem_slab_head->gslabs[o].full = hdr;
-            } else {
-                /* Prepend to the partial list */
-                hdr->next = phys_mem_slab_head->gslabs[o].partial;
-                phys_mem_slab_head->gslabs[o].partial = hdr;
-                /* Search free space for the next allocation */
-                for ( i = 0; i < hdr->nr; i++ ) {
-                    if ( 0 == hdr->marks[i] ) {
-                        hdr->free = i;
-                        break;
-                    }
-                }
-            }
-        } else {
-            /* No free space, then allocate new page for slab objects */
-            s = (1ULL << (o + PHYS_MEM_SLAB_BASE_ORDER
-                       + PHYS_MEM_SLAB_NR_OBJ_ORDER))
-                + sizeof(struct phys_mem_slab);
-            /* Align the page to fit to the buddy system, and get the order */
-            nr = binorder(CEIL(s, PAGESIZE) / PAGESIZE);
-            /* Allocate pages */
-            page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL, nr);
-            if ( NULL == page ) {
-                /* Unlock before return */
-                spin_unlock(&phys_mem_slab_lock);
-                return NULL;
-            }
-            hdr = phys_mem_page_address(page);
-            /* Calculate the number of slab objects in this block; N.B., + 1 in
-               the denominator is the `marks' for each objects. */
-            hdr->nr = ((1 << nr) * PAGESIZE - sizeof(struct phys_mem_slab))
-                / ((1 << (o + PHYS_MEM_SLAB_BASE_ORDER)) + 1);
-            /* Reset counters */
-            hdr->nused = 0;
-            hdr->free = 0;
-            /* Set the address of the first slab object */
-            hdr->obj_head = (void *)((u64)hdr + ((1 << nr) * PAGESIZE)
-                                     - ((1 << (o + PHYS_MEM_SLAB_BASE_ORDER))
-                                        * hdr->nr));
-            /* Reset marks and next cache */
-            kmemset(hdr->marks, 0, hdr->nr);
-            hdr->next = NULL;
-
-            /* Retrieve a slab */
-            ptr = (void *)((u64)hdr->obj_head + hdr->free
-                           * (1 << (o + PHYS_MEM_SLAB_BASE_ORDER)));
-            hdr->marks[hdr->free] = 1;
-            hdr->nused++;
-
-            if ( hdr->nr <= hdr->nused ) {
-                /* Becomes full */
-                hdr->free = -1;
-                phys_mem_slab_head->gslabs[o].partial = hdr->next;
-                /* Prepend to the full list */
-                hdr->next = phys_mem_slab_head->gslabs[o].full;
-                phys_mem_slab_head->gslabs[o].full = hdr;
-            } else {
-                /* Prepend to the partial list */
-                hdr->next = phys_mem_slab_head->gslabs[o].partial;
-                phys_mem_slab_head->gslabs[o].partial = hdr;
-                /* Search free space for the next allocation */
-                for ( i = 0; i < hdr->nr; i++ ) {
-                    if ( 0 == hdr->marks[i] ) {
-                        hdr->free = i;
-                        break;
-                    }
-                }
-            }
-        }
-    } else {
-        /* Large object: Page allocator */
-        page = phys_mem_alloc_pages(PHYS_MEM_ZONE_NORMAL,
-                                    binorder(CEIL(size, PAGESIZE) / PAGESIZE));
-        if ( NULL != page ) {
-            ptr = phys_mem_page_address(page);
-        } else {
-            ptr = NULL;
-        }
-    }
-
-    /* Unlock */
-    spin_unlock(&phys_mem_slab_lock);
-
-    return ptr;
-}
-
-/*
- * Deallocate memory space pointed by ptr
- *
- * SYNOPSIS
- *      void
- *      kfree(void *ptr);
- *
- * DESCRIPTION
- *      The kfree() function deallocates the memory allocation pointed by ptr.
- *
- * RETURN VALUES
- *      The kfree() function does not return a value.
- */
-void
-kfree(void *ptr)
-{
-    int i;
-    int j;
-    int found;
-    u64 asz;
-    struct phys_mem_slab *hdr;
-    struct phys_mem_slab **hdrp;
-
-    /* Lock */
-    spin_lock(&phys_mem_slab_lock);
-
-    if ( 0 == (u64)ptr % PAGESIZE ) {
-        /* Free pages */
-        phys_mem_free_pages(ptr);
-    } else {
-
-        /* Search for each order */
-        for ( i = 0; i < PHYS_MEM_SLAB_BASE_ORDER; i++ ) {
-            asz = (1 << (i + PHYS_MEM_SLAB_BASE_ORDER));
-
-            /* Search from partial */
-            hdrp = &phys_mem_slab_head->gslabs[i].partial;
-
-            /* Continue until the corresponding object found */
-            while ( NULL != *hdrp ) {
-                hdr = *hdrp;
-
-                found = -1;
-                for ( j = 0; j < hdr->nr; j++ ) {
-                    if ( ptr == (void *)((u64)hdr->obj_head + j * asz) ) {
-                        /* Found */
-                        found = j;
-                        break;
-                    }
-                }
-                if ( found >= 0 ) {
-                    hdr->nused--;
-                    hdr->marks[found] = 0;
-                    hdr->free = found;
-                    if ( hdr->nused <= 0 ) {
-                        /* To free list */
-                        *hdrp = hdr->next;
-                        hdr->next = phys_mem_slab_head->gslabs[i].free;
-                        phys_mem_slab_head->gslabs[i].free = hdr;
-                    }
-                    spin_unlock(&phys_mem_slab_lock);
-                    return;
-                }
-                hdrp = &hdr->next;
-            }
-
-            /* Search from full */
-            hdrp = &phys_mem_slab_head->gslabs[i].full;
-
-            /* Continue until the corresponding object found */
-            while ( NULL != *hdrp ) {
-                hdr = *hdrp;
-
-                found = -1;
-                for ( j = 0; j < hdr->nr; j++ ) {
-                    if ( ptr == (void *)((u64)hdr->obj_head + j * asz) ) {
-                        /* Found */
-                        found = j;
-                        break;
-                    }
-                }
-                if ( found >= 0 ) {
-                    hdr->nused--;
-                    hdr->marks[found] = 0;
-                    hdr->free = found;
-                    if ( hdr->nused <= 0 ) {
-                        /* To free list */
-                        *hdrp = hdr->next;
-                        hdr->next = phys_mem_slab_head->gslabs[i].free;
-                        phys_mem_slab_head->gslabs[i].free = hdr;
-                    } else {
-                        /* To partial list */
-                        *hdrp = hdr->next;
-                        hdr->next = phys_mem_slab_head->gslabs[i].partial;
-                        phys_mem_slab_head->gslabs[i].partial = hdr;
-                    }
-                    spin_unlock(&phys_mem_slab_lock);
-                    return;
-                }
-                hdrp = &hdr->next;
-            }
-        }
-    }
-
-    /* Unlock */
-    spin_unlock(&phys_mem_slab_lock);
-}
 
 /*
  * Local variables:
