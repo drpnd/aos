@@ -229,8 +229,8 @@ kmem_remap(u64 vaddr, u64 paddr, int flag)
     }
     /* PD */
     ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
-    if ( 0x81 != (ent[pd] & 0x81) ) {
-        /* Not present, or 4-Kbyte page */
+    if ( 0x01 == (ent[pd] & 0x81) ) {
+        /* Present, and 4-Kbyte page */
         return -1;
     }
 
@@ -247,6 +247,9 @@ kmem_remap(u64 vaddr, u64 paddr, int flag)
     return 0;
 }
 
+/*
+ * Resolve the physical address
+ */
 u64
 kmem_paddr(u64 vaddr)
 {

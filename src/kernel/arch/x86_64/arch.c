@@ -638,7 +638,6 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     u64 ss;
     u64 flags;
     struct page_entry *pgt;
-    struct phys_mem_page *page;
     u64 i;
     u64 j;
     u64 pg;
@@ -914,9 +913,10 @@ isr_page_fault(void *addr, u64 error)
 {
     char buf[512];
     int i;
-    for ( i = 0; i < 10; i++ ) {
-        buf[i] = '0' + (error % 10);
-        error /= 10;
+    u64 x = (u64)addr;
+    for ( i = 0; i < 16; i++ ) {
+        buf[15 - i] = '0' + (x % 10);
+        x /= 10;
     }
     buf[i] = 0;
     panic(buf);

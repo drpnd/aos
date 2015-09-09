@@ -659,7 +659,7 @@ kmem_init(void)
 
     /* First region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
-        if ( pmem->superpages[i].flags & PMEM_WIRED || i < 16 ) {
+        if ( pmem->superpages[i].flags & (PMEM_WIRED | PMEM_UNAVAIL) ) {
             kmem->region1[i].address = (size_t)i * SUPERPAGESIZE;
             kmem->region1[i].type = 1;
         } else {
@@ -742,6 +742,7 @@ kmem_alloc_pages(int order)
     ssize_t i;
     struct kmem_page *region;
     off_t off;
+    int ret;
 
     /* Allocate physical page */
     page = pmem_alloc_superpages(0, order);
@@ -778,8 +779,17 @@ kmem_alloc_pages(int order)
     for ( i = 0; i < (1LL << order); i++ ) {
         region[off + i].address = (size_t)paddr + i * SUPERPAGESIZE;
         region[off + i].type = 1;
-        kmem_remap((u64)vaddr + i * SUPERPAGESIZE,
-                   (u64)paddr + i * SUPERPAGESIZE, 1);
+        ret = kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE,
+                         (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
+        if ( ret < 0 ) {
+            /* Rollback */
+            for ( ; i >= 0; i-- ) {
+                kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
+            }
+            pmem_free_superpages(page);
+            _kpage_free(kpage);
+            return NULL;
+        }
     }
 
     return vaddr;
