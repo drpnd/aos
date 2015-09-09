@@ -36,6 +36,9 @@ struct ktask *
 task_clone(struct ktask *ot)
 {
     struct arch_task *t;
+    struct page_entry *pgt;
+    u64 i;
+    u64 j;
 
     /* Allocate the architecture-specific task structure of a new task */
     t = kmalloc(sizeof(struct arch_task));
@@ -77,9 +80,6 @@ task_clone(struct ktask *ot)
          - (u64)((struct arch_task *)ot->arch)->kstack);
 
     /* Copy the user memory space */
-    struct page_entry *pgt;
-    u64 i;
-    u64 j;
     /* Setup page table */
     pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
     if ( NULL == pgt ) {
