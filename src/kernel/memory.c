@@ -680,12 +680,12 @@ kmem_init(void)
     }
 
     /* Build the buddy system */
-    for ( i = KMEM_REGION_SIZE - 1; i >= KMEM_REGION_SIZE; i-- ) {
+    for ( i = KMEM_REGION_SIZE - 1; i >= 0; i-- ) {
         if ( 0 == kmem->region2[i].type ) {
             _kpage_free(&kmem->region2[i]);
         }
     }
-    for ( i = KMEM_REGION_SIZE - 1; i >= KMEM_REGION_SIZE; i-- ) {
+    for ( i = KMEM_REGION_SIZE - 1; i >= 0; i-- ) {
         if ( 0 == kmem->region1[i].type ) {
             _kpage_free(&kmem->region1[i]);
         }
@@ -729,6 +729,9 @@ kmem_init(void)
     return 0;
 }
 
+/*
+ * Allocate kernel pages
+ */
 void *
 kmem_alloc_pages(int order)
 {
@@ -826,7 +829,6 @@ kmem_free_pages(void *vaddr)
 void *
 kmalloc(size_t size)
 {
-    struct pmem_superpage *page;
     size_t o;
     void *ptr;
     int nr;
@@ -905,13 +907,12 @@ kmalloc(size_t size)
             /* Align the page to fit to the buddy system, and get the order */
             nr = binorder(CEIL(s, SUPERPAGESIZE) / SUPERPAGESIZE);
             /* Allocate pages */
-            page = kmem_alloc_pages(nr);
-            if ( NULL == page ) {
+            hdr = kmem_alloc_pages(nr);
+            if ( NULL == hdr ) {
                 /* Unlock before return */
                 spin_unlock(&kmem->slab_lock);
                 return NULL;
             }
-            hdr = pmem_superpage_address(page);
             /* Calculate the number of slab objects in this block; N.B., + 1 in
                the denominator is the `marks' for each objects. */
             hdr->nr = ((1 << nr) * SUPERPAGESIZE - sizeof(struct kmem_slab))
@@ -955,13 +956,8 @@ kmalloc(size_t size)
         }
     } else {
         /* Large object: Page allocator */
-        page = kmem_alloc_pages(binorder(CEIL(size, SUPERPAGESIZE)
-                                         / SUPERPAGESIZE));
-        if ( NULL != page ) {
-            ptr = pmem_superpage_address(page);
-        } else {
-            ptr = NULL;
-        }
+        ptr = kmem_alloc_pages(binorder(CEIL(size, SUPERPAGESIZE)
+                                        / SUPERPAGESIZE));
     }
 
     /* Unlock */
