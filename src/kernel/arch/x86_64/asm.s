@@ -551,6 +551,7 @@ _set_cr4:
 /* void invlpg(void *) */
 _invlpg:
 	invlpg	(%rdi)
+	ret
 
 /* int vmxon(void *) */
 _vmxon:
