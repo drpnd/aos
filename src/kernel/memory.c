@@ -647,7 +647,7 @@ _kpage_free(struct kmem_page *page)
 int
 kmem_init(void)
 {
-    int i;
+    ssize_t i;
     int ret;
 
     /* Initialize kmem */
@@ -659,7 +659,8 @@ kmem_init(void)
 
     /* First region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
-        if ( pmem->superpages[i].flags & (PMEM_WIRED | PMEM_UNAVAIL) ) {
+        if ( i < pmem->nr
+             && pmem->superpages[i].flags & (PMEM_WIRED | PMEM_UNAVAIL) ) {
             kmem->region1[i].address = (size_t)i * SUPERPAGESIZE;
             kmem->region1[i].type = 1;
         } else {
@@ -670,7 +671,9 @@ kmem_init(void)
 
     /* Second region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
-        if ( pmem->superpages[1536 + i].flags & (PMEM_WIRED | PMEM_UNAVAIL) ) {
+        if ( i + 1536 < pmem->nr
+             && pmem->superpages[1536 + i].flags
+             & (PMEM_WIRED | PMEM_UNAVAIL) ) {
             kmem->region2[i].address = (size_t)(i + 1536) * SUPERPAGESIZE;
             kmem->region2[i].type = 1;
         } else {
@@ -795,6 +798,9 @@ kmem_alloc_pages(int order)
     return vaddr;
 }
 
+/*
+ * Release the kernel pages starting from vaddr
+ */
 void
 kmem_free_pages(void *vaddr)
 {

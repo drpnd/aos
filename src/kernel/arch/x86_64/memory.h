@@ -141,6 +141,7 @@ struct phys_mem_page * phys_mem_alloc_pages(int, int);
 struct phys_mem_page * phys_mem_alloc_page(int);
 void * phys_mem_page_address(struct phys_mem_page *);
 void phys_mem_free_pages(void *);
+u64 kmem_paddr(u64);
 
 #endif /* _KERNEL_MEMORY_H */
 

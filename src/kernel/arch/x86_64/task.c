@@ -87,27 +87,23 @@ task_clone(struct ktask *ot)
     }
     kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
     /* Kernel */
-    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
+    pgt[0].entries[0] = kmem_paddr((u64)&pgt[1]) | 0x007;
     /* PDPT */
     for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
+        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
     }
     /* PT (1GB-- +2MiB) */
     for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
         for ( j = 0; j < 512; j++ ) {
             pgt[2 + i].entries[j] = 0x000;
         }
     }
-    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
-    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;
-    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
+    pgt[2 + 1].entries[0] = kmem_paddr((u64)&pgt[6]) | 0x007;
+    pgt[2 + 1].entries[510] = kmem_paddr((u64)&pgt[516]) | 0x007;
+    pgt[2 + 1].entries[511] = kmem_paddr((u64)&pgt[517]) | 0x007;
     for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
         for ( j = 0; j < 512; j++ ) {
             /* Not present */
             pgt[2 + i].entries[j] = 0x000;
@@ -115,11 +111,7 @@ task_clone(struct ktask *ot)
     }
     /* Kernel */
     for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
+        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
     }
     /* Executable */
     for ( i = 0; i < 512; i++ ) {
@@ -130,13 +122,13 @@ task_clone(struct ktask *ot)
     /* Setup the page table for user stack */
     for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = ((u64)t->ustack + i * PAGESIZE) | 0x087;
+            = (kmem_paddr((u64)t->ustack) + i * PAGESIZE) | 0x087;
     }
     /* Arguments */
     pgt[516].entries[0] = ((struct page_entry *)((struct arch_task *)ot->arch)
                            ->cr3)[516].entries[0];
 
-    t->cr3 = (u64)pgt;
+    t->cr3 = kmem_paddr((u64)pgt);
 
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 

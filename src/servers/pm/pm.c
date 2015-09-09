@@ -31,6 +31,7 @@ int
 main(int argc, char *argv[])
 {
     while ( 1 ) {
+        write(0, NULL, NULL);
     }
     exit(0);
 }

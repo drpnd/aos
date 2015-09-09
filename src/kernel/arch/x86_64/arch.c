@@ -652,27 +652,23 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
     kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
     /* PML4 */
-    pgt[0].entries[0] = (u64)&pgt[1] | 0x007;
+    pgt[0].entries[0] = kmem_paddr((u64)&pgt[1]) | 0x007;
     /* Pages for kernel space (0--1 GiB) */
     for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
+        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
     }
     /* Pages for user space (1--3 GiB) */
     for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
         for ( j = 0; j < 512; j++ ) {
             pgt[2 + i].entries[j] = 0x000;
         }
     }
-    pgt[2 + 1].entries[0] = (u64)&pgt[6] | 0x007;
-    pgt[2 + 1].entries[510] = (u64)&pgt[516] | 0x007;
-    pgt[2 + 1].entries[511] = (u64)&pgt[517] | 0x007;
+    pgt[2 + 1].entries[0] = kmem_paddr((u64)&pgt[6]) | 0x007;
+    pgt[2 + 1].entries[510] = kmem_paddr((u64)&pgt[516]) | 0x007;
+    pgt[2 + 1].entries[511] = kmem_paddr((u64)&pgt[517]) | 0x007;
     for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
+        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
         for ( j = 0; j < 512; j++ ) {
             /* Not present */
             pgt[2 + i].entries[j] = 0x000;
@@ -680,25 +676,12 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     }
     /* Pages for kernel space (3--4 GiB) */
     for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = (u64)&pgt[2 + i] | 0x007;
-        /* PD */
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = (i << 30) | (j << 21) | 0x183;
-        }
+        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
     }
 
     /* Program */
     pg = CEIL(size, PAGESIZE) / PAGESIZE;
     for ( i = 0; i < pg; i++ ) {
-        //page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
-#if 0
-        if ( NULL == page ) {
-            /* FIXME: free */
-            kfree(pgt);
-            return -1;
-        }
-#endif
-        //exec = phys_mem_page_address(page);
         exec = kmalloc(PAGESIZE);
         if ( NULL == exec ) {
             /* FIXME: free */
@@ -707,7 +690,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
         }
         /* Copy the executable memory */
         (void)kmemcpy(exec, entry + i * PAGESIZE, PAGESIZE);
-        pgt[6].entries[i] = ((u64)exec) | 0x087;
+        pgt[6].entries[i] = kmem_paddr((u64)exec) | 0x087;
     }
     /* Stack */
     kstack = kmalloc(KSTACK_SIZE);
@@ -725,10 +708,10 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     /* Setup the page table for user stack */
     for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
         pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = ((u64)ustack + i * PAGESIZE) | 0x087;
+            = (kmem_paddr((u64)ustack) + i * PAGESIZE) | 0x087;
     }
     /* Arguments */
-    pgt[516].entries[0] = (u64)argpg | 0x087;
+    pgt[516].entries[0] = kmem_paddr((u64)argpg) | 0x087;
 
     /* Configure the ring protection by the policy */
     switch ( policy ) {
@@ -764,7 +747,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     t->rp->cs = cs;
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
-    t->cr3 = (u64)pgt;
+    t->cr3 = kmem_paddr((u64)pgt);
 
     /* Set the page table for the client */
     ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
