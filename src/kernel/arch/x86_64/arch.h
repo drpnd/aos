@@ -36,9 +36,9 @@
 /* Lowest memory address managed by memory allocator
  * Note that ISA memory hole (0x00f00000-0x00ffffff) are detected as available
  * in the system memory map obtained from the BIOS, so be carefull if we use
- * the address below 0x01000000 for PHYS_MEM_FREE_ADDR.
+ * the address below 0x01000000 for PMEM_LBOUND.
  */
-#define PHYS_MEM_FREE_ADDR      0x02000000ULL
+#define PMEM_LBOUND             0x02000000ULL
 
 /* Maximum number of processors supported in this operating system */
 #define MAX_PROCESSORS          256
@@ -267,6 +267,7 @@ void * get_cr3(void);
 void set_cr3(void *);
 u64 get_cr4(void);
 void set_cr4(u64);
+void invlpg(void *);
 int vmxon(void *);
 int vmclear(void *);
 int vmptrld(void *);
@@ -275,8 +276,6 @@ u64 vmread(u64);
 int vmlaunch(void);
 int vmresume(void);
 void spin_lock_intr(u32 *);
-void spin_lock(u32 *);
-void spin_unlock(u32 *);
 void spin_unlock_intr(u32 *);
 
 /* in trampoline.s */

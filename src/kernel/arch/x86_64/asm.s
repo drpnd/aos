@@ -65,6 +65,7 @@
 	.globl	_set_cr3
 	.globl	_get_cr4
 	.globl	_set_cr4
+	.globl	_invlpg
 	.globl	_vmxon
 	.globl	_vmclear
 	.globl	_vmptrld
@@ -546,6 +547,10 @@ _get_cr4:
 _set_cr4:
 	movq	%rdi,%cr4
 	ret
+
+/* void invlpg(void *) */
+_invlpg:
+	invlpg	(%rdi)
 
 /* int vmxon(void *) */
 _vmxon:
