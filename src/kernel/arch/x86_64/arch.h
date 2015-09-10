@@ -171,7 +171,7 @@ struct page_entry {
  * Process (architecture specific structure)
  */
  struct arch_proc {
-    /* Page table (cr3) */
+    /* Page table (virtual address of cr3) */
     void *pgt;
     /* Parent structure (architecture-independent generic process structure) */
     struct proc *proc;

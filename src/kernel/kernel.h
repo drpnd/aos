@@ -52,6 +52,8 @@
 #define KMEM_MAX_BUDDY_ORDER    9
 #define KMEM_REGION_SIZE        512
 
+#define VMEM_MAX_BUDDY_ORDER    9
+
 
 /* Process table size */
 #define PROC_NR                 65536
@@ -89,6 +91,7 @@ struct fildes {
 struct vmem_page {
     reg_t addr;
     int type;
+    /* Buddy system */
     struct vmem_page *next;
 };
 
@@ -98,10 +101,13 @@ struct vmem_page {
 struct vmem_region {
     /* Region */
     ptr_t start;
-    size_t n;
+    size_t len;
 
     /* Pages belonging to this region */
     struct vmem_page *pages;
+
+    /* Buddy system */
+    struct vmem_page *heads[VMEM_MAX_BUDDY_ORDER + 1];
 
     /* Pointer to the next region */
     struct vmem_region *next;
@@ -111,11 +117,11 @@ struct vmem_region {
  * Virtual memory space
  */
 struct vmem_space {
-    /* Page table */
-    reg_t *pgt;
-
     /* Virtual memory region */
     struct vmem_region *first_region;
+
+    /* Architecture specific data structure (e.g., page table)  */
+    void *arch;
 };
 
 /*
@@ -135,7 +141,7 @@ struct pmem_superpage {
  * Buddy system
  */
 struct pmem_buddy {
-    struct pmem_superpage *heads[PMEM_MAX_BUDDY_ORDER];
+    struct pmem_superpage *heads[PMEM_MAX_BUDDY_ORDER + 1];
 };
 
 /*
@@ -223,7 +229,7 @@ struct kmem {
     struct kmem_page region1[KMEM_REGION_SIZE];
     struct kmem_page region2[KMEM_REGION_SIZE];
     /* Buddy system */
-    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER];
+    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
 
     /* Slab allocator */
     struct kmem_slab_root slab;
@@ -266,6 +272,9 @@ struct proc {
 
     /* Architecture specific structure; i.e., (struct arch_proc) */
     void *arch;
+
+    /* Memory */
+    struct vmem_space *vmem;
 
     /* Policy */
     int policy;
@@ -370,6 +379,8 @@ void pmem_free_superpages(struct pmem_superpage *);
 int kmem_init(void);
 void * kmalloc(size_t);
 void kfree(void *);
+struct vmem_region * vmem_region_create(void);
+struct vmem_space * vmem_space_create(void);
 
 /* in ramfs.c */
 int ramfs_init(u64 *);

@@ -30,6 +30,49 @@
 #define USTACK_SIZE     (PAGESIZE * 16)
 
 /*
+ * Create a new task
+ */
+struct ktask *
+task_new(void)
+{
+    struct arch_task *t;
+
+    /* Allocate the architecture-specific task structure of a new task */
+    t = kmalloc(sizeof(struct arch_task));
+    if ( NULL == t ) {
+        return NULL;
+    }
+    /* Allocate the kernel task structure of a new task */
+    t->kstack = kmalloc(KSTACK_SIZE);
+    if ( NULL == t->kstack ) {
+        kfree(t);
+        return NULL;
+    }
+    /* Allocate the user stack of a new task */
+    t->ustack = kmalloc(USTACK_SIZE);
+    if ( NULL == t->ustack ) {
+        kfree(t->kstack);
+        kfree(t);
+        return NULL;
+    }
+    /* Allocate the kernel stack of a new task */
+    t->ktask = kmalloc(sizeof(struct ktask));
+    if ( NULL == t->ktask ) {
+        kfree(t->ustack);
+        kfree(t->kstack);
+        kfree(t);
+        return NULL;
+    }
+    t->ktask->arch = t;
+
+    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
+
+    return t->ktask;
+}
+
+
+
+/*
  * Clone the task
  */
 struct ktask *
@@ -116,8 +159,8 @@ task_clone(struct ktask *ot)
     /* Executable */
     for ( i = 0; i < 512; i++ ) {
         /* Mapping */
-        pgt[6].entries[i] = ((struct page_entry *)((struct arch_task *)ot->arch)
-                             ->cr3)[6].entries[i];
+        pgt[6].entries[i] = ((struct page_entry *)((struct arch_proc *)ot->proc
+                                                   ->arch)->pgt)[6].entries[i];
     }
     /* Setup the page table for user stack */
     for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
@@ -125,16 +168,15 @@ task_clone(struct ktask *ot)
             = (kmem_paddr((u64)t->ustack) + i * PAGESIZE) | 0x087;
     }
     /* Arguments */
-    pgt[516].entries[0] = ((struct page_entry *)
-                           ((struct arch_proc *)ot->proc->arch)
-                           ->pgt)[516].entries[0];
+    pgt[516].entries[0] = ((struct page_entry *)((struct arch_proc *)ot->proc
+                                                 ->arch)->pgt)[516].entries[0];
 
     t->cr3 = kmem_paddr((u64)pgt);
 
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 
     /* Set the page table for the process */
-    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
+    //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     return t->ktask;
 }

@@ -36,8 +36,6 @@ static int _load_trampoline(void);
 static struct arch_task * _create_idle_task(void);
 static int
 _create_process(struct arch_task *, void (*)(void), size_t, int, void *);
-static struct page_entry * _create_page_table(void);
-static void _free_page_table(struct page_entry *);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
@@ -549,83 +547,6 @@ this_cpu(void)
 
     return pdata;
 }
-
-#if 0
-/*
- * Add PDPE
- */
-static int
-_add_page_pdpe(struct page_entry *pml4, u64 addr)
-{
-    struct phys_mem_page *page;
-    struct page_entry *ent;
-    int idx;
-
-    page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
-    if ( NULL == page ) {
-        return -1;
-    }
-    ent = phys_mem_page_address(page);
-    kmemset(ent, 0, PAGESIZE);
-
-    idx = addr >> 39;
-    pml4->entries[idx] = (u64)ent | 0x007;
-
-    return 0;
-}
-
-/*
- * Create a page table
- */
-static struct page_entry *
-_create_page_table(void)
-{
-    struct phys_mem_page *page;
-    struct page_entry *pte;
-    int i;
-    int ret;
-
-    /* PML4 */
-    page = phys_mem_alloc_page(PHYS_MEM_ZONE_NORMAL);
-    if ( NULL == page ) {
-        return NULL;
-    }
-    pte = phys_mem_page_address(page);
-    kmemset(pte, 0, PAGESIZE);
-
-    /* PDPE */
-    for ( i = 0; i < 4; i++ ) {
-        ret = _add_page_pdpe(pte, (u64)i << 39);
-        if ( ret < 0 ) {
-            _free_page_table(pte);
-            return NULL;
-        }
-    }
-
-    return pte;
-}
-#endif
-
-#if 0
-/*
- * Free the page table
- */
-static void
-_free_page_table(struct page_entry *pte)
-{
-    int i;
-    u64 addr;
-
-    for ( i = 0; i < 512; i++ ) {
-        addr = pte->entries[0] & ~(u64)0xfffULL;
-        if ( addr ) {
-            _free_page_table((struct page_entry *)addr);
-        }
-    }
-
-    phys_mem_free_pages(pte);
-}
-#endif
 
 /*
  * Create a new process
