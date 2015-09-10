@@ -37,4 +37,5 @@ ap_entry64:
 	movl	%eax,%es
 	movl	%eax,%fs
 	movl	%eax,%gs
+	sti
 	jmp	apstart64
