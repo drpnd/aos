@@ -90,6 +90,10 @@ tty: drivers/tty/tty.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 pash: bin/pash/pash.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
 
+## PCI driver
+pci: drivers/pci/pci.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
+	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+
 ## e1000 driver
 e1000: drivers/e1000/e1000.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
 	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^

@@ -21,35 +21,37 @@
  * SOFTWARE.
  */
 
-#ifndef _AOS_TYPES_H
-#define _AOS_TYPES_H
+#ifndef _PCI_H
+#define _PCI_H
 
-#if __LP64__
+#include <stdint.h>
 
-typedef signed long long ssize_t;
-typedef unsigned long long size_t;
-typedef signed long long off_t;
-typedef signed int pid_t;
-typedef signed int uid_t;
-typedef signed int gid_t;
+/*
+ * PCI configuration space
+ */
+struct pci_dev_conf {
+    uint16_t bus;
+    uint16_t slot;
+    uint16_t func;
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint8_t intr_pin;   /* 0x01: INTA#, 0x02: INTB#, 0x03: INTC#: 0x04: INTD# */
+    uint8_t intr_line;  /* 0xff: No connection */
+    uint8_t class;
+    uint8_t subclass;
+    uint8_t progif;
+    uint8_t revision;
+};
 
-/* Unsigned integer */
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned int uint32_t;
-typedef unsigned long long int uint64_t;
+/*
+ * PCI device
+ */
+struct pci_dev {
+    struct pci_dev_conf *device;
+    struct pci_dev *next;
+};
 
-/* Signed integer */
-typedef signed char int8_t;
-typedef signed short int16_t;
-typedef signed int int32_t;
-typedef signed long long int int64_t;
-
-#else
-#error "Must be LP64"
 #endif
-
-#endif /* _AOS_CONST_H */
 
 /*
  * Local variables:
