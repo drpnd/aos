@@ -543,6 +543,22 @@ atoi(const char *str)
 }
 
 /*
+ * Architecture-specific system call
+ *
+ * SYNOPSIS
+ *      int
+ *      sysarch(int number, void *args);
+ *
+ * DESCRIPTION
+ *      The sysarch() function calls the architecture-specific system call.
+ */
+int
+sysarch(int number, void *args)
+{
+    return syscall(SYS_sysarch, number, args);
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4
