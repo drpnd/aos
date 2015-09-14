@@ -35,6 +35,7 @@ main(int argc, char *argv[])
     pid_t pid;
     //int stat;
     char *tty_args[] = {"/drivers/tty", "tty0", NULL};
+    char *pci_args[] = {"/drivers/pci", NULL};
     char *e1000_args[] = {"/drivers/e1000", NULL};
 
     /* fork */
@@ -47,6 +48,26 @@ main(int argc, char *argv[])
     case 0:
         /* The child process */
         ret = execve("/drivers/tty", tty_args, NULL);
+        if ( ret < 0 ) {
+            /* Error */
+            return -1;
+        }
+        break;
+    default:
+        /* The parent process */
+        ;
+    }
+
+    /* fork */
+    pid = fork();
+    switch ( pid ) {
+    case -1:
+        /* Error */
+        exit(-1);
+        break;
+    case 0:
+        /* The child process */
+        ret = execve("/drivers/pci", pci_args, NULL);
         if ( ret < 0 ) {
             /* Error */
             return -1;
