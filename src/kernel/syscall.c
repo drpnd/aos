@@ -24,7 +24,15 @@
 #include <aos/const.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <machine/sysarch.h>
 #include "kernel.h"
+
+typedef __builtin_va_list va_list;
+#define va_start(ap, last)      __builtin_va_start((ap), (last))
+#define va_arg                  __builtin_va_arg
+#define va_end(ap)              __builtin_va_end(ap)
+#define va_copy(dest, src)      __builtin_va_copy((dest), (src))
+#define alloca(size)            __builtin_alloca((size))
 
 /*
  * Exit a process
@@ -101,6 +109,7 @@ sys_fork_c(u64 *task, u64 *ret0, u64 *ret1)
         return -1;
     }
     kmemset(np, 0, sizeof(struct proc));
+    kmemcpy(np->name, this_ktask()->proc->name, 1024); /* FIXME */
     nt = task_clone(t);
     if ( NULL == nt ) {
         kfree(l);
@@ -274,6 +283,8 @@ sys_open(const char *path, int oflag, ...)
     if ( NULL == t ) {
         return -1;
     }
+    /* FIXME */
+    kmemcpy(t->proc->name, path, kstrlen(path) + 1);
 
     return -1;
 }
@@ -675,6 +686,29 @@ sys_munmap(void *addr, size_t len)
 off_t
 sys_lseek(int fildes, off_t offset, int whence)
 {
+    return -1;
+}
+
+/*
+ * Architecture specific system call
+ */
+int
+sys_sysarch(int number, void *args)
+{
+    struct sysarch_io *io;
+
+    switch ( number ) {
+    case SYSARCH_INL:
+        io = (struct sysarch_io *)args;
+        io->data = inl(io->port);
+        return 0;
+    case SYSARCH_OUTL:
+        io = (struct sysarch_io *)args;
+        outl(io->port, io->data);
+        return 0;
+    default:
+        ;
+    }
     return -1;
 }
 

@@ -272,6 +272,131 @@ kmem_paddr(u64 vaddr)
     return (ent[pd] & 0xffffffffffe00000ULL) | (vaddr & 0x1fffffULL);
 }
 
+/*
+ * Initialize the architecture-specific virtual memory data structure
+ */
+int
+vmem_arch_init(struct vmem_space *vmem)
+{
+    struct arch_vmem_space *arch;
+    u64 *ent;
+    int i;
+
+    /* Allocate an architecture-specific virtual memory space */
+    arch = kmalloc(sizeof(struct arch_vmem_space));
+    if ( NULL == arch ) {
+        return -1;
+    }
+    arch->pgt = kmalloc(SUPERPAGESIZE);
+    if ( NULL == arch->pgt ) {
+        kfree(arch);
+        return -1;
+    }
+    vmem->arch = arch;
+
+    /* Setup the kernel region */
+
+    /* PML4 */
+    ent = (u64 *)arch->pgt;
+    ent[0] = kmem_paddr((u64)&ent[512]) | 0xf;
+
+    /* PDPT */
+    ent[512] = (KERNEL_PGT + 4096 * 2) | 0x7;
+    ent[513] = kmem_paddr((u64)&ent[1024]) | 0xf;
+    ent[514] = kmem_paddr((u64)&ent[1536]) | 0xf;
+    ent[515] = (KERNEL_PGT + 4096 * 5) | 0x7;
+
+    /* PD */
+    for ( i = 0; i < 1024; i++ ) {
+        ent[2048 + i] = 0;
+    }
+
+    return 0;
+}
+
+/*
+ * Remap virtual memory space in the page table
+ */
+int
+vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
+{
+    int pml4;
+    int pdpt;
+    int pd;
+    u64 *ent;
+
+    pml4 = (vaddr >> 39);
+    pdpt = (vaddr >> 30) & 0x1ff;
+    pd = (vaddr >> 21) & 0x1ff;
+
+    /* PML4 */
+    ent = ((struct arch_vmem_space *)vmem->arch)->pgt;
+    if ( !(ent[pml4] & 0x1) ) {
+        /* Not present */
+        return -1;
+    }
+    /* PDPT */
+    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
+    if ( 0x1 != (ent[pdpt] & 0x81) ) {
+        /* Not present, or 1-Gbyte page */
+        return -1;
+    }
+    /* PD */
+    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
+    if ( 0x01 == (ent[pd] & 0x81) ) {
+        /* Present, and 4-Kbyte page */
+        return -1;
+    }
+
+    /* Update the entry */
+    if ( flag ) {
+        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x087;
+    } else {
+        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x000;
+    }
+
+    /* Invalidate the TLB cache for this entry */
+    invlpg((void *)(vaddr & 0xffffffffffe00000ULL));
+
+    return 0;
+}
+
+/*
+ * Resolve the physical address
+ */
+u64
+vmem_paddr(struct vmem_space *vmem, u64 vaddr)
+{
+    int pml4;
+    int pdpt;
+    int pd;
+    u64 *ent;
+
+    pml4 = (vaddr >> 39);
+    pdpt = (vaddr >> 30) & 0x1ff;
+    pd = (vaddr >> 21) & 0x1ff;
+
+    /* PML4 */
+    ent = ((struct arch_vmem_space *)vmem->arch)->pgt;
+    if ( !(ent[pml4] & 0x1) ) {
+        /* Not present */
+        return -1;
+    }
+    /* PDPT */
+    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
+    if ( 0x1 != (ent[pdpt] & 0x81) ) {
+        /* Not present, or 1-Gbyte page */
+        return -1;
+    }
+    /* PD */
+    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
+    if ( 0x81 != (ent[pd] & 0x81) ) {
+        /* Not present, or 4-Kbyte page */
+        return -1;
+    }
+
+    return (ent[pd] & 0xffffffffffe00000ULL) | (vaddr & 0x1fffffULL);
+}
 
 /*
  * Local variables:

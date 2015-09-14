@@ -33,23 +33,16 @@
 
 /* Prototype declarations */
 static int _load_trampoline(void);
-static struct arch_task * _create_idle_task(void);
 static int
 _create_process(struct arch_task *, void (*)(void), size_t, int, void *);
+
+int vmem_remap(struct vmem_space *, u64, u64, int);
 
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
 
 /* ACPI structure */
 struct acpi arch_acpi;
-
-#define KSTACK_SIZE     PAGESIZE
-#define USTACK_SIZE     (PAGESIZE * 16)
-
-
-#define INITRAMFS_BASE  0x20000ULL
-#define USTACK_INIT     0x80000000ULL - 16
-#define CODE_INIT       0x40000000ULL
 
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
@@ -74,58 +67,6 @@ _load_trampoline(void)
     }
 
     return 0;
-}
-
-/*
- * Create an idle task
- */
-static struct arch_task *
-_create_idle_task(void)
-{
-    struct arch_task *t;
-
-    t = kmalloc(sizeof(struct arch_task));
-    if ( NULL == t ) {
-        return NULL;
-    }
-    t->kstack = kmalloc(PAGESIZE);
-    if ( NULL == t->kstack ) {
-        kfree(t);
-        return NULL;
-    }
-    t->ustack = kmalloc(PAGESIZE);
-    if ( NULL == t->ustack ) {
-        kfree(t->kstack);
-        kfree(t);
-        return NULL;
-    }
-    t->ktask = kmalloc(sizeof(struct ktask));
-    if ( NULL == t->ktask ) {
-        kfree(t->ustack);
-        kfree(t->kstack);
-        kfree(t);
-        return NULL;
-    }
-    t->ktask->arch = t;
-    //t->ktask->state = KTASK_STATE_CREATED;
-    t->ktask->state = KTASK_STATE_READY;
-    t->ktask->proc = NULL;
-    t->ktask->next = NULL;
-
-    t->rp = t->kstack + PAGESIZE - 16 - sizeof(struct stackframe64);
-
-    /* Idle task runs at ring 0. */
-    t->rp->cs = GDT_RING0_CODE_SEL;
-    t->rp->ss = GDT_RING0_DATA_SEL;
-    t->rp->ip = (u64)arch_idle;
-    t->rp->sp = (u64)t->ustack + PAGESIZE - 16;
-    t->rp->flags = 0x0200;
-    t->sp0 = (u64)t->kstack + PAGESIZE - 16;
-
-    /* Page table */
-    t->cr3 = KERNEL_PGT;
-
-    return t;
 }
 
 /*
@@ -155,17 +96,37 @@ _create_init_server(void)
         return -1;
     }
 
+    struct proc *proc;
+    struct vmem_page *vpage;
+    struct pmem_superpage *ppage;
+    void *paddr;
+
+    proc = kmalloc(sizeof(struct proc));
+    if ( NULL == proc ) {
+        return -1;
+    }
+    kstrlcpy(proc->name, "init", PATH_MAX);
+    proc->policy = KTASK_POLICY_USER;
+    proc->vmem = vmem_space_create();
+    //set_cr3((void *)((struct arch_vmem_space *)proc->vmem->arch)->cr3);
+
     /* Create a process */
     t = kmalloc(sizeof(struct arch_task));
     t->ktask = kmalloc(sizeof(struct ktask));
     t->ktask->arch = t;
-    t->ktask->proc = kmalloc(sizeof(struct proc));
-    t->ktask->proc->policy = KTASK_POLICY_USER;
-    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
+    t->ktask->proc = proc;
     t->ktask->next = NULL;
-    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
     t->kstack = kmalloc(KSTACK_SIZE);
-    t->ustack = kmalloc(USTACK_SIZE);
+
+    /* Allocate physical page */
+    ppage = pmem_alloc_superpage(0);
+    if ( NULL == ppage ) {
+        return -1;
+    }
+    paddr = pmem_superpage_address(ppage);
+    t->ustack = (void *)0xbfe00000ULL;
+    vmem_remap(proc->vmem, (u64)t->ustack, (u64)paddr, 1);
+
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     //t->ktask->state = KTASK_STATE_CREATED;
     t->ktask->state = KTASK_STATE_READY;
@@ -229,10 +190,9 @@ _create_pm_server(void)
     t->ktask = kmalloc(sizeof(struct ktask));
     t->ktask->arch = t;
     t->ktask->proc = kmalloc(sizeof(struct proc));
+    kmemcpy(t->ktask->proc->name, "pm", kstrlen("pm") + 1); /* FIXME */
     t->ktask->proc->policy = KTASK_POLICY_SERVER;
-    t->ktask->proc->arch = kmalloc(sizeof(struct arch_proc));
     t->ktask->next = NULL;
-    ((struct arch_proc *)t->ktask->proc->arch)->proc = t->ktask->proc;
     t->kstack = kmalloc(KSTACK_SIZE);
     t->ustack = kmalloc(USTACK_SIZE);
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
@@ -342,6 +302,10 @@ bsp_init(void)
     acpi_load(&arch_acpi);
 
     /* Set up interrupt vector */
+    idt_setup_intr_gate(0, intr_dze);
+    idt_setup_intr_gate(1, intr_debug);
+    //idt_setup_intr_gate(2, intr_nmi);
+
     idt_setup_intr_gate(6, intr_iof);
     idt_setup_intr_gate(13, intr_gpf);
     idt_setup_intr_gate(14, intr_pf);
@@ -405,6 +369,7 @@ bsp_init(void)
     syscall_table[SYS_mmap] = sys_mmap;
     syscall_table[SYS_munmap] = sys_munmap;
     syscall_table[SYS_lseek] = sys_lseek;
+    syscall_table[SYS_sysarch] = sys_sysarch;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
     /* Initialize the process table */
@@ -438,8 +403,8 @@ bsp_init(void)
     /* Estimate the frequency */
     pdata->freq = lapic_estimate_freq();
 
-    /* Set idle task */
-    pdata->idle_task = _create_idle_task();
+    /* Set an idle task for this processor */
+    pdata->idle_task = task_create_idle();
     if ( NULL == pdata->idle_task ) {
         panic("Fatal: Could not create the idle task for BSP.");
         return;
@@ -478,11 +443,13 @@ bsp_init(void)
     /* Launch the `init' server */
     cli();
 
+#if 0
     if ( _create_pm_server() < 0 ) {
         panic("Fatal: Cannot create the `pm' server.");
         return;
     }
-    if ( _create_init_server() < 0 ) {
+#endif
+    if ( proc_create_init() < 0 ) {
         panic("Fatal: Cannot create the `init' server.");
         return;
     }
@@ -518,8 +485,8 @@ ap_init(void)
     /* Estimate the frequency */
     pdata->freq = lapic_estimate_freq();
 
-    /* Set idle task */
-    pdata->idle_task = _create_idle_task();
+    /* Set an idle task for this processor */
+    pdata->idle_task = task_create_idle();
     if ( NULL == pdata->idle_task ) {
         panic("Fatal: Could not create the idle task for BSP.");
         return;
@@ -653,7 +620,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
 
     /* Clean up memory space of the current process */
     kfree(t->kstack);
-    kfree(t->ustack);
+    //kfree(t->ustack);
     t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
 
@@ -671,7 +638,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     t->cr3 = kmem_paddr((u64)pgt);
 
     /* Set the page table for the client */
-    ((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
+    //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     return 0;
 }
@@ -702,6 +669,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     u8 *arg;
     len += argc + (argc + 1) * sizeof(void *);
     if ( len < PAGESIZE ) {
+        /* FIXME: Replace kmalloc with vmalloc */
         arg = kmalloc(PAGESIZE);
     } else {
         arg = kmalloc(len);
@@ -723,9 +691,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         narg++;
     }
     *narg = NULL;
-    //narg = arg;
-    //__asm__ __volatile__ (" movq %%rax,%%dr0 " :: "a"(*(u64 *)*(narg + 0)));
-    //__asm__ __volatile__ (" movq %%rax,%%dr1 " :: "a"(*(narg + 0)));
 
     /* Create a process */
     ret = _create_process(t, entry, size, policy, arg);
@@ -801,6 +766,25 @@ arch_idle(void)
 }
 
 /*
+ * Debug fault/trap
+ */
+void
+isr_debug(void)
+{
+    char *buf = this_ktask()->proc->name;
+    panic(buf);
+}
+
+/*
+ * I/O fault
+ */
+void
+isr_io_fault(void)
+{
+    panic("FIXME: I/O fault");
+}
+
+/*
  * General protection fault
  */
 void
@@ -817,7 +801,7 @@ isr_page_fault(void *addr, u64 error)
 {
     char buf[512];
     int i;
-    u64 x = (u64)error;
+    u64 x = (u64)addr;
     for ( i = 0; i < 16; i++ ) {
         buf[15 - i] = '0' + (x % 10);
         x /= 10;

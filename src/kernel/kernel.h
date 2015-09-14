@@ -54,12 +54,20 @@
 
 #define VMEM_MAX_BUDDY_ORDER    9
 
+#define INITRAMFS_BASE          0x20000ULL
+#define USTACK_INIT             0xbfe00000ULL
+#define CODE_INIT               0x40000000ULL
+#define KSTACK_SIZE             4096
+#define USTACK_SIZE             (4096 * 16)
 
 /* Process table size */
 #define PROC_NR                 65536
 
 /* Maximum number of file descriptors */
 #define FD_MAX                  1024
+
+/* Maximum bytes in the path name */
+#define PATH_MAX                1024
 
 /* Task policy */
 #define KTASK_POLICY_KERNEL     0
@@ -89,8 +97,12 @@ struct fildes {
  * Virtual page
  */
 struct vmem_page {
+    /* Physical address */
     reg_t addr;
+    /* Type */
     int type;
+    /* Back-link to the corresponding region */
+    struct vmem_region *region;
     /* Buddy system */
     struct vmem_page *next;
 };
@@ -99,7 +111,7 @@ struct vmem_page {
  * Virtual memory region
  */
 struct vmem_region {
-    /* Region */
+    /* Region information */
     ptr_t start;
     size_t len;
 
@@ -235,14 +247,6 @@ struct kmem {
     struct kmem_slab_root slab;
 };
 
-
-
-
-
-
-
-
-
 /*
  * Pager
  */
@@ -261,7 +265,7 @@ struct proc {
     pid_t id;
 
     /* Name */
-    char *name;
+    char name[PATH_MAX];
 
     /* Parent process */
     struct proc *parent;
@@ -358,6 +362,9 @@ extern struct ktask_root *ktask_root;
 void kernel(void);
 int kstrcmp(const char *, const char *);
 size_t kstrlen(const char *);
+char * kstrcpy(char *, const char *);
+char * kstrncpy(char *, const char *, size_t);
+size_t kstrlcpy(char *, const char *, size_t);
 
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in asm.s. */
@@ -381,6 +388,8 @@ void * kmalloc(size_t);
 void kfree(void *);
 struct vmem_region * vmem_region_create(void);
 struct vmem_space * vmem_space_create(void);
+void vmem_space_delete(struct vmem_space *);
+struct vmem_page * vmem_alloc_pages(struct vmem_space *, int);
 
 /* in ramfs.c */
 int ramfs_init(u64 *);
@@ -401,6 +410,7 @@ int sys_execve(const char *, char *const [], char *const []);
 void * sys_mmap(void *, size_t, int, int, int, off_t);
 int sys_munmap(void *, size_t);
 off_t sys_lseek(int, off_t, int);
+int sys_sysarch(int, void *);
 
 /* The followings are mandatory functions for the kernel and should be
    implemented somewhere in arch/<arch_name>/ */

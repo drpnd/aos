@@ -46,19 +46,34 @@ proc_create(void)
 {
     struct proc *proc;
     struct ktask *ktask;
+    struct vmem_space *vmem;
 
+    /* Allocate the data structure for a new process */
     proc = kmalloc(sizeof(struct proc));
     if ( NULL == proc ) {
         return NULL;
     }
     kmemset(proc, 0, sizeof(struct proc));
+
+    /* Allocate a kernel task */
     ktask = kmalloc(sizeof(struct ktask));
     if ( NULL == ktask ) {
         kfree(proc);
         return NULL;
     }
     kmemset(ktask, 0, sizeof(struct ktask));
+
+    /* Link the process from the kernel task */
     ktask->proc = proc;
+
+    /* Allocate a new virtual memory space */
+    vmem = vmem_space_create();
+    if ( NULL == vmem ) {
+        kfree(ktask);
+        kfree(proc);
+        return NULL;
+    }
+    proc->vmem = vmem;
 
     return proc;
 }
@@ -201,6 +216,62 @@ kstrcmp(const char *s1, const char *s2)
     }
 
     return 0;
+}
+
+/*
+ * kstrcpy
+ */
+char *
+kstrcpy(char *dst, const char *src)
+{
+    size_t i;
+
+    i = 0;
+    while ( src[i] != '\0' ) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = src[i];
+
+    return dst;
+}
+
+/*
+ * kstrncpy
+ */
+char *
+kstrncpy(char *dst, const char *src, size_t n)
+{
+    size_t i;
+
+    i = 0;
+    while ( src[i] != '\0' || i < n ) {
+        dst[i] = src[i];
+        i++;
+    }
+    for ( ; i < n; i++ ) {
+        dst[i] = '\0';
+    }
+
+    return dst;
+}
+
+/*
+ * kstrlcpy
+ */
+size_t
+kstrlcpy(char *dst, const char *src, size_t n)
+{
+    size_t i;
+
+    i = 0;
+    while ( src[i] != '\0' || i < n - 1 ) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+
+    return i;
 }
 
 /*

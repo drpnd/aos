@@ -35,6 +35,9 @@ struct kmem *kmem;
 u64 binorder(u64);
 int kmem_remap(u64, u64, int);
 u64 kmem_paddr(u64);
+int vmem_arch_init(struct vmem_space *);
+int vmem_remap(struct vmem_space *, u64, u64, int);
+u64 vmem_paddr(struct vmem_space *, u64);
 
 /*
  * Split the buddies so that we get at least one buddy at the order of o
@@ -1333,7 +1336,7 @@ vmem_region_create(void)
         return NULL;
     }
     kmemset(region, 0, sizeof(struct vmem_region));
-    region->start = 0;
+    region->start = (void *)(1ULL << 30);
     region->len = SUPERPAGESIZE * 512; /* 1 GiB */
     region->next = NULL;
 
@@ -1350,6 +1353,7 @@ vmem_region_create(void)
         pages[i].addr = 0;
         pages[i].type = 0;
         pages[i].next = NULL;
+        pages[i].region = region;
     }
     region->pages = pages;
 
@@ -1400,7 +1404,111 @@ vmem_space_create(void)
     /* Set */
     space->first_region = region;
 
+    /* Initialize the architecture-specific data structure */
+    if ( vmem_arch_init(space) < 0 ) {
+        /* FIXME: Release pages in the region */
+        kfree(space);
+        return NULL;
+    }
+
     return space;
+}
+
+/*
+ * Delete the virtual memory process
+ */
+void
+vmem_space_delete(struct vmem_space *vmem)
+{
+    /* FIXME: Implement this function */
+    return;
+}
+
+/*
+ * Allocate virtual pages
+ */
+struct vmem_page *
+vmem_alloc_pages(struct vmem_space *vmem, int order)
+{
+    struct pmem_superpage *page;
+    struct vmem_page *vpage;
+    struct vmem_page *tmp;
+    void *paddr;
+    void *vaddr;
+    ssize_t i;
+    int ret;
+
+    /* Allocate physical page */
+    page = pmem_alloc_superpages(0, order);
+    if ( NULL == page ) {
+        return NULL;
+    }
+    paddr = pmem_superpage_address(page);
+
+    /* Virtual page */
+    vpage = _vpage_alloc(vmem, order);
+    if ( NULL == vpage ) {
+        pmem_free_superpages(page);
+        return NULL;
+    }
+
+    /* Resolve the virtual address */
+    vaddr = vpage->region->start
+        + (vpage - vpage->region->pages) * SUPERPAGESIZE;
+
+    /* Update the page table */
+    tmp = vpage;
+    for ( i = 0; i < (1LL << order); i++ ) {
+        tmp->addr = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
+        tmp->type = 1;
+        ret = vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE,
+                         (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
+        if ( ret < 0 ) {
+            /* Rollback */
+            for ( ; i >= 0; i-- ) {
+                vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
+            }
+            pmem_free_superpages(page);
+            _vpage_free(vmem, vpage);
+            return NULL;
+        }
+        tmp = vpage->next;
+    }
+
+
+    return vpage;
+}
+
+/*
+ * Release virtual pages
+ */
+void
+vmem_free_pages(void *addr)
+{
+    /* FIXME: Implement this */
+}
+
+/*
+ * Copy a virtual memory space
+ */
+struct vmem_space *
+vmem_space_copy(struct vmem_space *vmem)
+{
+    struct vmem_space *nvmem;
+
+    /* Allocate a new virtual memory space */
+    nvmem = kmalloc(sizeof(struct vmem_space));
+    if ( NULL == nvmem ) {
+        return NULL;
+    }
+
+    /* Region */
+    nvmem->first_region = kmalloc(sizeof(struct vmem_region));
+
+    /* FIXME */
+
+
+    return nvmem;
 }
 
 /*

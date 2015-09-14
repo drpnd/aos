@@ -168,13 +168,11 @@ struct page_entry {
 } __attribute__ ((packed));
 
 /*
- * Process (architecture specific structure)
+ * Virtual memory
  */
- struct arch_proc {
+struct arch_vmem_space {
     /* Page table (virtual address of cr3) */
     void *pgt;
-    /* Parent structure (architecture-independent generic process structure) */
-    struct proc *proc;
 } __attribute__ ((packed));
 
 /*
@@ -186,10 +184,11 @@ struct arch_task {
     struct stackframe64 *rp;
     /* SP0 for tss */
     u64 sp0;
-    /* CR3 */
+    /* CR3: Physical address of the page table */
     u64 cr3;
-    /* Stack pointers (kernel and user) */
+    /* Kernel stack pointer (kernel address) */
     void *kstack;
+    /* User stack pointer (virtual address) */
     void *ustack;
     /* Parent structure (architecture-independent generic task structure) */
     struct ktask *ktask;
@@ -238,6 +237,18 @@ void ltr(u16);
 void cli(void);
 void sti(void);
 void intr_null(void);
+
+void intr_dze(void);
+void intr_debug(void);
+void intr_nmi(void);
+void intr_breakpoint(void);
+void intr_overflow(void);
+void intr_bre(void);
+void intr_dna(void);
+void intr_df(void);
+void intr_snpf(void);
+void intr_ssf(void);
+
 void intr_iof(void);
 void intr_gpf(void);
 void intr_pf(void);
@@ -281,6 +292,10 @@ void spin_unlock_intr(u32 *);
 /* in trampoline.s */
 void trampoline(void);
 void trampoline_end(void);
+
+/* in task.c */
+struct arch_task * task_create_idle(void);
+int proc_create_init(void);
 
 #endif /* _KERNEL_ARCH_H */
 
