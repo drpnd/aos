@@ -12,11 +12,11 @@ ARCH=x86_64
 CFLAGS=-Wall -O3
 
 libc.o: ../lib/arch/$(ARCH)/libc.c
-	$(CC) -nostdinc -nostdlib -fleading-underscore -I../include -c -o $@ ../lib/arch/$(ARCH)/libc.c
+	$(CC) -DTEST=1 -nostdinc -nostdlib -fleading-underscore -I../include -c -o $@ ../lib/arch/$(ARCH)/libc.c
 	objcopy --prefix-symbols=aos_stdc $@
 
 libcasm.o: ../lib/arch/$(ARCH)/libcasm.s
-	$(CC) -nostdinc -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libcasm.s
+	$(CC) -DTEST=1 -nostdinc -nostdlib -I../include -c -o $@ ../lib/arch/$(ARCH)/libcasm.s
 	objcopy --prefix-symbols=aos_stdc $@
 
 test-libc: test-libc.o libc.o libcasm.o

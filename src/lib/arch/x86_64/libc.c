@@ -38,6 +38,7 @@ typedef __builtin_va_list va_list;
 /* in libcasm.s */
 unsigned long long syscall(int, ...);
 
+#if !defined(TEST) || !TEST
 int main(int argc, char *argv[]);
 
 /*
@@ -52,6 +53,7 @@ entry(int argc, char *argv[])
 
     while ( 1 ) {}
 }
+#endif
 
 /*
  * exit
