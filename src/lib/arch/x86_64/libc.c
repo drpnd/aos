@@ -38,6 +38,21 @@ typedef __builtin_va_list va_list;
 /* in libcasm.s */
 unsigned long long syscall(int, ...);
 
+int main(int argc, char *argv[]);
+
+/*
+ * Entry point to a process
+ */
+void
+entry(int argc, char *argv[])
+{
+    int ret;
+
+    ret = main(argc, argv);
+
+    while ( 1 ) {}
+}
+
 /*
  * exit
  */

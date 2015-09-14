@@ -72,31 +72,31 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 
 ## init server
 init: servers/init/init.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## process manager
 pm: servers/pm/pm.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## file system
 fs: servers/fs/fs.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## tty driver
 tty: drivers/tty/tty.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## shell
 pash: bin/pash/pash.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## PCI driver
 pci: drivers/pci/pci.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## e1000 driver
 e1000: drivers/e1000/e1000.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o
-	$(LD) -N -e _main -Ttext=$(ORG) --oformat binary -o $@ $^
+	$(LD) -N -e _entry -Ttext=$(ORG) --oformat binary -o $@ $^
 
 ## Clean
 clean:
