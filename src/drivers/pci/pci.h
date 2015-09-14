@@ -51,6 +51,11 @@ struct pci_dev {
     struct pci_dev *next;
 };
 
+uint16_t pci_read_config(uint16_t, uint16_t, uint16_t, uint16_t);
+uint64_t pci_read_mmio(uint8_t, uint8_t, uint8_t);
+uint32_t pci_read_rom_bar(uint8_t, uint8_t, uint8_t);
+uint8_t pci_get_header_type(uint16_t, uint16_t, uint16_t);
+
 #endif
 
 /*
