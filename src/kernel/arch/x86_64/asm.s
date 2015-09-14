@@ -76,7 +76,18 @@
 	.globl	_task_restart
 	.globl	_task_replace
 	.globl	_intr_null
+	.globl	_intr_dze
+	.globl	_intr_debug
+	.globl	_intr_nmi
+	.globl	_intr_breakpoint
+	.globl	_intr_overflow
+	.globl	_intr_bre
 	.globl	_intr_iof
+	.globl	_intr_dna
+	.globl	_intr_df
+	.globl	_intr_itf
+	.globl	_intr_snpf
+	.globl	_intr_ssf
 	.globl	_intr_gpf
 	.globl	_intr_pf
 	.globl	_intr_x87_fpe
@@ -119,6 +130,9 @@ kstart64:
 
 /* Entry point for the application processors */
 apstart64:
+	/* Disable interrupts */
+	cli
+
 	/* Re-configure the stack pointer (for alignment) */
 	/* Obtain APIC ID */
 	xorq	%rax,%rax
@@ -433,11 +447,8 @@ _sys_fork:
 	cmpl	$0,%eax
 	jne	1f
 	movq	-8(%rsp),%rdi
-	movq	%rdi,%dr0
 	movq	-16(%rsp),%rsi
-	movq	%rsi,%dr1
 	movq	-24(%rsp),%rdx
-	movq	%rdx,%dr2
 	call	sys_fork_restart
 1:
 	/* Return upon error */
@@ -639,6 +650,32 @@ _intr_null:
 	popq	%rax
 	iretq
 
+/* Debug fault or trap */
+_intr_debug:
+	pushq	%rbp
+	movq	%rsp,%rbp
+	pushq	%rbx
+	movq	16(%rbp),%rbx
+	movq	%rbx,%dr0	/* cs */
+	movq	8(%rbp),%rbx
+	movq	%rbx,%dr1	/* rip */
+	movq	32(%rbp),%rbx
+	movq	%rbx,%dr2	/* rsp */
+	call	_isr_debug
+	popq	%rbx
+	popq	%rbp
+	iretq
+
+_intr_dze:
+_intr_nmi:
+_intr_breakpoint:
+_intr_overflow:
+_intr_bre:
+_intr_dna:
+_intr_df:
+_intr_snpf:
+_intr_ssf:
+	iretq
 
 /* Interrupt handler for invalid opcode exception */
 _intr_iof:
@@ -651,10 +688,10 @@ _intr_iof:
 	//movq	%rbx,%dr1	/* rip */
 	movq	32(%rbp),%rbx
 	//movq	%rbx,%dr2	/* rsp */
+	call	_isr_io_fault
 	popq	%rbx
 	popq	%rbp
 	iretq
-
 
 /* Interrupt handler for general protection fault
  * Error code, RIP, CS, RFLAGS, (RSP, SS) */
@@ -674,6 +711,10 @@ _intr_gpf:
 	//cmpq	$0,%rbx
 	//jz	1f
 	//movq	%rbx,16(%rbp)   /* Overwrite the reentry point (%rip) */
+	pushq	%rdi
+	movq	8(%rbp),%rdi	/* error code */
+	call	_isr_general_protection_fault
+	popq	%rdi
 1:	popq	%rbx
 	popq	%rbp
 	addq	$0x8,%rsp
