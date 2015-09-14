@@ -71,7 +71,8 @@
 //#define SYS_sigreturn 417
 #define SYS_mmap        477
 #define SYS_lseek       478
-#define SYS_MAXSYSCALL  479
+#define SYS_sysarch     1023
+#define SYS_MAXSYSCALL  1024
 
 #endif /* _SYS_SYSCALL_H */
 
