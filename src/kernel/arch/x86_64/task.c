@@ -519,180 +519,6 @@ task_create_idle(void)
 }
 
 /*
- * Create an init server process
- */
-int
-proc_create_init(void)
-{
-    u64 *initramfs = (u64 *)INITRAMFS_BASE;
-    u64 offset = 0;
-    u64 size;
-    struct arch_task *t;
-    struct ktask_list *l;
-    const char *path;
-    struct proc *proc;
-    struct pmem_superpage *ppage;
-    void *paddr;
-
-    /* Find the file pointed by path from the initramfs */
-    path = "/servers/init";
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, path) ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find init */
-        return -1;
-    }
-
-    /* New process */
-    proc = kmalloc(sizeof(struct proc));
-    if ( NULL == proc ) {
-        goto error_proc;
-    }
-    kmemset(proc, 0, sizeof(struct proc));
-
-    /* Set the process name */
-    kstrlcpy(proc->name, "init", PATH_MAX);
-
-    /* Set the policy */
-    proc->policy = KTASK_POLICY_USER;
-
-    /* Create a virtual memory space */
-    proc->vmem = vmem_space_create();
-    if ( NULL == proc->vmem ) {
-        goto error_vmem;
-    }
-
-    /* Set the page table */
-    set_cr3((void *)kmem_paddr(
-                (u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt));
-
-    /* Create an architecture-specific task data structure */
-    t = kmalloc(sizeof(struct arch_task));
-    if ( NULL == t ) {
-        goto error_arch_task;
-    }
-    kmemset(t, 0, sizeof(struct arch_task));
-
-    /* Create a task */
-    t->ktask = kmalloc(sizeof(struct ktask));
-    if ( NULL == t->ktask ) {
-        goto error_task;
-    }
-    kmemset(t->ktask, 0, sizeof(struct ktask));
-    t->ktask->arch = t;
-
-    /* Associate the task with a process */
-    t->ktask->proc = proc;
-
-    /* Prepare the kernel stack */
-    t->kstack = kmalloc(KSTACK_SIZE);
-    if ( NULL == t->kstack ) {
-        goto error_kstack;
-    }
-
-    /* Prepare the user stack */
-    ppage = pmem_alloc_superpage(0);
-    if ( NULL == ppage ) {
-        goto error_ustack;
-    }
-    paddr = pmem_superpage_address(ppage);
-    t->ustack = (void *)USTACK_INIT;
-    vmem_remap(proc->vmem, (u64)t->ustack, (u64)paddr, 1);
-
-    /* Prepare exec */
-    ppage = pmem_alloc_superpage(0);
-    if ( NULL == ppage ) {
-        //goto error_exec;
-        return -1;
-    }
-    paddr = pmem_superpage_address(ppage);
-    void *exec;
-    exec = (void *)CODE_INIT;
-    vmem_remap(proc->vmem, (u64)exec, (u64)paddr, 1);
-    (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
-
-    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    kmemset(t->rp, 0, sizeof(struct stackframe64));
-    t->ktask->state = KTASK_STATE_READY;
-
-    /* Process table */
-    proc_table->procs[1] = t->ktask->proc;
-    proc_table->lastpid = 1;
-
-    /* Kernel task */
-    l = kmalloc(sizeof(struct ktask_list));
-    if ( NULL == l ) {
-        goto error_tl;
-    }
-    l->ktask = t->ktask;
-    l->next = NULL;
-    /* Push */
-    if ( NULL == ktask_root->r.head ) {
-        ktask_root->r.head = l;
-        ktask_root->r.tail = l;
-    } else {
-        ktask_root->r.tail->next = l;
-        ktask_root->r.tail = l;
-    }
-
-
-    u64 cs;
-    u64 ss;
-    u64 flags;
-    int policy = KTASK_POLICY_USER;
-
-    /* Configure the ring protection by the policy */
-    switch ( policy ) {
-    case KTASK_POLICY_KERNEL:
-        cs = GDT_RING0_CODE_SEL;
-        ss = GDT_RING0_DATA_SEL;
-        flags = 0x0200;
-        break;
-    case KTASK_POLICY_DRIVER:
-    case KTASK_POLICY_SERVER:
-    case KTASK_POLICY_USER:
-    default:
-        cs = GDT_RING3_CODE64_SEL + 3;
-        ss = GDT_RING3_DATA_SEL + 3;
-        flags = 0x3200;
-        break;
-    }
-
-    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
-    t->rp->gs = ss;
-    t->rp->fs = ss;
-    t->rp->sp = USTACK_INIT + USTACK_SIZE - 16;
-    t->rp->ss = ss;
-    t->rp->cs = cs;
-    t->rp->ip = CODE_INIT;
-    t->rp->flags = flags;
-    t->cr3 = kmem_paddr((u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt);
-
-    return 0;
-
-error_tl:
-    pmem_free_superpages(ppage);
-error_ustack:
-    kfree(t->kstack);
-error_kstack:
-    kfree(t->ktask);
-error_task:
-    kfree(t);
-error_arch_task:
-    vmem_space_delete(proc->vmem);
-error_vmem:
-    kfree(proc);
-error_proc:
-    return -1;
-}
-
-/*
  * Create a process
  */
 int
@@ -711,6 +537,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     u64 ss;
     u64 flags;
     int policy = KTASK_POLICY_USER;
+    void *exec;
 
     /* Check the process table first */
     if ( NULL != proc_table->procs[pid] ) {
@@ -795,7 +622,6 @@ proc_create(const char *path, const char *name, pid_t pid)
         return -1;
     }
     paddr = pmem_superpage_address(ppage2);
-    void *exec;
     exec = (void *)CODE_INIT;
     vmem_remap(proc->vmem, (u64)exec, (u64)paddr, 1);
     (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);

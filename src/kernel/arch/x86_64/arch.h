@@ -295,7 +295,6 @@ void trampoline_end(void);
 
 /* in task.c */
 struct arch_task * task_create_idle(void);
-int proc_create_init(void);
 int proc_create(const char *, const char *, pid_t);
 
 #endif /* _KERNEL_ARCH_H */
