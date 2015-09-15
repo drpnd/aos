@@ -70,163 +70,6 @@ _load_trampoline(void)
 }
 
 /*
- * Create the init server
- */
-static int
-_create_init_server(void)
-{
-    u64 *initramfs = (u64 *)INITRAMFS_BASE;
-    u64 offset = 0;
-    u64 size;
-    struct arch_task *t;
-    struct ktask_list *l;
-    int ret;
-
-    /* Find the file pointed by path from the initramfs */
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, "/servers/init") ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find init */
-        return -1;
-    }
-
-    struct proc *proc;
-    struct vmem_page *vpage;
-    struct pmem_superpage *ppage;
-    void *paddr;
-
-    proc = kmalloc(sizeof(struct proc));
-    if ( NULL == proc ) {
-        return -1;
-    }
-    kstrlcpy(proc->name, "init", PATH_MAX);
-    proc->policy = KTASK_POLICY_USER;
-    proc->vmem = vmem_space_create();
-    //set_cr3((void *)((struct arch_vmem_space *)proc->vmem->arch)->cr3);
-
-    /* Create a process */
-    t = kmalloc(sizeof(struct arch_task));
-    t->ktask = kmalloc(sizeof(struct ktask));
-    t->ktask->arch = t;
-    t->ktask->proc = proc;
-    t->ktask->next = NULL;
-    t->kstack = kmalloc(KSTACK_SIZE);
-
-    /* Allocate physical page */
-    ppage = pmem_alloc_superpage(0);
-    if ( NULL == ppage ) {
-        return -1;
-    }
-    paddr = pmem_superpage_address(ppage);
-    t->ustack = (void *)0xbfe00000ULL;
-    vmem_remap(proc->vmem, (u64)t->ustack, (u64)paddr, 1);
-
-    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    //t->ktask->state = KTASK_STATE_CREATED;
-    t->ktask->state = KTASK_STATE_READY;
-
-    /* Process table */
-    proc_table->procs[1] = t->ktask->proc;
-    proc_table->lastpid = 1;
-
-    /* Kernel task */
-    l = kmalloc(sizeof(struct ktask_list));
-    if ( NULL == l ) {
-        return -1;
-    }
-    l->ktask = t->ktask;
-    l->next = NULL;
-    /* Push */
-    if ( NULL == ktask_root->r.head ) {
-        ktask_root->r.head = l;
-        ktask_root->r.tail = l;
-    } else {
-        ktask_root->r.tail->next = l;
-        ktask_root->r.tail = l;
-    }
-
-    /* Create a process */
-    ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_USER, NULL);
-
-    return ret;
-}
-
-/*
- * Create the pm server
- */
-static int
-_create_pm_server(void)
-{
-    u64 *initramfs = (u64 *)INITRAMFS_BASE;
-    u64 offset = 0;
-    u64 size;
-    struct arch_task *t;
-    struct ktask_list *l;
-    int ret;
-
-    /* Find the file pointed by path from the initramfs */
-    while ( 0 != *initramfs ) {
-        if ( 0 == kstrcmp((char *)initramfs, "/servers/pm") ) {
-            offset = *(initramfs + 2);
-            size = *(initramfs + 3);
-            break;
-        }
-        initramfs += 4;
-    }
-    if ( 0 == offset ) {
-        /* Could not find pm */
-        return -1;
-    }
-
-    /* Create a process */
-    t = kmalloc(sizeof(struct arch_task));
-    t->ktask = kmalloc(sizeof(struct ktask));
-    t->ktask->arch = t;
-    t->ktask->proc = kmalloc(sizeof(struct proc));
-    kmemcpy(t->ktask->proc->name, "pm", kstrlen("pm") + 1); /* FIXME */
-    t->ktask->proc->policy = KTASK_POLICY_SERVER;
-    t->ktask->next = NULL;
-    t->kstack = kmalloc(KSTACK_SIZE);
-    t->ustack = kmalloc(USTACK_SIZE);
-    t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    //t->ktask->state = KTASK_STATE_CREATED;
-    t->ktask->state = KTASK_STATE_READY;
-
-    /* Process table */
-    proc_table->procs[0] = t->ktask->proc;
-    proc_table->lastpid = 0;
-
-    /* Kernel task */
-    l = kmalloc(sizeof(struct ktask_list));
-    if ( NULL == l ) {
-        return -1;
-    }
-    l->ktask = t->ktask;
-    l->next = NULL;
-    /* Push */
-    if ( NULL == ktask_root->r.head ) {
-        ktask_root->r.head = l;
-        ktask_root->r.tail = l;
-    } else {
-        ktask_root->r.tail->next = l;
-        ktask_root->r.tail = l;
-    }
-
-    /* Create a process */
-    ret = _create_process(t, (void *)(INITRAMFS_BASE + offset), size,
-                          KTASK_POLICY_SERVER, NULL);
-
-    return ret;
-}
-
-/*
  * Panic -- damn blue screen, lovely green screen
  */
 void
@@ -443,13 +286,11 @@ bsp_init(void)
     /* Launch the `init' server */
     cli();
 
-#if 0
-    if ( _create_pm_server() < 0 ) {
+    if ( proc_create("/servers/pm", "pm", 0) < 0 ) {
         panic("Fatal: Cannot create the `pm' server.");
         return;
     }
-#endif
-    if ( proc_create_init() < 0 ) {
+    if ( proc_create("/servers/init", "init", 1) < 0 ) {
         panic("Fatal: Cannot create the `init' server.");
         return;
     }

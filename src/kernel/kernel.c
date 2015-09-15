@@ -39,46 +39,6 @@ kmain(void)
 }
 
 /*
- * Create a new process
- */
-struct proc *
-proc_create(void)
-{
-    struct proc *proc;
-    struct ktask *ktask;
-    struct vmem_space *vmem;
-
-    /* Allocate the data structure for a new process */
-    proc = kmalloc(sizeof(struct proc));
-    if ( NULL == proc ) {
-        return NULL;
-    }
-    kmemset(proc, 0, sizeof(struct proc));
-
-    /* Allocate a kernel task */
-    ktask = kmalloc(sizeof(struct ktask));
-    if ( NULL == ktask ) {
-        kfree(proc);
-        return NULL;
-    }
-    kmemset(ktask, 0, sizeof(struct ktask));
-
-    /* Link the process from the kernel task */
-    ktask->proc = proc;
-
-    /* Allocate a new virtual memory space */
-    vmem = vmem_space_create();
-    if ( NULL == vmem ) {
-        kfree(ktask);
-        kfree(proc);
-        return NULL;
-    }
-    proc->vmem = vmem;
-
-    return proc;
-}
-
-/*
  * Local APIC timer
  * Low-level scheduler (just loading run queue)
  */
