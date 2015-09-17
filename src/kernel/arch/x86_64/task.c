@@ -182,146 +182,6 @@ task_clone(struct ktask *ot)
     return t->ktask;
 }
 
-
-
-
-/*
- * Create a new process
- */
-int
-proc_create_(struct arch_task *t, void (*entry)(void), size_t size,
-            int policy, void *argpg)
-{
-    u64 cs;
-    u64 ss;
-    u64 flags;
-    struct page_entry *pgt;
-    u64 i;
-    u64 j;
-    u64 pg;
-    void *exec;
-    void *kstack;
-    void *ustack;
-    struct vmem_space *vm;
-
-    /* Allocate a new virtual memory space */
-    vm = vmem_space_create();
-    if ( NULL == vm ) {
-        return -1;
-    }
-
-
-
-    /* Setup a page table */
-    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
-    if ( NULL == pgt ) {
-        return -1;
-    }
-    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* PML4 */
-    pgt[0].entries[0] = kmem_paddr((u64)&pgt[1]) | 0x007;
-    /* Pages for kernel space (0--1 GiB) */
-    for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-    /* Pages for user space (1--3 GiB) */
-    for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    pgt[2 + 1].entries[0] = kmem_paddr((u64)&pgt[6]) | 0x007;
-    pgt[2 + 1].entries[510] = kmem_paddr((u64)&pgt[516]) | 0x007;
-    pgt[2 + 1].entries[511] = kmem_paddr((u64)&pgt[517]) | 0x007;
-    for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            /* Not present */
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    /* Pages for kernel space (3--4 GiB) */
-    for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-
-    /* Program */
-    pg = CEIL(size, PAGESIZE) / PAGESIZE;
-    for ( i = 0; i < pg; i++ ) {
-        exec = kmalloc(PAGESIZE);
-        if ( NULL == exec ) {
-            /* FIXME: free */
-            kfree(pgt);
-            return -1;
-        }
-        /* Copy the executable memory */
-        (void)kmemcpy(exec, entry + i * PAGESIZE, PAGESIZE);
-        pgt[6].entries[i] = kmem_paddr((u64)exec) | 0x087;
-    }
-    /* Stack */
-    kstack = kmalloc(KSTACK_SIZE);
-    if ( NULL == kstack ) {
-        kfree(pgt);
-        return -1;
-    }
-    ustack = kmalloc(USTACK_SIZE);
-    if ( NULL == ustack ) {
-        kfree(pgt);
-        kfree(kstack);
-        return -1;
-    }
-
-    /* Setup the page table for user stack */
-    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
-        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = (kmem_paddr((u64)ustack) + i * PAGESIZE) | 0x087;
-    }
-    /* Arguments */
-    pgt[516].entries[0] = kmem_paddr((u64)argpg) | 0x087;
-
-    /* Configure the ring protection by the policy */
-    switch ( policy ) {
-    case KTASK_POLICY_KERNEL:
-        cs = GDT_RING0_CODE_SEL;
-        ss = GDT_RING0_DATA_SEL;
-        flags = 0x0200;
-        break;
-    case KTASK_POLICY_DRIVER:
-    case KTASK_POLICY_SERVER:
-    case KTASK_POLICY_USER:
-    default:
-        cs = GDT_RING3_CODE64_SEL + 3;
-        ss = GDT_RING3_DATA_SEL + 3;
-        flags = 0x3200;
-        break;
-    }
-
-    /* Clean up memory space of the current process */
-    kfree(t->kstack);
-    kfree(t->ustack);
-    t->rp = kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
-    kmemset(t->rp, 0, sizeof(struct stackframe64));
-
-    /* Replace the current process with the new process */
-    t->kstack = kstack;
-    t->ustack = ustack;
-    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
-    t->rp->gs = ss;
-    t->rp->fs = ss;
-    t->rp->sp = USTACK_INIT;
-    t->rp->ss = ss;
-    t->rp->cs = cs;
-    t->rp->ip = CODE_INIT;
-    t->rp->flags = flags;
-    t->cr3 = kmem_paddr((u64)pgt);
-
-    /* Set the page table for the client */
-    //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
-
-    return 0;
-}
-
 /*
  * Clone a process of the context specified by the ot argument
  */
@@ -578,6 +438,10 @@ proc_create(const char *path, const char *name, pid_t pid)
         goto error_vmem;
     }
 
+    /* Process table */
+    proc_table->procs[pid] = proc;
+    proc_table->lastpid = pid;
+
     /* Set the page table */
     set_cr3((void *)kmem_paddr(
                 (u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt));
@@ -629,10 +493,6 @@ proc_create(const char *path, const char *name, pid_t pid)
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     t->ktask->state = KTASK_STATE_READY;
-
-    /* Process table */
-    proc_table->procs[pid] = t->ktask->proc;
-    proc_table->lastpid = pid;
 
     /* Kernel task */
     l = kmalloc(sizeof(struct ktask_list));
