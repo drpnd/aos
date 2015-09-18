@@ -336,6 +336,7 @@ vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
         return -1;
     }
     /* PDPT */
+    /* FIXME: This is the physical address, but must be virtual address */
     ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
     if ( 0x1 != (ent[pdpt] & 0x81) ) {
         /* Not present, or 1-Gbyte page */
@@ -383,6 +384,7 @@ vmem_paddr(struct vmem_space *vmem, u64 vaddr)
         return -1;
     }
     /* PDPT */
+    /* FIXME: This is the physical address, but must be virtual address */
     ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
     if ( 0x1 != (ent[pdpt] & 0x81) ) {
         /* Not present, or 1-Gbyte page */
