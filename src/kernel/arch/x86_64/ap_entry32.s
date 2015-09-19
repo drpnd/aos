@@ -34,7 +34,7 @@ ap_entry32:
 
 	/* %cs is automatically set after the long jump operation */
 	/* Setup other segment registers */
-	movl	$AP_GDT_DATA_SEL,%eax
+	movl	$AP_GDT_DATA64_SEL,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
 	movl	%eax,%es

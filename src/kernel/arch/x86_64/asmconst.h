@@ -33,7 +33,8 @@
 	.set	AP_GDT_CODE64_SEL,0x08	/* Code64 selector */
 	.set	AP_GDT_CODE32_SEL,0x10	/* Code32 selector */
 	.set	AP_GDT_CODE16_SEL,0x18	/* Code16 selector */
-	.set	AP_GDT_DATA_SEL,0x20	/* Data selector */
+	.set	AP_GDT_DATA64_SEL,0x20	/* Data selector */
+	.set	AP_GDT_DATA32_SEL,0x28	/* Data selector */
 
 	.set	APIC_BASE,0xfee00000
 

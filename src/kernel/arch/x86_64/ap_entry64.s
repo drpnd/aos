@@ -31,9 +31,10 @@
 /* Entry point */
 ap_entry64:
 	cli
-	xorl	%eax,%eax
+	movl	$AP_GDT_DATA64_SEL,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
+	xorl	%eax,%eax
 	movl	%eax,%es
 	movl	%eax,%fs
 	movl	%eax,%gs
