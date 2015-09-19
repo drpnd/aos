@@ -129,7 +129,8 @@ pg_setup.2:
 	wrmsr
 
 	/* Activate page translation and long mode */
-	movl	$0x80000001,%eax
+	movl	%cr0,%eax
+	orl	$0x80000001,%eax
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
