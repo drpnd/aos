@@ -482,30 +482,34 @@ read:
 	movw	%bx,-4(%bp)
 	movw	%cx,-6(%bp)
 	movw	%dx,-8(%bp)
+	movw	%es,-10(%bp)
 	/* Prepare space for local variables */
-	/* u16 cx -10(%bp) */
-	/* u16 counter -12(%bp) */
-	subw	$12,%sp
+	/* u16 cx -12(%bp) */
+	/* u16 counter -14(%bp) */
+	subw	$14,%sp
 
 	/* Reset counter */
 	xorw	%ax,%ax
-	movw	%ax,-12(%bp)
+	movw	%ax,-14(%bp)
 
 	/* Set number of sectors to be read */
-	movw	%cx,-10(%bp)
+	movw	%cx,-12(%bp)
 1:
 	movw	-2(%bp),%ax	/* Restore %ax */
-	addw	-12(%bp),%ax	/* Current LBA */
+	addw	-14(%bp),%ax	/* Current LBA */
 	call	lba2chs		/* Convert LBA (%ax) to CHS (%cx,%dh) */
 	call	read_sector	/* Read a sector */
-	addw	$SECTOR_SIZE,%bx
-	movw	-12(%bp),%ax	/* Get */
+	movw	%es,%ax
+	addw	$(SECTOR_SIZE/16),%ax
+	movw	%ax,%es
+	movw	-14(%bp),%ax	/* Get */
 	incw	%ax		/*  and increase the current LBA %ax */
-	movw	%ax,-12(%bp)	/*  then write back */
-	cmpw	-10(%bp),%ax
+	movw	%ax,-14(%bp)	/*  then write back */
+	cmpw	-12(%bp),%ax
 	jb	1b		/* Need to read more sectors */
 
 	/* Restore the saved registers */
+	movw	-10(%bp),%es
 	movw	-8(%bp),%dx
 	movw	-6(%bp),%cx
 	movw	-4(%bp),%bx
