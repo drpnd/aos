@@ -36,8 +36,6 @@ static int _load_trampoline(void);
 static int
 _create_process(struct arch_task *, void (*)(void), size_t, int, void *);
 
-int vmem_remap(struct vmem_space *, u64, u64, int);
-
 /* System call table */
 void *syscall_table[SYS_MAXSYSCALL];
 
@@ -555,7 +553,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
  * flag (i.e., DO NOT use sti/cli).  Also use caution in use of lock.
  */
 void
-arch_task_swiched(struct arch_task *prev, struct arch_task *next)
+arch_task_switched(struct arch_task *prev, struct arch_task *next)
 {
 }
 
@@ -640,6 +638,7 @@ isr_general_protection_fault(u64 error)
 void
 isr_page_fault(void *addr, u64 error)
 {
+    //__asm__ ("movq %%rax,%%dr0" :: "a"(this_ktask()));
     char buf[512];
     int i;
     u64 x = (u64)addr;

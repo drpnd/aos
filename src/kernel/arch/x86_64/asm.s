@@ -728,6 +728,7 @@ _intr_pf:
 	movq	%rsp,%rbp
 	pushq	%rdi
 	movq	16(%rbp),%rdi
+	movq	%rdi,%dr1	/* rip */
 	pushq	%rsi
 	movq	%cr2,%rdi	/* virtual address */
 	movq	8(%rbp),%rsi	/* error code */
@@ -849,7 +850,7 @@ _task_restart:
 	/* Notify that the current task is switched (to the kernel) */
 	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
-	callq	_arch_task_swiched
+	callq	_arch_task_switched
 	/* Task switch (set the stack frame of the new task) */
 	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
 	movq	%rax,P_CUR_TASK_OFFSET(%rbp)
