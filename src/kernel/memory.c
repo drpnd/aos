@@ -1504,11 +1504,48 @@ vmem_space_copy(struct vmem_space *vmem)
 
     /* Region */
     nvmem->first_region = kmalloc(sizeof(struct vmem_region));
+    if ( NULL == nvmem->first_region ) {
+        kfree(nvmem);
+        return NULL;
+    }
+
+    /* Copy all the pages */
 
     /* FIXME */
 
-
     return nvmem;
+}
+
+/*
+ * Remap virtual memory space in the page table
+ */
+int
+vmem_remap_(struct vmem_space *vmem, void *vaddr, reg_t paddr, int flag)
+{
+    /* Research the corresponding region */
+    struct vmem_region *region;
+    struct vmem_page *page;
+
+    region = vmem->first_region;
+    while ( NULL != region ) {
+        if ( (reg_t)vaddr >= (reg_t)region->start
+             && (reg_t)vaddr < (reg_t)region->start + region->len ) {
+            /* Found */
+            page = &region->pages[((reg_t)vaddr - (reg_t)region->start)
+                                  / SUPERPAGESIZE];
+            break;
+        }
+        region = region->next;
+    }
+    if ( NULL == region ) {
+        /* Region not found */
+        return -1;
+    }
+
+    /* FIXME: Virtual address of the page table entries must be set up and
+       stored here.  Then, translate to the physical addresss. */
+
+    return -1;
 }
 
 /*
