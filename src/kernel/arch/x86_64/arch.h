@@ -173,6 +173,8 @@ struct page_entry {
 struct arch_vmem_space {
     /* Page table (virtual address of cr3) */
     void *pgt;
+    /* The root of the hierarchical page table */
+    struct arch_page_entry *pgtroot;
 } __attribute__ ((packed));
 
 /*
