@@ -167,6 +167,21 @@ struct page_entry {
     u64 entries[512];
 } __attribute__ ((packed));
 
+
+/*
+ * Architecture specific page entry
+ */
+struct arch_page_entry {
+    int type;
+    union {
+        struct arch_page_dir *child;
+        void *addr;
+    } u;
+};
+struct arch_page_dir {
+    struct arch_page_entry *c[512];
+};
+
 /*
  * Virtual memory
  */
