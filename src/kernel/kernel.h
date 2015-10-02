@@ -54,6 +54,8 @@
 
 #define VMEM_MAX_BUDDY_ORDER    9
 
+#define VMEM_USED               1
+
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
 #define CODE_INIT               0x40000000ULL
@@ -81,6 +83,17 @@
 #define IV_CRASH                0xfe
 #define NR_IV                   0x100
 #define IV_IRQ(n)               (0x20 + (n))
+
+
+#define ENOENT                  2
+#define EINTR                   4
+#define EIO                     5
+#define ENOEXEC                 8
+#define EBADF                   9
+#define ENOMEM                  12
+#define EACCES                  13
+#define EFAULT                  14
+#define EINVAL                  22
 
 /*
  * File descriptor
