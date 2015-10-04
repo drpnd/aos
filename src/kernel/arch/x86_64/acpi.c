@@ -57,8 +57,24 @@ _validate_checksum(const u8 *ptr, int len)
     return sum;
 }
 
+
 /*
- * Get the current ACPI timer
+ * Check if the ACPI timer is available
+ */
+int
+acpi_timer_available(struct acpi *acpi)
+{
+    if ( 0 == acpi->acpi_pm_tmr_port ) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/*
+ * Get the current ACPI timer.  Note that the caller must check the
+ * availability of the ACPI timer through the acpi_timer_available() function
+ * before calling this function.
  */
 u32
 acpi_get_timer(struct acpi *acpi)
@@ -73,9 +89,11 @@ u64
 acpi_get_timer_period(struct acpi *acpi)
 {
     if ( acpi->acpi_pm_tmr_ext ) {
-        return ((u64)1<<32);
+        /* 32-bit counter */
+        return ((u64)1ULL << 32);
     } else {
-        return (1<<24);
+        /* 24-bit counter */
+        return (1 << 24);
     }
 }
 /*
@@ -88,7 +106,9 @@ acpi_get_timer_hz(void)
 }
 
 /*
- * Wait
+ * Wait usec microseconds using ACPI timer.  Note that the caller must check
+ * the availability of the ACPI timer through the acpi_timer_available()
+ * function before calling this function.
  */
 void
 acpi_busy_usleep(struct acpi *acpi, u64 usec)
@@ -232,7 +252,9 @@ _parse_fadt(struct acpi *acpi, struct acpi_sdt_hdr *sdt)
         dsdt = fadt->dsdt;
     }
 
-    /* Check flags */
+    /* Check flags: The eighth bit of fadt->flags presents the TMR_VAL_EXT flag.
+       If this flag is clear, the counter of the timer is implemented as a
+       24-bit value.  Otherwise, it is implemented as a 32-bit value. */
     acpi->acpi_pm_tmr_ext = (fadt->flags >> 8) & 0x1;
 
     /* SMI command */
@@ -392,6 +414,9 @@ acpi_load(struct acpi *acpi)
 {
     u16 ebda;
     u64 ebda_addr;
+
+    /* Reset the data structure */
+    kmemset(acpi, 0, sizeof(struct acpi));
 
     /* Check 1KB of EBDA, first */
     ebda = *(u16 *)BDA_EDBA;
