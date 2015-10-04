@@ -31,7 +31,7 @@
 #define BDA_EDBA        0x040e
 
 /* Prototype declarations */
-static int _checksum(u8 *, int);
+static int _validate_checksum(const u8 *, int);
 static int _parse_apic(struct acpi *, struct acpi_sdt_hdr *);
 static int _parse_fadt(struct acpi *, struct acpi_sdt_hdr *);
 static int _parse_rsdt(struct acpi *, struct acpi_rsdp *);
@@ -39,10 +39,13 @@ static int _rsdp_search_range(struct acpi *, u64, u64);
 
 
 /*
- * Compute ACPI checksum
+ * Validate ACPI checksum: Since the ACPI checksum is a one-byte modular sum,
+ * this function calculates the sum of len bytes from the memory space pointed
+ * by ptr.  If the checksum is valid, this function returns zero.  Otherwise,
+ * this returns a non-zero value.
  */
 static int
-_checksum(u8 *ptr, int len)
+_validate_checksum(const u8 *ptr, int len)
 {
     u8 sum = 0;
     int i;
@@ -368,7 +371,7 @@ _rsdp_search_range(struct acpi *acpi, u64 start, u64 end)
 
     for ( addr = start; addr < end; addr += 0x10 ) {
         /* Check the checksum of the RSDP */
-        if ( 0 == _checksum((u8 *)addr, 20) ) {
+        if ( 0 == _validate_checksum((u8 *)addr, 20) ) {
             /* Checksum is correct, then check the signature. */
             rsdp = (struct acpi_rsdp *)addr;
             if ( 0 == kmemcmp((u8 *)rsdp->signature, (u8 *)"RSD PTR ", 8) ) {
