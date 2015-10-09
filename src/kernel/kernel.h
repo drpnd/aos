@@ -32,6 +32,11 @@
 #define PAGESIZE                4096
 #define SUPERPAGESIZE           (1ULL << 21)
 
+#define PAGE_ADDR(i)            ((i) * PAGESIZE)
+#define SUPERPAGE_ADDR(i)       ((i) * SUPERPAGESIZE)
+#define PAGE_INDEX(a)           ((a) / PAGESIZE)
+#define SUPERPAGE_INDEX(a)      ((a) / SUPERPAGESIZE)
+
 #define PMEM_USED               1ULL            /* Managed by buddy system */
 #define PMEM_WIRED              (1ULL<<1)       /* Wired (kernel use) */
 #define PMEM_ALLOC              (1ULL<<2)       /* Allocated */
