@@ -1460,7 +1460,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     tmp = vpage;
     for ( i = 0; i < (1LL << order); i++ ) {
         tmp->addr = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
-        tmp->type = 1;
+        tmp->type = VMEM_USED;
         ret = vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE,
                          (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
         if ( ret < 0 ) {
@@ -1517,35 +1517,74 @@ vmem_space_copy(struct vmem_space *vmem)
 }
 
 /*
+ * Search the corresponding region from the virtual address
+ */
+static struct vmem_region *
+_vmem_search_region(struct vmem_space *vmem, void *vaddr)
+{
+    struct vmem_region *region;
+
+    while ( NULL != region ) {
+        if ( (reg_t)vaddr >= (reg_t)region->start
+             && (reg_t)vaddr < (reg_t)region->start + region->len ) {
+            /* Found */
+            return region;
+            break;
+        }
+        region = region->next;
+    }
+
+    return NULL;
+}
+
+/*
+ * Search the corresponding page from the virtual address
+ */
+static struct vmem_page *
+_vmem_search_page(struct vmem_space *vmem, void *vaddr)
+{
+    struct vmem_region *region;
+    struct vmem_region *page;
+
+    /* Search the corresponding region */
+    region = _vmem_search_region(vmem, vaddr);
+    if ( NULL == region ) {
+        /* No region found */
+        return NULL;
+    }
+
+    /* Get page information */
+    page = &region->pages[((reg_t)vaddr - (reg_t)region->start)
+                          / SUPERPAGESIZE];
+
+    return page;
+}
+
+/*
  * Remap virtual memory space in the page table
  */
 int
 vmem_remap_(struct vmem_space *vmem, void *vaddr, reg_t paddr, int flag)
 {
     /* Research the corresponding region */
-    struct vmem_region *region;
     struct vmem_page *page;
 
-    region = vmem->first_region;
-    while ( NULL != region ) {
-        if ( (reg_t)vaddr >= (reg_t)region->start
-             && (reg_t)vaddr < (reg_t)region->start + region->len ) {
-            /* Found */
-            page = &region->pages[((reg_t)vaddr - (reg_t)region->start)
-                                  / SUPERPAGESIZE];
-            break;
-        }
-        region = region->next;
+    /* Search the corresponding page */
+    page = _vmem_search_page(vmem, vaddr);
+
+    if ( VMEM_USED == page->type ) {
+        /* The specified page is already mapped */
+        return -ENOMEM;
     }
-    if ( NULL == region ) {
-        /* Region not found */
-        return -1;
-    }
+
+    /* Align and map the page to a physical address */
+    page->addr = (paddr / SUPERPAGESIZE) * SUPERPAGESIZE;
+    page->type = VMEM_USED;
 
     /* FIXME: Virtual address of the page table entries must be set up and
        stored here.  Then, translate to the physical addresss. */
 
-    return -1;
+    return 0;
 }
 
 /*

@@ -29,6 +29,22 @@
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
+/* Type of memory area */
+#define BSE_USABLE              1
+#define BSE_RESERVED            2
+#define BSE_ACPI_RECLAIMABLE    3
+#define BSE_ACPI_NVS            4
+#define BSE_BAD                 5
+
+/*
+ * Prototype declarations
+ */
+static u64 _resolve_phys_mem_size(struct bootinfo *);
+static u64 _find_pmem_region(struct bootinfo *, u64 );
+static int _init_pages(struct bootinfo *, struct pmem *);
+static int _init_prox_domain(struct pmem *, struct acpi *);
+
+
 /*
  * Initialize physical memory
  *
@@ -50,22 +66,72 @@ struct pmem *
 arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct pmem *pm;
-    struct bootinfo_sysaddrmap_entry *bse;
     u64 nr;
     u64 addr;
     u64 sz;
-    u64 a;
-    u64 b;
     u64 i;
-    u64 j;
-    int prox;
-    u64 pxbase;
-    u64 pxlen;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
         return NULL;
     }
+
+    /* Obtain memory size from the system address map */
+    addr = _resolve_phys_mem_size(bi);
+
+    /* Calculate required memory size for pages */
+    nr  = CEIL(addr, SUPERPAGESIZE) / SUPERPAGESIZE;
+    sz = nr * sizeof(struct pmem_superpage) + sizeof(struct pmem);
+
+    /* Fine the available region for the pmem data structure */
+    addr = _find_pmem_region(bi, sz);
+    /* Could not find available pages for the management structure */
+    if ( 0 == addr ) {
+        return NULL;
+    }
+
+    /* Setup the memory page management structure */
+    pm = (struct pmem *)(addr + nr * sizeof(struct pmem_superpage));
+    kmemset(pm, 0, sizeof(struct pmem));
+    pm->nr = nr;
+    pm->superpages = (struct pmem_superpage *)addr;
+
+    /* Reset all pages */
+    for ( i = 0; i < pm->nr; i++ ) {
+        /* Mark as unavailable */
+        pm->superpages[i].flags = PMEM_UNAVAIL;
+        pm->superpages[i].order = -1;
+        pm->superpages[i].prox_domain = -1;
+        pm->superpages[i].refcnt = 0;
+    }
+
+    /* Mark self (used by phys_mem and phys_mem->pages) */
+    for ( i = SUPERPAGE_INDEX(addr); i <= SUPERPAGE_INDEX(addr + sz); i++ ) {
+        pm->superpages[i].flags |= PMEM_WIRED;
+    }
+
+    /* Initialize all pages */
+    if ( _init_pages(bi, pm) < 0 ) {
+        return NULL;
+    }
+
+    /* Initialize the proximity domain */
+    if ( _init_prox_domain(pm, acpi) < 0 ) {
+        return NULL;
+    }
+
+    return pm;
+}
+
+/*
+ * Find the upper bound of the memory region
+ */
+static u64
+_resolve_phys_mem_size(struct bootinfo *bi)
+{
+    struct bootinfo_sysaddrmap_entry *bse;
+    u64 addr;
+    u64 i;
 
     /* Obtain memory size */
     addr = 0;
@@ -77,16 +143,27 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         }
     }
 
-    /* Calculate required memory size for pages */
-    nr  = CEIL(addr, SUPERPAGESIZE) / SUPERPAGESIZE;
-    sz = nr * sizeof(struct pmem_superpage) + sizeof(struct pmem);
+    return addr;
+}
+
+/*
+ * Find the memory region for the pmem data structure
+ */
+static u64
+_find_pmem_region(struct bootinfo *bi, u64 sz)
+{
+    struct bootinfo_sysaddrmap_entry *bse;
+    u64 addr;
+    u64 i;
+    u64 a;
+    u64 b;
 
     /* Search free space system address map obitaned from BIOS for the memory
        allocator (calculated above) */
     addr = 0;
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
-        if ( 1 == bse->type ) {
+        if ( BSE_USABLE == bse->type ) {
             /* Available space from a to b */
             a = CEIL(bse->base, SUPERPAGESIZE);
             b = FLOOR(bse->base + bse->len, SUPERPAGESIZE);
@@ -117,48 +194,25 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         }
     }
 
-    /* Could not find available pages for the management structure */
-    if ( 0 == addr ) {
-        return NULL;
-    }
+    return addr;
+}
 
-    /* Setup the memory page management structure */
-    pm = (struct pmem *)(addr + nr * sizeof(struct pmem_superpage));
-    kmemset(pm, 0, sizeof(struct pmem));
-    pm->nr = nr;
-    pm->superpages = (struct pmem_superpage *)addr;
-
-    /* Reset flags */
-    pxbase = 0;
-    pxlen = 0;
-    prox = -1;
-    for ( i = 0; i < pm->nr; i++ ) {
-        /* Mark as unavailable */
-        pm->superpages[i].flags = PMEM_UNAVAIL;
-        pm->superpages[i].order = -1;
-        pm->superpages[i].prox_domain = -1;
-        pm->superpages[i].refcnt = 0;
-
-        /* Check the proximity domain */
-        if ( i * SUPERPAGESIZE >= pxbase
-             && (i + 1) * SUPERPAGESIZE <= pxbase + pxlen ) {
-            pm->superpages[i].prox_domain = prox;
-        } else {
-            prox = acpi_memory_prox_domain(acpi, i * SUPERPAGESIZE, &pxbase,
-                                           &pxlen);
-            if ( prox >= 0 ) {
-                pm->superpages[i].prox_domain = prox;
-            } else {
-                pxbase = 0;
-                pxlen = 0;
-            }
-        }
-    }
+/*
+ * Initialize all pages
+ */
+static int
+_init_pages(struct bootinfo *bi, struct pmem *pm)
+{
+    struct bootinfo_sysaddrmap_entry *bse;
+    u64 i;
+    u64 j;
+    u64 a;
+    u64 b;
 
     /* Check system address map obitaned from BIOS */
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
-        if ( 1 == bse->type ) {
+        if ( BSE_USABLE == bse->type ) {
             /* Available */
             a = CEIL(bse->base, SUPERPAGESIZE) / SUPERPAGESIZE;
             b = FLOOR(bse->base + bse->len, SUPERPAGESIZE) / SUPERPAGESIZE;
@@ -167,7 +221,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
             for ( j = a; j < b; j++ ) {
                 if ( j >= pm->nr ) {
                     /* Error */
-                    return NULL;
+                    return -1;
                 }
                 /* Unmark unavailable */
                 pm->superpages[j].flags &= ~PMEM_UNAVAIL;
@@ -179,14 +233,52 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         }
     }
 
-    /* Mark self (used by phys_mem and phys_mem->pages) */
-    for ( i = addr / SUPERPAGESIZE;
-          i <= CEIL(addr + sz, SUPERPAGESIZE) / SUPERPAGESIZE; i++ ) {
-        pm->superpages[i].flags |= PMEM_WIRED;
+    return 0;
+}
+
+/*
+ * Initialize proximity domain from the ACPI information
+ */
+static int
+_init_prox_domain(struct pmem *pm, struct acpi *acpi)
+{
+    u64 i;
+    int prox;
+    u64 pxbase;
+    u64 pxlen;
+
+    /* Let the proximity domain be resolve in the first loop. */
+    pxbase = 0;
+    pxlen = 0;
+    prox = -1;
+
+    /* Resolve the proximity domain of all pages */
+    for ( i = 0; i < pm->nr; i++ ) {
+        /* Check the proximity domain of the page */
+        if ( SUPERPAGE_ADDR(i) >= pxbase
+             && SUPERPAGE_ADDR(i + 1) <= pxbase + pxlen ) {
+            /* This page is within the previously resolved memory space. */
+            pm->superpages[i].prox_domain = prox;
+        } else {
+            /* This page is out of the range of the previously resolved
+               proximity domain, then resolve it now. */
+            prox = acpi_memory_prox_domain(acpi, SUPERPAGE_ADDR(i), &pxbase,
+                                           &pxlen);
+            if ( prox >= 0 ) {
+                /* Set the proximity domain */
+                pm->superpages[i].prox_domain = prox;
+            } else {
+                /* No proximity domain; then clear the stored base and length
+                   to force resolve the proximity domain in the next loop. */
+                pxbase = 0;
+                pxlen = 0;
+            }
+        }
     }
 
-    return pm;
+    return 0;
 }
+
 
 /*
  * Remap kernel memory space in the page table
@@ -309,6 +401,52 @@ vmem_arch_init(struct vmem_space *vmem)
     /* PD */
     for ( i = 0; i < 1024; i++ ) {
         ent[2048 + i] = 0;
+    }
+
+    return 0;
+}
+
+/*
+ * Remap the virtual memory space into the page table
+ */
+int
+arch_vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr)
+{
+    int pml4;
+    int pdpt;
+    int pd;
+    struct arch_vmem_space *arch;
+    u64 *ent;
+
+    /* Resolve the offset in each table */
+    pml4 = (vaddr >> 39);
+    pdpt = (vaddr >> 30) & 0x1ff;
+    pd = (vaddr >> 21) & 0x1ff;
+
+    /* Get the architecture specific table */
+    arch = vmem->arch;
+
+    /* Page table */
+    if ( NULL == arch->pgtroot ) {
+        /* Allocate PML4 */
+        arch->pgtroot = kmalloc(sizeof(struct arch_page_entry));
+        if ( NULL == arch->pgtroot ) {
+            return -1;
+        }
+    }
+
+    if ( !((u64)arch->pgtroot & 0x1) ) {
+        /* Not present */
+        return -1;
+    }
+
+    /* PML4 */
+    ent = arch->pgtroot->entries[pml4];
+
+    /* Resolve the page directory pointer table */
+    if ( !((u64)ent & 0x1) ) {
+        /* Not present */
+        return -1;
     }
 
     return 0;

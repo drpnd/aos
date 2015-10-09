@@ -172,14 +172,14 @@ struct page_entry {
  * Architecture specific page entry
  */
 struct arch_page_entry {
-    int type;
     union {
         struct arch_page_dir *child;
         void *addr;
+        u64 bits;
     } u;
 };
 struct arch_page_dir {
-    struct arch_page_entry *c[512];
+    u64 *entries[512];
 };
 
 /*
@@ -189,7 +189,7 @@ struct arch_vmem_space {
     /* Page table (virtual address of cr3) */
     void *pgt;
     /* The root of the hierarchical page table */
-    struct arch_page_entry *pgtroot;
+    struct arch_page_dir *pgtroot;
 } __attribute__ ((packed));
 
 /*
