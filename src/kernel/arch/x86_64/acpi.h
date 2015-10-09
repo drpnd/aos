@@ -255,6 +255,7 @@ struct acpi {
 
 int acpi_load(struct acpi *);
 void acpi_busy_usleep(struct acpi *, u64);
+int acpi_timer_available(struct acpi *);
 u32 acpi_get_timer(struct acpi *);
 u64 acpi_get_timer_period(struct acpi *);
 u64 acpi_get_timer_hz(void);
