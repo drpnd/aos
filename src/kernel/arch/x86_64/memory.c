@@ -279,6 +279,58 @@ _init_prox_domain(struct pmem *pm, struct acpi *acpi)
     return 0;
 }
 
+/*
+ * Initialize the kernel memory
+ */
+struct kmem *
+arch_kmem_init(void)
+{
+    struct kmem *kmem;
+    struct kmem_region *region[2];
+    int i;
+
+    /* Check the size of the kmem data structure first */
+    if ( sizeof(struct kmem) + sizeof(struct kmem_region) * 2
+         + sizeof(struct kmem_page) * 1024 > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+
+    /* Initialize the kmem data structure */
+    kmem = (struct kmem *)KMEM_BASE;
+    kmemset(kmem, 0, sizeof(struct kmem));
+
+    /* Prepare regions: Note that this operating system has two kernel regions
+       unlike other UNIX-like systems in the region from 0 to 1 GiB and from 3
+       to 4 GiB.  The first region could be removed by relocating the kernel,
+       but this operating system does not do it. */
+    region[0] = (struct kmem_region *)(KMEM_BASE + sizeof(struct kmem));
+    region[1] = (struct kmem_region *)(KMEM_BASE + sizeof(struct kmem)
+                                       + sizeof(struct kmem_region));
+    region[0]->start = (ptr_t)0;
+    region[0]->len = (1ULL << 30);
+    region[0]->pages = (struct kmem_page *)(KMEM_BASE + sizeof(struct kmem)
+                                            + sizeof(struct kmem_region) * 2);
+    region[0]->next = region[1];
+    region[1]->start = (ptr_t)(3ULL << 30);
+    region[1]->len = (1ULL << 30);
+    region[1]->pages = (struct kmem_page *)(KMEM_BASE + sizeof(struct kmem)
+                                            + sizeof(struct kmem_region) * 2
+                                            + sizeof(struct kmem_page) * 512);
+    region[1]->next = NULL;
+
+    /* 512 pages in a region */
+    for ( i = 0; i < 512; i++ ) {
+        region[0]->pages[i].address = SUPERPAGE_ADDR(i);
+        region[0]->pages[i].type = 0;
+        region[1]->pages[i].address = SUPERPAGE_ADDR(i) + (3ULL << 30);
+        region[1]->pages[i].type = 0;
+    }
+
+
+    return kmem;
+}
+
+
 
 /*
  * Remap kernel memory space in the page table

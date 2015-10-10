@@ -644,6 +644,10 @@ _kpage_free(struct kmem_page *page)
     spin_unlock(&kmem->lock);
 }
 
+
+
+
+
 /*
  * Initialize the kernel memory
  */
@@ -783,10 +787,10 @@ kmem_alloc_pages(int order)
         return NULL;
     }
     for ( i = 0; i < (1LL << order); i++ ) {
-        region[off + i].address = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
+        region[off + i].address = (size_t)paddr + SUPERPAGE_ADDR(i);
         region[off + i].type = 1;
-        ret = kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE,
-                         (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
+        ret = kmem_remap((u64)vaddr + SUPERPAGE_ADDR(i),
+                         (u64)paddr + SUPERPAGE_ADDR(i), 1);
         if ( ret < 0 ) {
             /* Rollback */
             for ( ; i >= 0; i-- ) {

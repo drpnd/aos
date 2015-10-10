@@ -29,11 +29,11 @@
 #include <sys/resource.h>
 
 /* Page size */
-#define PAGESIZE                4096
+#define PAGESIZE                4096ULL
 #define SUPERPAGESIZE           (1ULL << 21)
 
-#define PAGE_ADDR(i)            ((i) * PAGESIZE)
-#define SUPERPAGE_ADDR(i)       ((i) * SUPERPAGESIZE)
+#define PAGE_ADDR(i)            (PAGESIZE * (i))
+#define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (i))
 #define PAGE_INDEX(a)           ((a) / PAGESIZE)
 #define SUPERPAGE_INDEX(a)      ((a) / SUPERPAGESIZE)
 
@@ -242,10 +242,32 @@ struct kmem_slab_root {
  * Kernel memory page
  */
 struct kmem_page {
+    /* Physical address */
     reg_t address;
+    /* Type */
     int type;
+    /* Back-link to the corresponding region */
+    struct kmem_region *region;
     /* Buddy system */
     struct kmem_page *next;
+};
+
+/*
+ * Kernel memory region
+ */
+struct kmem_region {
+    /* Region information */
+    ptr_t start;
+    size_t len;
+
+    /* Pages belonging to this region */
+    struct kmem_page *pages;
+
+    /* Buddy system */
+    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
+
+    /* Pointer to the next region */
+    struct kmem_region *next;
 };
 
 /*
@@ -255,6 +277,10 @@ struct kmem {
     /* Lock */
     spinlock_t lock;
     spinlock_t slab_lock;
+
+    /* Kernel memory region(s) */
+    struct kmem_region *first_region;
+
     /* Regions */
     struct kmem_page region1[KMEM_REGION_SIZE];
     struct kmem_page region2[KMEM_REGION_SIZE];

@@ -40,6 +40,9 @@
  */
 #define PMEM_LBOUND             0x02000000ULL
 
+#define KMEM_BASE               0x00100000ULL
+#define KMEM_MAX_SIZE           0x00800000ULL
+
 /* Maximum number of processors supported in this operating system */
 #define MAX_PROCESSORS          256
 
