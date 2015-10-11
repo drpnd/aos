@@ -46,3 +46,6 @@
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
 	.set	BUFFER,0x6000		/* Buffer: 6000-61ff */
+
+	.set	APIC_LAPIC_ID,0x020
+	.set	MSR_APIC_BASE,0x1b

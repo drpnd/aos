@@ -47,8 +47,10 @@ entry32:
 	movl	%eax,%gs
 
 	/* Obtain APIC ID */
-	movl	$0xfee00000,%edx
-	movl	0x20(%edx),%eax		/* APIC ID */
+	movl	$MSR_APIC_BASE,%ecx
+	rdmsr
+	andl	$0xfffffffffffff000,%eax	/* APIC Base */
+	movl	APIC_LAPIC_ID(%eax),%eax
 	shrl	$24,%eax
 	/* P6 family and Pentium processors: [27:24] */
 	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
