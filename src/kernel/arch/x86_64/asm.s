@@ -107,9 +107,13 @@ kstart64:
 
 	/* Re-configure the stack pointer (for alignment) */
 	/* Obtain APIC ID */
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
 	xorq	%rax,%rax
-	movl	$0xfee00000,%edx
-	movl	0x20(%edx),%eax		/* APIC ID */
+	movl	APIC_LAPIC_ID(%rdx),%eax
 	shrl	$24,%eax
 	/* P6 family and Pentium processors: [27:24] */
 	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
@@ -135,9 +139,13 @@ apstart64:
 
 	/* Re-configure the stack pointer (for alignment) */
 	/* Obtain APIC ID */
+	movq	$MSR_APIC_BASE,%rcx
+	rdmsr
+	shlq	$32,%rdx
+	addq	%rax,%rdx
+	andq	$0xfffffffffffff000,%rdx	/* APIC Base */
 	xorq	%rax,%rax
-	movl	$0xfee00000,%edx
-	movl	0x20(%edx),%eax		/* APIC ID */
+	movl	APIC_LAPIC_ID(%rdx),%eax
 	shrl	$24,%eax
 	/* P6 family and Pentium processors: [27:24] */
 	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
