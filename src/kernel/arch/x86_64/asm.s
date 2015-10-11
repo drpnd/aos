@@ -640,7 +640,7 @@ _intr_null:
 	rdmsr			/* Read APIC info to [%edx:%eax]; N.B., higer */
 				/*  32 bits of %rax and %rdx are cleared */
 				/*  bit [35:12]: APIC Base, [11]: EN */
-				/*  [10]: EXTD, and [8]:BSP*/
+				/*  [10]: EXTD, and [8]:BSP */
 	shlq	$32,%rdx
 	addq	%rax,%rdx
 	andq	$0xfffffffffffff000,%rdx	/* APIC Base */

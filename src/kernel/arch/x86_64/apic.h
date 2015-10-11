@@ -26,7 +26,7 @@
 
 #include <aos/const.h>
 
-#define APIC_BASE               0xfee00000
+#define APIC_MSR                0x1b
 #define APIC_LAPIC_ID           0x020
 #define APIC_SIVR               0x0f0
 #define APIC_ICR_LOW            0x300

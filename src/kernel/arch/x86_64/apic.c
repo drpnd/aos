@@ -40,6 +40,8 @@
 #define ICR_DEST_ALL_INC_SELF   0x00080000
 #define ICR_DEST_ALL_EX_SELF    0x000c0000
 
+u64 apic_base;
+
 /*
  * Initialize the local APIC
  */
@@ -47,11 +49,16 @@ void
 lapic_init(void)
 {
     u32 reg;
+    u64 msr;
+
+    /* Get the IA32_APIC_BASE */
+    msr = rdmsr(APIC_MSR);
+    apic_base = msr & 0xfffffffffffff000;
 
     /* Enable APIC at spurious interrupt vector register: default vector 0xff */
-    reg = mfread32(APIC_BASE + APIC_SIVR);
+    reg = mfread32(apic_base + APIC_SIVR);
     reg |= 0x100;       /* Bit 8: APIC Software Enable/Disable */
-    mfwrite32(APIC_BASE + APIC_SIVR, reg);
+    mfwrite32(apic_base + APIC_SIVR, reg);
 }
 
 /*
@@ -63,14 +70,14 @@ lapic_send_init_ipi(void)
     u32 icrl;
     u32 icrh;
 
-    icrl = mfread32(APIC_BASE + APIC_ICR_LOW);
-    icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
+    icrl = mfread32(apic_base + APIC_ICR_LOW);
+    icrh = mfread32(apic_base + APIC_ICR_HIGH);
 
     icrl = (icrl & ~0x000cdfff) | ICR_INIT | ICR_DEST_ALL_EX_SELF;
     icrh = (icrh & 0x000fffff);
 
-    mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
-    mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
+    mfwrite32(apic_base + APIC_ICR_HIGH, icrh);
+    mfwrite32(apic_base + APIC_ICR_LOW, icrl);
 }
 
 /*
@@ -83,16 +90,16 @@ lapic_send_startup_ipi(u8 vector)
     u32 icrh;
 
     do {
-        icrl = mfread32(APIC_BASE + APIC_ICR_LOW);
-        icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
+        icrl = mfread32(apic_base + APIC_ICR_LOW);
+        icrh = mfread32(apic_base + APIC_ICR_HIGH);
         /* Wait until it's idle */
     } while ( icrl & (ICR_SEND_PENDING) );
 
     icrl = (icrl & ~0x000cdfff) | ICR_STARTUP | ICR_DEST_ALL_EX_SELF | vector;
     icrh = (icrh & 0x000fffff);
 
-    mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
-    mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
+    mfwrite32(apic_base + APIC_ICR_HIGH, icrh);
+    mfwrite32(apic_base + APIC_ICR_LOW, icrl);
 }
 
 /*
@@ -104,14 +111,14 @@ lapic_send_fixed_ipi(u8 vector)
     u32 icrl;
     u32 icrh;
 
-    icrl = mfread32(APIC_BASE + APIC_ICR_LOW);
-    icrh = mfread32(APIC_BASE + APIC_ICR_HIGH);
+    icrl = mfread32(apic_base + APIC_ICR_LOW);
+    icrh = mfread32(apic_base + APIC_ICR_HIGH);
 
     icrl = (icrl & ~0x000cdfff) | ICR_FIXED | ICR_DEST_ALL_EX_SELF | vector;
     icrh = (icrh & 0x000fffff);
 
-    mfwrite32(APIC_BASE + APIC_ICR_HIGH, icrh);
-    mfwrite32(APIC_BASE + APIC_ICR_LOW, icrl);
+    mfwrite32(apic_base + APIC_ICR_HIGH, icrh);
+    mfwrite32(apic_base + APIC_ICR_LOW, icrl);
 }
 
 /*
@@ -122,7 +129,7 @@ lapic_id(void)
 {
     u32 reg;
 
-    reg = *(u32 *)(APIC_BASE + APIC_LAPIC_ID);
+    reg = *(u32 *)(apic_base + APIC_LAPIC_ID);
 
     return reg >> 24;
 }
@@ -142,26 +149,26 @@ lapic_estimate_freq(void)
     probe = APIC_FREQ_PROBE;
 
     /* Disable timer */
-    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+    mfwrite32(apic_base + APIC_LVT_TMR, APIC_LVT_DISABLE);
 
     /* Set divide configuration */
-    mfwrite32(APIC_BASE + APIC_TMRDIV, APIC_TMRDIV_X16);
+    mfwrite32(apic_base + APIC_TMRDIV, APIC_TMRDIV_X16);
 
     /* Vector: lvt[18:17] = 00 : oneshot */
-    mfwrite32(APIC_BASE + APIC_LVT_TMR, 0x0);
+    mfwrite32(apic_base + APIC_LVT_TMR, 0x0);
 
     /* Set initial counter */
     t0 = 0xffffffff;
-    mfwrite32(APIC_BASE + APIC_INITTMR, t0);
+    mfwrite32(apic_base + APIC_INITTMR, t0);
 
     /* Sleep probing time */
     acpi_busy_usleep(&arch_acpi, probe);
 
     /* Disable current timer */
-    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+    mfwrite32(apic_base + APIC_LVT_TMR, APIC_LVT_DISABLE);
 
     /* Read current timer */
-    t1 = mfread32(APIC_BASE + APIC_CURTMR);
+    t1 = mfread32(apic_base + APIC_CURTMR);
 
     /* Calculate the APIC bus frequency */
     ret = (u64)(t0 - t1) << 4;
@@ -185,9 +192,9 @@ lapic_start_timer(u64 freq, u8 vec)
     busfreq = pdata->freq;
 
     /* Set counter */
-    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_PERIODIC | (u32)vec);
-    mfwrite32(APIC_BASE + APIC_TMRDIV, APIC_TMRDIV_X16);
-    mfwrite32(APIC_BASE + APIC_INITTMR, (busfreq >> 4) / freq);
+    mfwrite32(apic_base + APIC_LVT_TMR, APIC_LVT_PERIODIC | (u32)vec);
+    mfwrite32(apic_base + APIC_TMRDIV, APIC_TMRDIV_X16);
+    mfwrite32(apic_base + APIC_INITTMR, (busfreq >> 4) / freq);
 }
 
 /*
@@ -197,7 +204,7 @@ void
 lapic_stop_timer(void)
 {
     /* Disable timer */
-    mfwrite32(APIC_BASE + APIC_LVT_TMR, APIC_LVT_DISABLE);
+    mfwrite32(apic_base + APIC_LVT_TMR, APIC_LVT_DISABLE);
 }
 
 /*
