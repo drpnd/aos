@@ -225,7 +225,7 @@ _init_pages(struct bootinfo *bi, struct pmem *pm)
                 }
                 /* Unmark unavailable */
                 pm->superpages[j].flags &= ~PMEM_UNAVAIL;
-                if ( j * SUPERPAGESIZE <= PMEM_LBOUND ) {
+                if ( SUPERPAGE_ADDR(j) <= PMEM_LBOUND ) {
                     /* Wired by kernel */
                     pm->superpages[j].flags |= PMEM_WIRED;
                 }
