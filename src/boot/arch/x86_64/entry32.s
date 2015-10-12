@@ -88,9 +88,8 @@ entry32:
 
 3:
 	/* Enable PAE and SSE */
-	movl	$0x000002a0,%eax	/* CR4[bit 5] = PAE */
-	movl	%eax,%cr4		/* CR4[bit 7] = PGE */
-					/* CR4[bit 9] = OSFXSR */
+	movl	$0x00000220,%eax	/* CR4[bit 5] = PAE */
+	movl	%eax,%cr4		/* CR4[bit 9] = OSFXSR */
 /* Create 64bit page table */
 pg_setup:
 	movl	$KERNEL_PGT,%ebx	/* Low 12 bit must be zero */
