@@ -29,15 +29,6 @@
 #include "arch.h"
 #include "../../kernel.h"
 
-/* Maximum order of buddy system */
-#define PHYS_MEM_MAX_BUDDY_ORDER        18
-/* 32 (2^5) byte is the minimum object size of a slab object */
-#define PHYS_MEM_SLAB_BASE_ORDER        5
-/* 1024 (2^(5 + 6 - 1)) byte is the maximum object size of a slab object */
-#define PHYS_MEM_SLAB_ORDER             6
-/* 2^16 objects in a cache */
-#define PHYS_MEM_SLAB_NR_OBJ_ORDER      4
-
 #define PHYS_MEM_ZONE_DMA       0
 #define PHYS_MEM_ZONE_NORMAL    1
 #define PHYS_MEM_ZONE_HIGHMEM   2
@@ -46,101 +37,16 @@
 /* Page size for the physical page management */
 #define PHYS_MEM_PAGESIZE       (1ULL << 21)
 
-/*
- * Buddy system
- */
-struct phys_mem_buddy {
-    struct phys_mem_buddy_list *heads[PHYS_MEM_MAX_BUDDY_ORDER];
-};
-
-/*
- * Physical memory page
- */
-struct phys_mem_page {
-    u64 flags;
-    int order;
-    int prox_domain;
-};
-
-/*
- * List structure in unused page for the buddy system
- */
-struct phys_mem_buddy_list {
-    struct phys_mem_buddy_list *prev;
-    struct phys_mem_buddy_list *next;
-} __attribute__ ((packed));
-
-/*
- * Zone
- */
-struct phys_mem_zone {
-    /* Buddy structure */
-    struct phys_mem_buddy buddy;
-};
-
-/*
- * Physical memory
- */
-struct phys_mem {
-    /* The number of pages */
-    u64 nr;
-    /* Pages (flags etc.) */
-    struct phys_mem_page *pages;
-    /* Zones */
-    struct phys_mem_zone zones[PHYS_MEM_NR_ZONES];
-};
-
-/*
- * A slab object
- */
-struct phys_mem_slab_obj {
-    void *addr;
-} __attribute__ ((packed));
-
-/*
- * Slab objects
- *  slab_hdr
- *    object 0
- *    object 1
- *    ...
- */
-struct phys_mem_slab {
-    /* slab_hdr */
-    struct phys_mem_slab *next;
-    int nr;
-    int nused;
-    int free;
-    void *obj_head;
-    /* Free marks follows (nr byte) */
-    u8 marks[1];
-    /* Objects follows */
-} __attribute__ ((packed));
-
-/*
- * Free list of slab objects
- */
-struct phys_mem_slab_free_list {
-    struct phys_mem_slab *partial;
-    struct phys_mem_slab *full;
-    struct phys_mem_slab *free;
-} __attribute__ ((packed));
-
-/*
- * Root data structure of slab objects
- */
-struct phys_mem_slab_root {
-    /* Generic slabs */
-    struct phys_mem_slab_free_list gslabs[PHYS_MEM_SLAB_ORDER];
-} __attribute__ ((packed));
-
+/* Page table constants */
+#define PMEM_PTESIZE    4096
+#define PMEM_PTNENT     512
+#define PMEM_PML4       39
+#define PMEM_PDPT       30
+#define PMEM_PD         21
+#define PMEM_PT         12
 
 /* in memory.c */
 struct pmem * arch_pmem_init(struct bootinfo *, struct acpi *);
-int phys_mem_init(struct bootinfo *, struct acpi *);
-struct phys_mem_page * phys_mem_alloc_pages(int, int);
-struct phys_mem_page * phys_mem_alloc_page(int);
-void * phys_mem_page_address(struct phys_mem_page *);
-void phys_mem_free_pages(void *);
 u64 kmem_paddr(u64);
 
 #endif /* _KERNEL_MEMORY_H */

@@ -167,11 +167,16 @@ struct pmem_superpage {
     struct pmem_superpage *next;
 };
 
+struct pmem_page_althdr {
+    struct pmem_page_althdr *prev;
+    struct pmem_page_althdr *next;
+};
+
 /*
  * Buddy system
  */
 struct pmem_buddy {
-    struct pmem_superpage *heads[PMEM_MAX_BUDDY_ORDER + 1];
+    struct pmem_page_althdr *heads[PMEM_MAX_BUDDY_ORDER + 1];
 };
 
 /*
@@ -187,12 +192,14 @@ struct pmem_numa_domain {
 struct pmem {
     /* Lock */
     spinlock_t lock;
-    /* The number of superpages */
+    /* The number of pages */
     size_t nr;
-    /* Superpages (maintaining flags, proximity domain etc.) */
-    struct pmem_superpage *superpages;
+
     /* NUMA domains */
     struct pmem_numa_domain domains[PMEM_NUMA_MAX_DOMAINS];
+
+    /* Architecture specific data structure (e.g., page table)  */
+    void *arch;
 };
 
 /*

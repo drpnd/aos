@@ -390,8 +390,8 @@ proc_create(const char *path, const char *name, pid_t pid)
     struct arch_task *t;
     struct ktask_list *l;
     struct proc *proc;
-    struct pmem_superpage *ppage1;
-    struct pmem_superpage *ppage2;
+    void *ppage1;
+    void *ppage2;
     void *paddr;
     u64 cs;
     u64 ss;
@@ -471,23 +471,21 @@ proc_create(const char *path, const char *name, pid_t pid)
     }
 
     /* Prepare the user stack */
-    ppage1 = pmem_alloc_superpage(0);
+    ppage1 = pmem_alloc_page(0);
     if ( NULL == ppage1 ) {
         goto error_ustack;
     }
-    paddr = pmem_superpage_address(ppage1);
     t->ustack = (void *)USTACK_INIT;
-    vmem_remap(proc->vmem, (u64)t->ustack, (u64)paddr, 1);
+    vmem_remap(proc->vmem, (u64)t->ustack, (u64)ppage1, 1);
 
     /* Prepare exec */
-    ppage2 = pmem_alloc_superpage(0);
+    ppage2 = pmem_alloc_page(0);
     if ( NULL == ppage2 ) {
         goto error_exec;
         return -1;
     }
-    paddr = pmem_superpage_address(ppage2);
     exec = (void *)CODE_INIT;
-    vmem_remap(proc->vmem, (u64)exec, (u64)paddr, 1);
+    vmem_remap(proc->vmem, (u64)exec, (u64)ppage2, 1);
     (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
 
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
@@ -540,9 +538,9 @@ proc_create(const char *path, const char *name, pid_t pid)
     return 0;
 
 error_tl:
-    pmem_free_superpages(ppage2);
+    pmem_free_pages(ppage2, 0);
 error_exec:
-    pmem_free_superpages(ppage1);
+    pmem_free_pages(ppage1, 0);
 error_ustack:
     kfree(t->kstack);
 error_kstack:

@@ -39,134 +39,6 @@ int vmem_arch_init(struct vmem_space *);
 int vmem_remap(struct vmem_space *, u64, u64, int);
 u64 vmem_paddr(struct vmem_space *, u64);
 
-/*
- * Split the buddies so that we get at least one buddy at the order of o
- */
-static int
-_superpage_split(struct pmem_buddy *buddy, int o)
-{
-    int ret;
-    struct pmem_superpage *next;
-
-    /* Check the head of the current order */
-    if ( NULL != buddy->heads[o] ) {
-        /* At least one memory block (buddy) is available in this order. */
-        return 0;
-    }
-
-    /* Check the order */
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* No space available */
-        return -1;
-    }
-
-    /* Check the upper order */
-    if ( NULL == buddy->heads[o + 1] ) {
-        /* The upper order is also empty, then try to split one more upper. */
-        ret = _superpage_split(buddy, o + 1);
-        if ( ret < 0 ) {
-            /* Cannot get any */
-            return ret;
-        }
-    }
-
-    /* Save next at the upper order */
-    next = buddy->heads[o + 1]->next;
-    /* Split into two */
-    buddy->heads[o] = buddy->heads[o + 1];
-    buddy->heads[o]->prev = NULL;
-    buddy->heads[o]->next = buddy->heads[o] + (1 << o);
-    buddy->heads[o]->next->prev = buddy->heads[o];
-    buddy->heads[o]->next->next = NULL;
-    /* Remove the split one from the upper order */
-    buddy->heads[o + 1] = next;
-    if ( NULL != buddy->heads[o + 1] ) {
-        buddy->heads[o + 1]->prev = NULL;
-    }
-
-    return 0;
-}
-
-/*
- * Merge buddies onto the upper order on if possible
- */
-static void
-_superpage_merge(struct pmem_buddy *buddy, struct pmem_superpage *off, int o)
-{
-    int found;
-    struct pmem_superpage *p0;
-    struct pmem_superpage *p1;
-    struct pmem_superpage *list;
-
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* Reached the maximum order */
-        return;
-    }
-
-    /* Get the first page of the upper order */
-    p0 = pmem->superpages + ((off - pmem->superpages) / (1 << (o + 1))
-                             * (1 << (o + 1)));
-    /* Get the neighboring buddy */
-    p1 = p0 + (1 << o);
-
-    /* Check the current level and remove the pairs */
-    list = buddy->heads[o];
-    found = 0;
-    while ( NULL != list ) {
-        if ( p0 == list || p1 == list ) {
-            /* Found */
-            found++;
-            if ( 2 == found ) {
-                /* Found both */
-                break;
-            }
-        }
-        /* Go to the next one */
-        list = list->next;
-    }
-    if ( 2 != found ) {
-        /* Either of the buddy is not free */
-        return;
-    }
-
-    /* Remove both from the list */
-    if ( p0->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p0->prev;
-        list->next = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = list;
-        }
-    }
-    if ( p1->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p1->prev;
-        list->next = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = list;
-        }
-    }
-
-    /* Prepend it to the upper order */
-    p0->prev = NULL;
-    p0->next = buddy->heads[o + 1];
-    buddy->heads[o + 1] = p0;
-
-    /* Try to merge the upper order of buddies */
-    _superpage_merge(buddy, p0, o + 1);
-}
 
 /*
  * Build buddy system
@@ -174,66 +46,6 @@ _superpage_merge(struct pmem_buddy *buddy, struct pmem_superpage *off, int o)
 int
 pmem_init(struct pmem *pm)
 {
-    size_t i;
-    size_t j;
-    int k;
-    int flag;
-    int prox;
-    struct pmem_superpage *page;
-
-    /* Add all pages to the buddy system */
-    for ( k = PMEM_MAX_BUDDY_ORDER; k >= 0; k-- ) {
-        for ( i = 0; i < pm->nr; i += (1 << k) ) {
-            /* Check whether all pages are free and belong to the same domain */
-            flag = 0;
-            prox = -1;
-            for ( j = 0; j < (1ULL << k); j++ ) {
-                if ( i + j >= pm->nr ) {
-                    /* Exceeds the upper limit */
-                    flag = 1;
-                    break;
-                }
-                if ( !PMEM_IS_FREE(&pm->superpages[i + j]) ) {
-                    /* Used page */
-                    flag = 1;
-                    break;
-                }
-                if ( 0 != j && prox != pm->superpages[i + j].prox_domain ) {
-                    /* Different proximity domain */
-                    flag = 1;
-                    break;
-                }
-                prox = pm->superpages[i + j].prox_domain;
-            }
-            if ( prox < 0 || prox >= PMEM_NUMA_MAX_DOMAINS ) {
-                /* Exceeding max domains */
-                continue;
-            }
-            if ( !flag ) {
-                /* Append this page to the order k in the buddy system */
-                if ( NULL == pm->domains[prox].buddy.heads[k] ) {
-                    /* Empty list */
-                    pm->domains[prox].buddy.heads[k] = &pm->superpages[i];
-                    pm->domains[prox].buddy.heads[k]->prev = NULL;
-                    pm->domains[prox].buddy.heads[k]->next = NULL;
-                } else {
-                    /* Search the tail */
-                    page = pm->domains[prox].buddy.heads[k];
-                    while ( NULL != page->next ) {
-                        page = page->next;
-                    }
-                    page->next = &pm->superpages[i];
-                    page->next->prev = page;
-                    page->next->next = NULL;
-                }
-                /* Mark these pages as used (by the buddy system) */
-                for ( j = 0; j < (1ULL << k); j++ ) {
-                    pm->superpages[i + j].flags |= PMEM_USED;
-                }
-            }
-        }
-    }
-
     return 0;
 }
 
@@ -251,11 +63,11 @@ pmem_init(struct pmem *pm)
  *      The phys_mem_alloc_superpages() function returns a pointer to allocated
  *      superpage.  If there is an error, it returns a NULL pointer.
  */
-struct pmem_superpage *
-pmem_alloc_superpages(int domain, int order)
+void *
+pmem_alloc_pages(int domain, int order)
 {
     int ret;
-    struct pmem_superpage *a;
+    struct pmem_page_althdr *a;
 
     /* Check the argument */
     if ( order < 0 ) {
@@ -278,6 +90,7 @@ pmem_alloc_superpages(int domain, int order)
     /* Lock */
     spin_lock(&pmem->lock);
 
+#if 0
     /* Split first if needed */
     ret = _superpage_split(&pmem->domains[domain].buddy, order);
     if ( ret < 0 ) {
@@ -292,9 +105,9 @@ pmem_alloc_superpages(int domain, int order)
     if ( NULL != pmem->domains[domain].buddy.heads[order] ) {
         pmem->domains[domain].buddy.heads[order]->prev = NULL;
     }
-
+#endif
     /* Save the order */
-    a->order = order;
+    //a->order = order;
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -317,9 +130,9 @@ pmem_alloc_superpages(int domain, int order)
  *      page.  If there is an error, it returns a NULL pointer.
  */
 struct pmem_superpage *
-pmem_alloc_superpage(int domain)
+pmem_alloc_page(int domain)
 {
-    return pmem_alloc_superpages(domain, 0);
+    return pmem_alloc_pages(domain, 0);
 }
 
 /*
@@ -341,10 +154,7 @@ pmem_alloc_superpage(int domain)
 void *
 pmem_superpage_address(struct pmem_superpage *page)
 {
-    if ( NULL == page ) {
-        return NULL;
-    }
-    return PMEM_SUPERPAGE_ADDRESS(page);
+    return NULL;
 }
 
 /*
@@ -362,14 +172,10 @@ pmem_superpage_address(struct pmem_superpage *page)
  *      The phys_mem_free_superpages() function does not return a value.
  */
 void
-pmem_free_superpages(struct pmem_superpage *page)
+pmem_free_pages(void *page, int order)
 {
     struct pmem_superpage *list;
-    int order;
     int domain;
-
-    /* Get the order */
-    order = page->order;
 
     /* If the order exceeds its maximum, that's something wrong. */
     if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
@@ -379,25 +185,6 @@ pmem_free_superpages(struct pmem_superpage *page)
 
     /* Lock */
     spin_lock(&pmem->lock);
-
-    /* Reset the order */
-    page->order = -1;
-
-    /* Get the proximinity domain */
-    domain = page->prox_domain;
-
-    /* Return it to the buddy system */
-    list = pmem->domains[domain].buddy.heads[order];
-    /* Prepend the returned pages */
-    pmem->domains[domain].buddy.heads[order] = page;
-    pmem->domains[domain].buddy.heads[order]->prev = NULL;
-    pmem->domains[domain].buddy.heads[order]->next = list;
-    if ( NULL != list ) {
-        list->prev = page;
-    }
-
-    /* Merge buddies if possible */
-    _superpage_merge(&pmem->domains[domain].buddy, page, order);
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -664,6 +451,7 @@ kmem_init(void)
     kmem = (struct kmem *)0x00100000ULL;
     kmemset(kmem, 0, sizeof(struct kmem));
 
+#if 0
     /* First region */
     for ( i = 0; i < KMEM_REGION_SIZE; i++ ) {
         if ( i < pmem->nr
@@ -688,7 +476,7 @@ kmem_init(void)
             kmem->region2[i].type = 0;
         }
     }
-
+#endif
     /* Build the buddy system */
     for ( i = KMEM_REGION_SIZE - 1; i >= 0; i-- ) {
         if ( 0 == kmem->region2[i].type ) {
@@ -745,7 +533,6 @@ kmem_init(void)
 void *
 kmem_alloc_pages(int order)
 {
-    struct pmem_superpage *page;
     struct kmem_page *kpage;
     void *paddr;
     void *vaddr;
@@ -755,16 +542,15 @@ kmem_alloc_pages(int order)
     int ret;
 
     /* Allocate physical page */
-    page = pmem_alloc_superpages(0, order);
-    if ( NULL == page ) {
+    paddr = pmem_alloc_pages(0, order);
+    if ( NULL == paddr ) {
         return NULL;
     }
-    paddr = pmem_superpage_address(page);
 
     /* Kernel page */
     kpage = _kpage_alloc(order);
     if ( NULL == kpage ) {
-        pmem_free_superpages(page);
+        pmem_free_pages(paddr, order);
         return NULL;
     }
 
@@ -782,7 +568,7 @@ kmem_alloc_pages(int order)
         vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
     } else {
         /* Error */
-        pmem_free_superpages(page);
+        pmem_free_pages(paddr, order);
         _kpage_free(kpage);
         return NULL;
     }
@@ -796,7 +582,7 @@ kmem_alloc_pages(int order)
             for ( ; i >= 0; i-- ) {
                 kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem_free_superpages(page);
+            pmem_free_pages(paddr, order);
             _kpage_free(kpage);
             return NULL;
         }
@@ -829,7 +615,7 @@ kmem_free_pages(void *vaddr)
 
     _kpage_free(kpage);
     paddr = kmem_paddr((u64)vaddr);
-    pmem_free_superpages(&pmem->superpages[(u64)paddr / SUPERPAGESIZE]);
+    //pmem_free_pages(&pmem->superpages[(u64)paddr / SUPERPAGESIZE]);
 }
 
 
@@ -1434,7 +1220,6 @@ vmem_space_delete(struct vmem_space *vmem)
 struct vmem_page *
 vmem_alloc_pages(struct vmem_space *vmem, int order)
 {
-    struct pmem_superpage *page;
     struct vmem_page *vpage;
     struct vmem_page *tmp;
     void *paddr;
@@ -1443,16 +1228,15 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     int ret;
 
     /* Allocate physical page */
-    page = pmem_alloc_superpages(0, order);
-    if ( NULL == page ) {
+    paddr = pmem_alloc_pages(0, order);
+    if ( NULL == paddr ) {
         return NULL;
     }
-    paddr = pmem_superpage_address(page);
 
     /* Virtual page */
     vpage = _vpage_alloc(vmem, order);
     if ( NULL == vpage ) {
-        pmem_free_superpages(page);
+        pmem_free_pages(paddr, order);
         return NULL;
     }
 
@@ -1472,7 +1256,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
             for ( ; i >= 0; i-- ) {
                 vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem_free_superpages(page);
+            pmem_free_pages(paddr, order);
             _vpage_free(vmem, vpage);
             return NULL;
         }
