@@ -47,6 +47,7 @@
 
 /* in memory.c */
 struct pmem * arch_pmem_init(struct bootinfo *, struct acpi *);
+void * arch_pmem_alloc_pages(int, int);
 u64 kmem_paddr(u64);
 
 #endif /* _KERNEL_MEMORY_H */

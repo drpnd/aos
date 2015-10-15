@@ -66,6 +66,8 @@ pmem_init(struct pmem *pm)
 void *
 pmem_alloc_pages(int domain, int order)
 {
+    return pmem->alloc_pages(domain, order);
+#if 0
     int ret;
     struct pmem_page_althdr *a;
 
@@ -89,6 +91,7 @@ pmem_alloc_pages(int domain, int order)
 
     /* Lock */
     spin_lock(&pmem->lock);
+#endif
 
 #if 0
     /* Split first if needed */
@@ -106,6 +109,7 @@ pmem_alloc_pages(int domain, int order)
         pmem->domains[domain].buddy.heads[order]->prev = NULL;
     }
 #endif
+#if 0
     /* Save the order */
     //a->order = order;
 
@@ -113,6 +117,7 @@ pmem_alloc_pages(int domain, int order)
     spin_unlock(&pmem->lock);
 
     return a;
+#endif
 }
 
 /*

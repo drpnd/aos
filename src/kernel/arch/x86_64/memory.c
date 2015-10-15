@@ -134,6 +134,9 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         return NULL;
     }
 
+    /* Set the page allocation function */
+    pm->alloc_pages = arch_pmem_alloc_pages;
+
     return pm;
 }
 
@@ -152,7 +155,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
  *      there is an error, it returns a NULL pointer.
  */
 void *
-x_pmem_alloc_pages(int domain, int order)
+arch_pmem_alloc_pages(int domain, int order)
 {
     struct pmem_page_althdr *a;
 

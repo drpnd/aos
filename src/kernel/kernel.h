@@ -200,6 +200,10 @@ struct pmem {
 
     /* Architecture specific data structure (e.g., page table)  */
     void *arch;
+
+    /* Functions */
+    void * (*alloc_pages)(int, int);
+    void * (*free_pages)(int, int);
 };
 
 /*
