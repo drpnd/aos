@@ -136,6 +136,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 
     /* Set the page allocation function */
     pm->alloc_pages = arch_pmem_alloc_pages;
+    pm->free_pages = arch_pmem_free_pages;
 
     return pm;
 }
@@ -175,6 +176,39 @@ arch_pmem_alloc_pages(int domain, int order)
     spin_unlock(&pmem->lock);
 
     return a;
+}
+
+/*
+ * Free allocated 2^order superpages
+ *
+ * SYNOPSIS
+ *      void
+ *      arch_pmem_free_pages(void *page, int order);
+ *
+ * DESCRIPTION
+ *      The arch_pmem_free_pages() function deallocates superpages pointed by
+ *      page.
+ *
+ * RETURN VALUES
+ *      The arch_pmem_free_pages() function does not return a value.
+ */
+void
+arch_pmem_free_pages(void *page, int order)
+{
+    struct pmem_page *list;
+    int domain;
+
+    /* If the order exceeds its maximum, that's something wrong. */
+    if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
+        /* Something is wrong... */
+        return;
+    }
+
+    /* Lock */
+    spin_lock(&pmem->lock);
+
+    /* Unlock */
+    spin_unlock(&pmem->lock);
 }
 
 /*
