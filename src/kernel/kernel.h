@@ -203,7 +203,7 @@ struct pmem {
 
     /* Functions */
     void * (*alloc_pages)(int, int);
-    void * (*free_pages)(int, int);
+    void (*free_pages)(void *, int);
 };
 
 /*
