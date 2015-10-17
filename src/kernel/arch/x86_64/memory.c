@@ -48,6 +48,7 @@ static int
 _init_pages_range(u64, u64, struct pmem *, struct acpi *, u64, u64);
 static int _count_linear_page_tables(u64);
 static int _prepare_linear_page_tables(u64 *, u64);
+static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
@@ -134,7 +135,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         return NULL;
     }
 
-    /* Set the page allocation function */
+    /* Set the page allocation/release functions */
     pm->proto.alloc_pages = arch_pmem_alloc_pages;
     pm->proto.alloc_page = arch_pmem_alloc_page;
     pm->proto.free_pages = arch_pmem_free_pages;
@@ -160,18 +161,54 @@ void *
 arch_pmem_alloc_pages(int domain, int order)
 {
     struct pmem_page_althdr *a;
+    void *cr3;
+    int ret;
 
-    /* Check the argument */
+    /* Check the argument of the allocation order */
     if ( order < 0 ) {
         /* Invalid argument */
+        return NULL;
+    }
+
+    /* Check the size */
+    if ( order > PMEM_MAX_BUDDY_ORDER ) {
+        /* Oversized request */
+        return NULL;
+    }
+
+    /* Check the proximity domain */
+    if ( domain < 0 || domain >= PMEM_NUMA_MAX_DOMAINS ) {
+        /* Invalid zone */
         return NULL;
     }
 
     /* Lock */
     spin_lock(&pmem->lock);
 
-    /* FIXME */
-    a = NULL;
+    /* Save the cr3 */
+    cr3 = get_cr3();
+
+    /* Linear addressing */
+    set_cr3(pmem->arch);
+
+    /* Split the upper-order's buddy first if needed */
+    ret = _pmem_split(&pmem->domains[domain].buddy, order);
+    if ( ret < 0 ) {
+        /* Restore cr3 then unlock */
+        set_cr3(cr3);
+        spin_unlock(&pmem->lock);
+        return NULL;
+    }
+
+    /* Obtain the contiguous pages from the head */
+    a = pmem->domains[domain].buddy.heads[order];
+    pmem->domains[domain].buddy.heads[order] = a->next;
+    if ( NULL != pmem->domains[domain].buddy.heads[order] ) {
+        pmem->domains[domain].buddy.heads[order]->prev = NULL;
+    }
+
+    /* Restore cr3 */
+    set_cr3(cr3);
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -194,7 +231,7 @@ arch_pmem_alloc_page(int domain)
  *
  * SYNOPSIS
  *      void
- *      arch_pmem_free_pages(void *page, int order);
+ *      arch_pmem_free_pages(void *page, int domain, int order);
  *
  * DESCRIPTION
  *      The arch_pmem_free_pages() function deallocates superpages pointed by
@@ -204,10 +241,10 @@ arch_pmem_alloc_page(int domain)
  *      The arch_pmem_free_pages() function does not return a value.
  */
 void
-arch_pmem_free_pages(void *page, int order)
+arch_pmem_free_pages(void *page, int domain, int order)
 {
-    struct pmem_page *list;
-    int domain;
+    struct pmem_page_althdr *list;
+    void *cr3;
 
     /* If the order exceeds its maximum, that's something wrong. */
     if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
@@ -217,6 +254,29 @@ arch_pmem_free_pages(void *page, int order)
 
     /* Lock */
     spin_lock(&pmem->lock);
+
+    /* Save the cr3 */
+    cr3 = get_cr3();
+
+    /* Linear addressing */
+    set_cr3(pmem->arch);
+
+
+    /* Return it to the buddy system */
+    list = pmem->domains[domain].buddy.heads[order];
+    /* Prepend the returned pages */
+    pmem->domains[domain].buddy.heads[order] = page;
+    pmem->domains[domain].buddy.heads[order]->prev = NULL;
+    pmem->domains[domain].buddy.heads[order]->next = list;
+    if ( NULL != list ) {
+        list->prev = page;
+    }
+
+    /* Merge buddies if possible */
+    _pmem_merge(&pmem->domains[domain].buddy, page, order);
+
+    /* Restore cr3 */
+    set_cr3(cr3);
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -335,6 +395,7 @@ _init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
     int prox;
     u64 pxbase;
     u64 pxlen;
+    struct pmem_page_althdr *list;;
 
     /* Let the proximity domain be resolve in the first loop. */
     pxbase = 0;
@@ -362,6 +423,15 @@ _init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
         /* Check the proximity domain of the page */
         if ( PAGE_ADDR(i) >= pxbase && PAGE_ADDR(i + 1) <= pxbase + pxlen ) {
             /* This page is within the previously resolved memory space. */
+            /* Return it to the buddy system */
+            list = pmem->domains[prox].buddy.heads[0];
+            /* Prepend the returned pages */
+            pmem->domains[prox].buddy.heads[0] = (void *)PAGE_ADDR(i);
+            pmem->domains[prox].buddy.heads[prox]->prev = NULL;
+            pmem->domains[prox].buddy.heads[prox]->next = list;
+            if ( NULL != list ) {
+                list->prev = (void *)PAGE_ADDR(i);
+            }
             _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
         } else {
             /* This page is out of the range of the previously resolved
@@ -369,6 +439,14 @@ _init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
             prox = acpi_memory_prox_domain(acpi, PAGE_ADDR(i), &pxbase, &pxlen);
             if ( prox >= 0 ) {
                 /* Set the proximity domain */
+                list = pmem->domains[prox].buddy.heads[0];
+                /* Prepend the returned pages */
+                pmem->domains[prox].buddy.heads[0] = (void *)PAGE_ADDR(i);
+                pmem->domains[prox].buddy.heads[prox]->prev = NULL;
+                pmem->domains[prox].buddy.heads[prox]->next = list;
+                if ( NULL != list ) {
+                    list->prev = (void *)PAGE_ADDR(i);
+                }
                 _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
             } else {
                 /* No proximity domain; then clear the stored base and length

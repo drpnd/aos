@@ -45,7 +45,7 @@
 #define PMEM_IS_FREE(x)         (0 == (x)->flags ? 1 : 0)
 
 #define PMEM_NUMA_MAX_DOMAINS   256
-#define PMEM_MAX_BUDDY_ORDER    9
+#define PMEM_MAX_BUDDY_ORDER    18
 
 /* 32 (2^5) byte is the minimum object size of a slab object */
 #define KMEM_SLAB_BASE_ORDER    5
@@ -155,18 +155,8 @@ struct vmem_space {
 };
 
 /*
- * Physical page structure (superpage)
+ * Physical page structure header
  */
-struct pmem_superpage {
-    u32 flags;
-    int prox_domain;
-    int refcnt;
-    /* Buddy system */
-    int order;
-    struct pmem_superpage *prev;
-    struct pmem_superpage *next;
-};
-
 struct pmem_page_althdr {
     struct pmem_page_althdr *prev;
     struct pmem_page_althdr *next;
@@ -195,7 +185,7 @@ struct pmem_proto {
     /* Allocate a page from a particular zone */
     void * (*alloc_page)(int);
     /* Free 2^n pages */
-    void (*free_pages)(void *, int);
+    void (*free_pages)(void *, int, int);
 };
 
 /*

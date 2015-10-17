@@ -66,58 +66,7 @@ pmem_init(struct pmem *pm)
 void *
 pmem_alloc_pages(int domain, int order)
 {
-    return pmem->alloc_pages(domain, order);
-#if 0
-    int ret;
-    struct pmem_page_althdr *a;
-
-    /* Check the argument */
-    if ( order < 0 ) {
-        /* Invalid argument */
-        return NULL;
-    }
-
-    /* Check the size */
-    if ( order > PMEM_MAX_BUDDY_ORDER ) {
-        /* Oversized request */
-        return NULL;
-    }
-
-    /* Check the domain */
-    if ( domain < 0 || domain >= PMEM_NUMA_MAX_DOMAINS ) {
-        /* Invalid zone */
-        return NULL;
-    }
-
-    /* Lock */
-    spin_lock(&pmem->lock);
-#endif
-
-#if 0
-    /* Split first if needed */
-    ret = _superpage_split(&pmem->domains[domain].buddy, order);
-    if ( ret < 0 ) {
-        /* No memory available */
-        spin_unlock(&pmem->lock);
-        return NULL;
-    }
-
-    /* Obtain from the head */
-    a = pmem->domains[domain].buddy.heads[order];
-    pmem->domains[domain].buddy.heads[order] = a->next;
-    if ( NULL != pmem->domains[domain].buddy.heads[order] ) {
-        pmem->domains[domain].buddy.heads[order]->prev = NULL;
-    }
-#endif
-#if 0
-    /* Save the order */
-    //a->order = order;
-
-    /* Unlock */
-    spin_unlock(&pmem->lock);
-
-    return a;
-#endif
+    return pmem->proto.alloc_pages(domain, order);
 }
 
 /*
@@ -138,28 +87,6 @@ struct pmem_superpage *
 pmem_alloc_page(int domain)
 {
     return pmem_alloc_pages(domain, 0);
-}
-
-/*
- * Resolve the physical address of the specified page structure
- *
- * SYNOPSIS
- *      void *
- *      pmem_superpage_address(struct pmem_superpage *page);
- *
- * DESCRIPTION
- *      The pmem_superpage_address() function returns the physical memory
- *      address corresponding to the specified superpage structure.
- *
- * RETURN VALUES
- *      The pmem_superpage_address() function returns a pointer to the physical
- *      memory address corresponding to the superpage.  If there is an error, it
- *      returns a NULL pointer.
- */
-void *
-pmem_superpage_address(struct pmem_superpage *page)
-{
-    return NULL;
 }
 
 /*
