@@ -189,6 +189,7 @@ arch_pmem_alloc_pages(int domain, int order)
     cr3 = get_cr3();
 
     /* Linear addressing */
+    _disable_page_global();
     set_cr3(pmem->arch);
 
     /* Split the upper-order's buddy first if needed */
@@ -209,6 +210,7 @@ arch_pmem_alloc_pages(int domain, int order)
 
     /* Restore cr3 */
     set_cr3(cr3);
+    _enable_page_global();
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -259,8 +261,8 @@ arch_pmem_free_pages(void *page, int domain, int order)
     cr3 = get_cr3();
 
     /* Linear addressing */
+    _disable_page_global();
     set_cr3(pmem->arch);
-
 
     /* Return it to the buddy system */
     list = pmem->domains[domain].buddy.heads[order];
@@ -277,6 +279,7 @@ arch_pmem_free_pages(void *page, int domain, int order)
 
     /* Restore cr3 */
     set_cr3(cr3);
+    _enable_page_global();
 
     /* Unlock */
     spin_unlock(&pmem->lock);
@@ -684,10 +687,6 @@ _disable_page_global(void)
     /* Disable the global page feature */
     set_cr4(get_cr4() & ~0x80ULL);
 }
-
-
-
-
 
 /*
  * Initialize the kernel memory
