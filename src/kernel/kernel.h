@@ -187,6 +187,18 @@ struct pmem_numa_domain {
 };
 
 /*
+ * Protocol to operate the physical memory
+ */
+struct pmem_proto {
+    /* Allocate 2^n pages from a particular zone */
+    void * (*alloc_pages)(int, int);
+    /* Allocate a page from a particular zone */
+    void * (*alloc_page)(int);
+    /* Free 2^n pages */
+    void (*free_pages)(void *, int);
+};
+
+/*
  * Physical memory
  */
 struct pmem {
@@ -201,9 +213,8 @@ struct pmem {
     /* Architecture specific data structure (e.g., page table)  */
     void *arch;
 
-    /* Functions */
-    void * (*alloc_pages)(int, int);
-    void (*free_pages)(void *, int);
+    /* Protocol */
+    struct pmem_proto proto;
 };
 
 /*

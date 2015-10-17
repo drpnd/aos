@@ -135,8 +135,9 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Set the page allocation function */
-    pm->alloc_pages = arch_pmem_alloc_pages;
-    pm->free_pages = arch_pmem_free_pages;
+    pm->proto.alloc_pages = arch_pmem_alloc_pages;
+    pm->proto.alloc_page = arch_pmem_alloc_page;
+    pm->proto.free_pages = arch_pmem_free_pages;
 
     return pm;
 }
@@ -177,6 +178,16 @@ arch_pmem_alloc_pages(int domain, int order)
 
     return a;
 }
+
+/*
+ * Allocate a page
+ */
+void *
+arch_pmem_alloc_page(int domain)
+{
+    return arch_pmem_alloc_pages(domain, 0);
+}
+
 
 /*
  * Free allocated 2^order superpages
