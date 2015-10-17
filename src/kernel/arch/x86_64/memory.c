@@ -50,7 +50,7 @@ static int _count_linear_page_tables(u64);
 static int _prepare_linear_page_tables(u64 *, u64);
 static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
-static void _pmem_return_to_buddy(void *, int, int);
+static void _pmem_return_to_buddy(struct pmem *, void *, int, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
 
@@ -266,7 +266,7 @@ arch_pmem_free_pages(void *page, int domain, int order)
     set_cr3(pmem->arch);
 
     /* Return it to the buddy system */
-    _pmem_return_to_buddy(page, domain, order);
+    _pmem_return_to_buddy(pmem, page, domain, order);
 
     /* Merge buddies if possible */
     _pmem_merge(&pmem->domains[domain].buddy, page, order);
@@ -421,7 +421,7 @@ _init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
         if ( PAGE_ADDR(i) >= pxbase && PAGE_ADDR(i + 1) <= pxbase + pxlen ) {
             /* This page is within the previously resolved memory space. */
             /* Return it to the buddy system */
-            _pmem_return_to_buddy((void *)PAGE_ADDR(i), prox, 0);
+            _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), prox, 0);
             _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
         } else {
             /* This page is out of the range of the previously resolved
@@ -430,7 +430,7 @@ _init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
             if ( prox >= 0 ) {
                 /* The proximity domain is resolved, then add it to the buddy
                    system. */
-                _pmem_return_to_buddy((void *)PAGE_ADDR(i), prox, 0);
+                _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), prox, 0);
                 _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
             } else {
                 /* No proximity domain; then clear the stored base and length
@@ -653,16 +653,16 @@ _pmem_merge(struct pmem_buddy *buddy, void *addr, int o)
  * Return 2^order pages to the buddy system of the specified domain
  */
 static void
-_pmem_return_to_buddy(void *addr, int domain, int order)
+_pmem_return_to_buddy(struct pmem *pm, void *addr, int domain, int order)
 {
     struct pmem_page_althdr *list;
 
     /* Return it to the buddy system */
-    list = pmem->domains[domain].buddy.heads[order];
+    list = pm->domains[domain].buddy.heads[order];
     /* Prepend the returned pages */
-    pmem->domains[domain].buddy.heads[order] = addr;
-    pmem->domains[domain].buddy.heads[order]->prev = NULL;
-    pmem->domains[domain].buddy.heads[order]->next = list;
+    pm->domains[domain].buddy.heads[order] = addr;
+    pm->domains[domain].buddy.heads[order]->prev = NULL;
+    pm->domains[domain].buddy.heads[order]->next = list;
     if ( NULL != list ) {
         list->prev = addr;
     }
