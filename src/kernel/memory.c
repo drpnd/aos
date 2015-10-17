@@ -49,78 +49,6 @@ pmem_init(struct pmem *pm)
     return 0;
 }
 
-/*
- * Allocate 2^order physical superpages
- *
- * SYNOPSIS
- *      struct pmem_superpage *
- *      phys_mem_alloc_superpages(int zone, int order);
- *
- * DESCRIPTION
- *      The phys_mem_alloc_superpages() function allocates 2^order superpages.
- *
- * RETURN VALUES
- *      The phys_mem_alloc_superpages() function returns a pointer to allocated
- *      superpage.  If there is an error, it returns a NULL pointer.
- */
-void *
-pmem_alloc_pages(int domain, int order)
-{
-    return pmem->proto.alloc_pages(domain, order);
-}
-
-/*
- * Allocate a physical superpage
- *
- * SYNOPSIS
- *      struct pmem_superpage *
- *      pmem_alloc_superpage(int domain);
- *
- * DESCRIPTION
- *      The pmem_alloc_superpage() function allocates one superpage.
- *
- * RETURN VALUES
- *      The pmem_alloc_superpage() function returns a pointer to the allocated
- *      page.  If there is an error, it returns a NULL pointer.
- */
-struct pmem_superpage *
-pmem_alloc_page(int domain)
-{
-    return pmem_alloc_pages(domain, 0);
-}
-
-/*
- * Free allocated 2^order superpages
- *
- * SYNOPSIS
- *      void
- *      phys_mem_free_superpages(struct pmem_superpage *page);
- *
- * DESCRIPTION
- *      The phys_mem_free_superpages() function deallocates superpages pointed
- *      by page.
- *
- * RETURN VALUES
- *      The phys_mem_free_superpages() function does not return a value.
- */
-void
-pmem_free_pages(void *page, int order)
-{
-    struct pmem_superpage *list;
-    int domain;
-
-    /* If the order exceeds its maximum, that's something wrong. */
-    if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
-        /* Something is wrong... */
-        return;
-    }
-
-    /* Lock */
-    spin_lock(&pmem->lock);
-
-    /* Unlock */
-    spin_unlock(&pmem->lock);
-}
 
 /*
  * Split the buddies so that we get at least one buddy at the order of o
@@ -474,7 +402,7 @@ kmem_alloc_pages(int order)
     int ret;
 
     /* Allocate physical page */
-    paddr = pmem_alloc_pages(0, order);
+    paddr = pmem->proto.alloc_pages(0, order);
     if ( NULL == paddr ) {
         return NULL;
     }
@@ -482,7 +410,7 @@ kmem_alloc_pages(int order)
     /* Kernel page */
     kpage = _kpage_alloc(order);
     if ( NULL == kpage ) {
-        pmem_free_pages(paddr, order);
+        pmem->proto.free_pages(paddr, 0, order);
         return NULL;
     }
 
@@ -500,7 +428,7 @@ kmem_alloc_pages(int order)
         vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
     } else {
         /* Error */
-        pmem_free_pages(paddr, order);
+        pmem->proto.free_pages(paddr, 0, order);
         _kpage_free(kpage);
         return NULL;
     }
@@ -514,7 +442,7 @@ kmem_alloc_pages(int order)
             for ( ; i >= 0; i-- ) {
                 kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem_free_pages(paddr, order);
+            pmem->proto.free_pages(paddr, 0, order);
             _kpage_free(kpage);
             return NULL;
         }
@@ -1160,7 +1088,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     int ret;
 
     /* Allocate physical page */
-    paddr = pmem_alloc_pages(0, order);
+    paddr = pmem->proto.alloc_pages(0, order);
     if ( NULL == paddr ) {
         return NULL;
     }
@@ -1168,7 +1096,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     /* Virtual page */
     vpage = _vpage_alloc(vmem, order);
     if ( NULL == vpage ) {
-        pmem_free_pages(paddr, order);
+        pmem->proto.free_pages(paddr, 0, order);
         return NULL;
     }
 
@@ -1188,7 +1116,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
             for ( ; i >= 0; i-- ) {
                 vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem_free_pages(paddr, order);
+            pmem->proto.free_pages(paddr, 0, order);
             _vpage_free(vmem, vpage);
             return NULL;
         }

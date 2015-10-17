@@ -471,7 +471,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     }
 
     /* Prepare the user stack */
-    ppage1 = pmem_alloc_page(0);
+    ppage1 = pmem->proto.alloc_page(0);
     if ( NULL == ppage1 ) {
         goto error_ustack;
     }
@@ -479,7 +479,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     vmem_remap(proc->vmem, (u64)t->ustack, (u64)ppage1, 1);
 
     /* Prepare exec */
-    ppage2 = pmem_alloc_page(0);
+    ppage2 = pmem->proto.alloc_page(0);
     if ( NULL == ppage2 ) {
         goto error_exec;
         return -1;
@@ -538,9 +538,9 @@ proc_create(const char *path, const char *name, pid_t pid)
     return 0;
 
 error_tl:
-    pmem_free_pages(ppage2, 0);
+    pmem->proto.free_pages(ppage2, 0, 0);
 error_exec:
-    pmem_free_pages(ppage1, 0);
+    pmem->proto.free_pages(ppage1, 0, 0);
 error_ustack:
     kfree(t->kstack);
 error_kstack:
