@@ -675,7 +675,7 @@ static void
 _enable_page_global(void)
 {
     /* Enable the global page feature */
-    set_cr4(get_cr4() | 0x80);
+    set_cr4(get_cr4() | CR4_PGE);
 }
 
 /*
@@ -685,7 +685,7 @@ static void
 _disable_page_global(void)
 {
     /* Disable the global page feature */
-    set_cr4(get_cr4() & ~0x80ULL);
+    set_cr4(get_cr4() & ~CR4_PGE);
 }
 
 /*
@@ -729,8 +729,13 @@ arch_kmem_init(void)
 
     /* 512 pages in a region */
     for ( i = 0; i < 512; i++ ) {
-        region[0]->pages[i].address = SUPERPAGE_ADDR(i);
-        region[0]->pages[i].type = 0;
+        if ( SUPERPAGE_ADDR(i) < PMEM_LBOUND ) {
+            region[0]->pages[i].address = SUPERPAGE_ADDR(i);
+            region[0]->pages[i].type = 1;
+        } else {
+            region[0]->pages[i].address = 0;
+            region[0]->pages[i].type = 0;
+        }
         region[1]->pages[i].address = SUPERPAGE_ADDR(i) + (3ULL << 30);
         region[1]->pages[i].type = 0;
     }

@@ -54,7 +54,7 @@
 /* 2^16 objects in a cache */
 #define KMEM_SLAB_NR_OBJ_ORDER  4
 
-#define KMEM_MAX_BUDDY_ORDER    9
+#define KMEM_MAX_BUDDY_ORDER    18
 #define KMEM_REGION_SIZE        512
 
 #define VMEM_MAX_BUDDY_ORDER    9
@@ -435,10 +435,6 @@ void sched_high(void);
 
 /* in memory.c */
 int pmem_init(struct pmem *);
-struct pmem_superpage * pmem_alloc_superpages(int, int);
-struct pmem_superpage * pmem_alloc_superpage(int);
-void * pmem_superpage_address(struct pmem_superpage *);
-void pmem_free_superpages(struct pmem_superpage *);
 int kmem_init(void);
 void * kmalloc(size_t);
 void kfree(void *);

@@ -77,6 +77,9 @@
 #define GDT_RING3_CODE64_SEL    (5<<3)
 #define GDT_TSS_SEL_BASE        (6<<3)
 
+/* Control registers */
+#define CR4_PGE                 (1ULL<<7)
+
 /*
  * Boot information from boot loader
  */

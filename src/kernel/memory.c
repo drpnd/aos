@@ -394,23 +394,23 @@ void *
 kmem_alloc_pages(int order)
 {
     struct kmem_page *kpage;
-    void *paddr;
+    void *ppage;
     void *vaddr;
     ssize_t i;
     struct kmem_page *region;
     off_t off;
     int ret;
 
-    /* Allocate physical page */
-    paddr = pmem->proto.alloc_pages(0, order);
-    if ( NULL == paddr ) {
+    /* Allocate a physical page */
+    ppage = pmem->proto.alloc_pages(0, order);
+    if ( NULL == ppage ) {
         return NULL;
     }
 
     /* Kernel page */
     kpage = _kpage_alloc(order);
     if ( NULL == kpage ) {
-        pmem->proto.free_pages(paddr, 0, order);
+        pmem->proto.free_pages(ppage, 0, order);
         return NULL;
     }
 
@@ -428,21 +428,21 @@ kmem_alloc_pages(int order)
         vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
     } else {
         /* Error */
-        pmem->proto.free_pages(paddr, 0, order);
+        pmem->proto.free_pages(ppage, 0, order);
         _kpage_free(kpage);
         return NULL;
     }
     for ( i = 0; i < (1LL << order); i++ ) {
-        region[off + i].address = (size_t)paddr + SUPERPAGE_ADDR(i);
+        region[off + i].address = (size_t)ppage + SUPERPAGE_ADDR(i);
         region[off + i].type = 1;
         ret = kmem_remap((u64)vaddr + SUPERPAGE_ADDR(i),
-                         (u64)paddr + SUPERPAGE_ADDR(i), 1);
+                         (u64)ppage + SUPERPAGE_ADDR(i), 1);
         if ( ret < 0 ) {
             /* Rollback */
             for ( ; i >= 0; i-- ) {
                 kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem->proto.free_pages(paddr, 0, order);
+            pmem->proto.free_pages(ppage, 0, order);
             _kpage_free(kpage);
             return NULL;
         }
