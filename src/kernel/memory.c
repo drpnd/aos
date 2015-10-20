@@ -746,7 +746,7 @@ kfree(void *ptr)
  * Split the buddies so that we get at least one buddy at the order of o
  */
 static int
-_vpage_split(struct vmem_region *region, int o)
+_vmem_page_split(struct vmem_region *region, int o)
 {
     int ret;
     struct vmem_page *next;
@@ -766,7 +766,7 @@ _vpage_split(struct vmem_region *region, int o)
     /* Check the upper order */
     if ( NULL == region->heads[o + 1] ) {
         /* The upper order is also empty, then try to split one more upper. */
-        ret = _vpage_split(region, o + 1);
+        ret = _vmem_page_split(region, o + 1);
         if ( ret < 0 ) {
             /* Cannot get any */
             return ret;
@@ -789,7 +789,7 @@ _vpage_split(struct vmem_region *region, int o)
  * Merge buddies onto the upper order on if possible
  */
 static void
-_vpage_merge(struct vmem_region *region, struct vmem_page *off, int o)
+_vmem_page_merge(struct vmem_region *region, struct vmem_page *off, int o)
 {
     int found;
     struct vmem_page *p0;
@@ -862,14 +862,14 @@ _vpage_merge(struct vmem_region *region, struct vmem_page *off, int o)
     region->heads[o + 1] = p0;
 
     /* Try to merge the upper order of buddies */
-    _vpage_merge(region, p0, o + 1);
+    _vmem_page_merge(region, p0, o + 1);
 }
 
 /*
  * Search available virtual pages
  */
 static struct vmem_page *
-_vpage_alloc(struct vmem_space *vm, int n)
+_vmem_page_alloc(struct vmem_space *vm, int n)
 {
     struct vmem_page *page;
     struct vmem_region *region;
@@ -885,7 +885,7 @@ _vpage_alloc(struct vmem_space *vm, int n)
     region = vm->first_region;
 
     /* Split first if needed */
-    ret = _vpage_split(region, n);
+    ret = _vmem_page_split(region, n);
     if ( ret < 0 ) {
         /* No memory available */
         return NULL;
@@ -907,8 +907,11 @@ _vpage_alloc(struct vmem_space *vm, int n)
     return page;
 }
 
+/*
+ * Release a virtual page
+ */
 static void
-_vpage_free(struct vmem_space *vm, void *addr)
+_vmem_page_free(struct vmem_space *vm, void *addr)
 {
     struct vmem_region *region;
     struct vmem_page *page;
@@ -964,7 +967,7 @@ _vpage_free(struct vmem_space *vm, void *addr)
     region->heads[order]->next = list;
 
     /* Merge buddies if possible */
-    _vpage_merge(region, page, order);
+    _vmem_page_merge(region, page, order);
 }
 
 /*
@@ -1094,7 +1097,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     }
 
     /* Virtual page */
-    vpage = _vpage_alloc(vmem, order);
+    vpage = _vmem_page_alloc(vmem, order);
     if ( NULL == vpage ) {
         pmem->proto.free_pages(paddr, 0, order);
         return NULL;
@@ -1117,7 +1120,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
                 vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
             pmem->proto.free_pages(paddr, 0, order);
-            _vpage_free(vmem, vpage);
+            _vmem_page_free(vmem, vpage);
             return NULL;
         }
         tmp = vpage->next;
