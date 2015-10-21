@@ -695,11 +695,11 @@ struct kmem *
 arch_kmem_init(void)
 {
     struct kmem *kmem;
-    struct kmem_region *region[2];
+    struct vmem_region *region[2];
     int i;
 
     /* Check the size of the kmem data structure first */
-    if ( sizeof(struct kmem) + sizeof(struct kmem_region) * 2
+    if ( sizeof(struct kmem) + sizeof(struct vmem_region) * 2
          + sizeof(struct kmem_page) * 1024 > KMEM_MAX_SIZE ) {
         return NULL;
     }
@@ -712,31 +712,31 @@ arch_kmem_init(void)
        unlike other UNIX-like systems in the region from 0 to 1 GiB and from 3
        to 4 GiB.  The first region could be removed by relocating the kernel,
        but this operating system does not do it. */
-    region[0] = (struct kmem_region *)(KMEM_BASE + sizeof(struct kmem));
-    region[1] = (struct kmem_region *)(KMEM_BASE + sizeof(struct kmem)
-                                       + sizeof(struct kmem_region));
+    region[0] = (struct vmem_region *)(KMEM_BASE + sizeof(struct kmem));
+    region[1] = (struct vmem_region *)(KMEM_BASE + sizeof(struct kmem)
+                                       + sizeof(struct vmem_region));
     region[0]->start = (ptr_t)0;
     region[0]->len = (1ULL << 30);
-    region[0]->pages = (struct kmem_page *)(KMEM_BASE + sizeof(struct kmem)
-                                            + sizeof(struct kmem_region) * 2);
+    region[0]->pages = (struct vmem_page *)(KMEM_BASE + sizeof(struct kmem)
+                                            + sizeof(struct vmem_region) * 2);
     region[0]->next = region[1];
     region[1]->start = (ptr_t)(3ULL << 30);
     region[1]->len = (1ULL << 30);
-    region[1]->pages = (struct kmem_page *)(KMEM_BASE + sizeof(struct kmem)
-                                            + sizeof(struct kmem_region) * 2
-                                            + sizeof(struct kmem_page) * 512);
+    region[1]->pages = (struct vmem_page *)(KMEM_BASE + sizeof(struct kmem)
+                                            + sizeof(struct vmem_region) * 2
+                                            + sizeof(struct vmem_page) * 512);
     region[1]->next = NULL;
 
     /* 512 pages in a region */
     for ( i = 0; i < 512; i++ ) {
         if ( SUPERPAGE_ADDR(i) < PMEM_LBOUND ) {
-            region[0]->pages[i].address = SUPERPAGE_ADDR(i);
+            region[0]->pages[i].addr = SUPERPAGE_ADDR(i);
             region[0]->pages[i].type = 1;
         } else {
-            region[0]->pages[i].address = 0;
+            region[0]->pages[i].addr = 0;
             region[0]->pages[i].type = 0;
         }
-        region[1]->pages[i].address = SUPERPAGE_ADDR(i) + (3ULL << 30);
+        region[1]->pages[i].addr = SUPERPAGE_ADDR(i) + (3ULL << 30);
         region[1]->pages[i].type = 0;
     }
 
