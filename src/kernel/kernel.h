@@ -60,6 +60,7 @@
 #define VMEM_MAX_BUDDY_ORDER    9
 
 #define VMEM_USED               1
+#define VMEM_GLOBAL             (1<<1)
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
