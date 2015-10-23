@@ -1090,16 +1090,16 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     ssize_t i;
     int ret;
 
-    /* Allocate physical page */
-    paddr = pmem->proto.alloc_pages(0, order);
-    if ( NULL == paddr ) {
+    /* Allocate 2^order contiguous virtual pages */
+    vpage = _vmem_page_alloc(vmem, order);
+    if ( NULL == vpage ) {
         return NULL;
     }
 
-    /* Virtual page */
-    vpage = _vmem_page_alloc(vmem, order);
-    if ( NULL == vpage ) {
-        pmem->proto.free_pages(paddr, 0, order);
+    /* Allocate physical page */
+    paddr = pmem->proto.alloc_pages(0, order);
+    if ( NULL == paddr ) {
+        _vmem_page_free(vmem, vpage);
         return NULL;
     }
 
