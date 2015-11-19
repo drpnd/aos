@@ -164,6 +164,15 @@ struct pmem_page_althdr {
 };
 
 /*
+ * Physical page
+ */
+struct pmem_page {
+    u8 usable:1;
+    u8 used:1;
+    u8 order:6;
+};
+
+/*
  * Buddy system
  */
 struct pmem_buddy {
@@ -195,8 +204,12 @@ struct pmem_proto {
 struct pmem {
     /* Lock */
     spinlock_t lock;
+
     /* The number of pages */
     size_t nr;
+
+    /* pages */
+    struct pmem_page *pages;
 
     /* NUMA domains */
     struct pmem_numa_domain domains[PMEM_NUMA_MAX_DOMAINS];
