@@ -312,7 +312,6 @@ load_tftp_file:
 	xorl	%eax,%eax
 	movw	t_PXENV_TFTP_READ.BufferSize,%ax
 	addl	%eax,%edx
-	movw	$0xffff,%ax			/* to raise an error */
 	cmpl	$0x100000,%edx
 	jge	load_tftp_file.error
 	/* Check if it is the last packet */
