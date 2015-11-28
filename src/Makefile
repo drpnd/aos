@@ -17,6 +17,9 @@ diskboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
 bootmon: CFLAGS=-I./include \
 	-Wall -fleading-underscore -nostdlib -nodefaultlibs -fno-builtin -O3 -m64
+
+pxeboot: ASFLAGS=-nostdlib -I./boot/arch/$(ARCH)/
+
 kpack: CFLAGS=-I./include \
 	-Wall -fleading-underscore -nostdlib -nodefaultlibs -fno-builtin -O3 -m64
 
@@ -32,6 +35,10 @@ bootmon: boot/arch/$(ARCH)/bootmon.o \
 	boot/arch/$(ARCH)/entry64.o \
 	boot/arch/$(ARCH)/boot.o
 	$(LD) -N -e bootmon -Ttext=0x9000 --oformat binary -o $@ $^
+
+## PXE boot
+pxeboot: boot/arch/$(ARCH)/pxeboot.o
+	$(LD) -N -e pxeboot -Ttext=0x7c00 --oformat binary -o $@ $^
 
 ## Kernel
 kernel/arch/$(ARCH)/arch.o: include/aos/const.h kernel/kernel.h \

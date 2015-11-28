@@ -78,6 +78,8 @@ initrd:
 bootloader:
 #	Compile the initial program loader in MBR
 	make -C src diskboot
+#	Compile the PXE boot loader
+	make -C src pxeboot
 #	Compile the boot monitor called from diskboot
 	make -C src bootmon
 
