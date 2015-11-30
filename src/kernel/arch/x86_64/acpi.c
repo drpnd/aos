@@ -432,6 +432,22 @@ acpi_load(struct acpi *acpi)
 }
 
 /*
+ * Test if the platform is running on NUMA architecture
+ */
+int
+acpi_is_numa(struct acpi *acpi)
+{
+    /* Check the pointer to the SRAT */
+    if ( NULL == acpi->srat ) {
+        /* NUMA is enabled. */
+        return 0;
+    }
+
+    /* NUMA is disabled or unsupported. */
+    return 1;
+}
+
+/*
  * Resolve the proximity domain of a local APIC
  */
 int
