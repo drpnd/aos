@@ -551,6 +551,116 @@ acpi_memory_prox_domain(struct acpi *acpi, u64 m, u64 *rbase, u64 *rlen)
 }
 
 /*
+ * Count the number of entries of memory domains from ACPI SRAT
+ */
+int
+acpi_memory_count_entries(struct acpi *acpi)
+{
+    u64 addr;
+    struct acpi_sdt_srat_common *srat;
+    u32 len;
+    int n;
+
+    /* Check the pointer to the SRAT */
+    if ( NULL == acpi->srat ) {
+        return -1;
+    }
+
+    /* Clear */
+    n = 0;
+    len = 0;
+
+    /* Entry point for the SRAT */
+    addr = (u64)acpi->srat;
+    len += sizeof(struct acpi_sdt_hdr) + sizeof(struct acpi_sdt_srat_hdr);
+
+    /* Look through the SRAT for memory proximity domain entries */
+    while ( len < acpi->srat->length ) {
+        srat = (struct acpi_sdt_srat_common *)(addr + len);
+        if ( len + srat->length > acpi->srat->length ) {
+            /* Oversized */
+            break;
+        }
+        switch ( srat->type ) {
+        case 1:
+            /* Memory */
+            n++;
+            break;
+        default:
+            /* Other or unknown */
+            ;
+        }
+        /* Next entry */
+        len += srat->length;
+    }
+
+    return n;
+}
+
+/*
+ * Convert the domain table to to physical memory zone map
+ */
+int
+acpi_memory_zone_map(struct acpi *acpi, struct pmem_zone_map *zmap)
+{
+    u64 addr;
+    struct acpi_sdt_srat_common *srat;
+    struct acpi_sdt_srat_memory *srat_memory;
+    u32 len;
+    u64 tbase;
+    u64 tlen;
+    int n;
+
+    /* Check the pointer to the SRAT */
+    if ( NULL == acpi->srat ) {
+        return 0;
+    }
+
+    /* Clear */
+    n = 0;
+    len = 0;
+
+    /* Entry point for the SRAT */
+    addr = (u64)acpi->srat;
+    len += sizeof(struct acpi_sdt_hdr) + sizeof(struct acpi_sdt_srat_hdr);
+
+    /* Look through the SRAT for memory proximity domain entries */
+    while ( len < acpi->srat->length ) {
+        srat = (struct acpi_sdt_srat_common *)(addr + len);
+        if ( len + srat->length > acpi->srat->length ) {
+            /* Oversized */
+            break;
+        }
+        switch ( srat->type ) {
+        case 1:
+            /* Memory */
+            if ( n >= zmap->nr ) {
+                /* Error */
+                return -1;
+            }
+            srat_memory = (struct acpi_sdt_srat_memory *)srat;
+            tbase = (u64)srat_memory->base_addr_low |
+                ((u64)srat_memory->base_addr_high << 32);
+            tlen = (u64)srat_memory->length_low |
+                ((u64)srat_memory->length_high << 32);
+            zmap->entries[n].pgbase = PAGE_INDEX(tbase);
+            zmap->entries[n].pglen = tlen / PAGESIZE;
+            zmap->entries[n].zone
+                = PMEM_ZONE_NUMA(srat_memory->proximity_domain);
+            n++;
+            break;
+        default:
+            /* Other or unknown */
+            ;
+        }
+        /* Next entry */
+        len += srat->length;
+    }
+
+    return n;
+}
+
+/*
  * Local variables:
  * tab-width: 4
  * c-basic-offset: 4

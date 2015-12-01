@@ -25,6 +25,7 @@
 #define _KERNEL_ACPI_H
 
 #include <aos/const.h>
+#include "../../kernel.h"
 
 #define ACPI_TMR_HZ 3579545
 #define ACPI_SCI_EN 0x1
@@ -260,8 +261,11 @@ u32 acpi_get_timer(struct acpi *);
 u64 acpi_get_timer_period(struct acpi *);
 u64 acpi_get_timer_hz(void);
 
+int acpi_is_numa(struct acpi *);
 int acpi_lapic_prox_domain(struct acpi *, int);
 int acpi_memory_prox_domain(struct acpi *, u64, u64 *, u64 *);
+int acpi_memory_count_entries(struct acpi *);
+int acpi_memory_zone_map(struct acpi *, struct pmem_zone_map *);
 
 extern struct acpi arch_acpi;
 

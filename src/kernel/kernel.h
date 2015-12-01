@@ -34,8 +34,8 @@
 
 #define PAGE_ADDR(i)            (PAGESIZE * (i))
 #define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (i))
-#define PAGE_INDEX(a)           ((a) / PAGESIZE)
-#define SUPERPAGE_INDEX(a)      ((a) / SUPERPAGESIZE)
+#define PAGE_INDEX(a)           ((u64)(a) / PAGESIZE)
+#define SUPERPAGE_INDEX(a)      ((u64)(a) / SUPERPAGESIZE)
 
 #define PMEM_USED               1ULL            /* Managed by buddy system */
 #define PMEM_WIRED              (1ULL<<1)       /* Wired (kernel use) */
@@ -44,8 +44,16 @@
 #define PMEM_UNAVAIL            (1ULL<<16)      /* Unavailable space */
 #define PMEM_IS_FREE(x)         (0 == (x)->flags ? 1 : 0)
 
-#define PMEM_NUMA_MAX_DOMAINS   256
 #define PMEM_MAX_BUDDY_ORDER    18
+#define PMEM_INVAL_BUDDY_ORDER  0x3f
+
+#define PMEM_NUMA_MAX_DOMAINS   256
+#define PMEM_ZONE_DMA           0
+#define PMEM_ZONE_LOWMEM        1
+#define PMEM_ZONE_UMA           2
+#define PMEM_ZONE_NUMA(d)       (3 + (d))
+#define PMEM_MAX_ZONES          (3 + PMEM_NUMA_MAX_DOMAINS)
+
 
 /* 32 (2^5) byte is the minimum object size of a slab object */
 #define KMEM_SLAB_BASE_ORDER    5
@@ -180,29 +188,50 @@ struct pmem_buddy {
 };
 
 /*
- * NUMA domain
+ * Memory zone
  */
-struct pmem_numa_domain {
+struct pmem_zone {
+    /* Buddy system */
     struct pmem_buddy buddy;
+    /* Statistics */
+    size_t total;
+    size_t used;
+};
+
+/*
+ * An entry of zone map
+ */
+struct pmem_zone_map_entry {
+    u64 pgbase;
+    u64 pglen;
+    int zone;
+};
+
+/*
+ * Physical memory zone map
+ */
+struct pmem_zone_map {
+    struct pmem_zone_map_entry *entries;
+    int nr;
 };
 
 /*
  * Protocol to operate the physical memory
  */
 struct pmem_proto {
-    /* Allocate 2^n pages from a particular zone */
-    void * (*alloc_pages)(int, int);
-    /* Allocate a page from a particular zone */
-    void * (*alloc_page)(int);
-    /* Free 2^n pages */
-    void (*free_pages)(void *, int, int);
+    /* Allocate 2^order pages from a particular domain */
+    void * (*alloc_pages)(int domain, int order);
+    /* Allocate a page from a particular domain */
+    void * (*alloc_page)(int domain);
+    /* Free pages */
+    void (*free_pages)(void *page);
 };
 
 /*
  * Physical memory
  */
 struct pmem {
-    /* Lock */
+    /* Lock variable for physical memory operations */
     spinlock_t lock;
 
     /* The number of pages */
@@ -211,14 +240,17 @@ struct pmem {
     /* pages */
     struct pmem_page *pages;
 
-    /* NUMA domains */
-    struct pmem_numa_domain domains[PMEM_NUMA_MAX_DOMAINS];
+    /* Zones (NUMA domains) */
+    struct pmem_zone zones[PMEM_NUMA_MAX_DOMAINS];
 
     /* Architecture specific data structure (e.g., page table)  */
     void *arch;
 
-    /* Protocol */
+    /* Protocol set to operate the physical memory */
     struct pmem_proto proto;
+
+    /* Zone map */
+    struct pmem_zone_map zmap;
 };
 
 /*
