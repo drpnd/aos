@@ -538,9 +538,9 @@ proc_create(const char *path, const char *name, pid_t pid)
     return 0;
 
 error_tl:
-    pmem->proto.free_pages(ppage2, 0, 0);
+    pmem->proto.free_pages(ppage2);
 error_exec:
-    pmem->proto.free_pages(ppage1, 0, 0);
+    pmem->proto.free_pages(ppage1);
 error_ustack:
     kfree(t->kstack);
 error_kstack:

@@ -28,6 +28,7 @@
 
 #define FLOOR(val, base)        (((val) / (base)) * (base))
 #define CEIL(val, base)         ((((val) - 1) / (base) + 1) * (base))
+#define DIV_FLOOR(val, base)    ((val) / (base))
 #define DIV_CEIL(val, base)     (((val) - 1) / (base) + 1)
 
 /* Type of memory area */
@@ -43,14 +44,17 @@
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static u64 _find_pmem_region(struct bootinfo *, u64 );
 static int
-_init_pages(struct bootinfo *, struct pmem *, struct acpi *, u64, u64);
-static int
-_init_pages_range(u64, u64, struct pmem *, struct acpi *, u64, u64);
+_init_pages(struct bootinfo *, struct pmem *, u64, u64);
+static int _init_pmem_zone_buddy(struct pmem *, struct acpi *);
+static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
 static int _count_linear_page_tables(u64);
-static int _prepare_linear_page_tables(u64 *, u64);
+static int _prepare_linear_page_table(u64 *, u64);
 static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
 static void _pmem_return_to_buddy(struct pmem *, void *, int, int);
+static int _pmem_page_zone(void *);
+static u64 _pmem_size(int, u64, int);
+static struct pmem * _pmem_init(u64, int, u64, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
 
@@ -81,6 +85,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     u64 pmsz;
     int nt;
     int ret;
+    int nzme;
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
@@ -101,10 +106,17 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Calculate the number of pages */
-    nr  = DIV_CEIL(sz, PAGESIZE);
+    nr = DIV_CEIL(sz, PAGESIZE);
+
+    /* Initialize the memory zone map */
+    nzme = acpi_memory_count_entries(acpi);
+    if ( nzme < 0 ) {
+        /* UMA */
+        nzme = 0;
+    }
 
     /* Calculate the required memory size for pages */
-    pmsz = nt * PMEM_PTESIZE + sizeof(struct pmem);
+    pmsz = _pmem_size(nt, nr, nzme);
 
     /* Fine the available region for the pmem data structure */
     base = _find_pmem_region(bi, pmsz);
@@ -114,13 +126,15 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Setup the memory page management structure */
-    pm = (struct pmem *)(base + nt * PMEM_PTESIZE);
-    kmemset(pm, 0, sizeof(struct pmem));
-    pm->nr = nr;
-    pm->arch = (void *)base;
+    pm = (struct pmem *)(base + nt * PMEM_PTSIZE
+                         + nr * sizeof(struct pmem_page));
+    pm = _pmem_init(base, nt, nr, nzme);
+
+    /* Update the zone map information */
+    acpi_memory_zone_map(acpi, &pm->zmap);
 
     /* Prepare a page table for linear addressing */
-    ret = _prepare_linear_page_tables(pm->arch, sz);
+    ret = _prepare_linear_page_table(pm->arch, sz);
     if ( ret < 0 ) {
         return NULL;
     }
@@ -128,13 +142,16 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     /* Linear addressing */
     set_cr3(pm->arch);
 
-    /* Initialize all available pages with the buddy system except for wired
-       memory.  Note that wired memory space are the range from 0 to
-       PMEM_LBOUND, and the space used by pmem. */
-    ret = _init_pages(bi, pm, acpi, base, pmsz);
+    /* Initialize all available pages */
+    ret = _init_pages(bi, pm, base, pmsz);
     if ( ret < 0 ) {
         return NULL;
     }
+
+    /* Initialize all usable pages with the buddy system except for wired
+       memory.  Note that the wired memory space is the range from 0 to
+       PMEM_LBOUND, and the space used by pmem. */
+    ret = _init_pmem_zone_buddy(pm, acpi);
 
     /* Set the page allocation/release functions */
     pm->proto.alloc_pages = arch_pmem_alloc_pages;
@@ -145,25 +162,26 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 }
 
 /*
- * Allocate 2^order physical pages
+ * Allocate 2^order physical pages from the zone
  *
  * SYNOPSIS
  *      void *
- *      pmem_alloc_pages(int domain, int order);
+ *      pmem_alloc_pages(int zone, int order);
  *
  * DESCRIPTION
- *      The pmem_alloc_pages() function allocates 2^order pages.
+ *      The pmem_alloc_pages() function allocates 2^order pages from the zone.
  *
  * RETURN VALUES
- *      The pmem_alloc_pages() function returns a pointer to allocated page.  If
- *      there is an error, it returns a NULL pointer.
+ *      The pmem_alloc_pages() function returns a pointer to allocated page(s).
+ *      IF there is an error, it returns a NULL pointer.
  */
 void *
-arch_pmem_alloc_pages(int domain, int order)
+arch_pmem_alloc_pages(int zone, int order)
 {
     struct pmem_page_althdr *a;
     void *cr3;
     int ret;
+    u64 i;
 
     /* Check the argument of the allocation order */
     if ( order < 0 ) {
@@ -177,13 +195,13 @@ arch_pmem_alloc_pages(int domain, int order)
         return NULL;
     }
 
-    /* Check the proximity domain */
-    if ( domain < 0 || domain >= PMEM_NUMA_MAX_DOMAINS ) {
+    /* Check the zone */
+    if ( zone < 0 || zone >= PMEM_MAX_ZONES ) {
         /* Invalid zone */
         return NULL;
     }
 
-    /* Lock */
+    /* Take the lock */
     spin_lock(&pmem->lock);
 
     /* Save the cr3 */
@@ -194,7 +212,7 @@ arch_pmem_alloc_pages(int domain, int order)
     set_cr3(pmem->arch);
 
     /* Split the upper-order's buddy first if needed */
-    ret = _pmem_split(&pmem->domains[domain].buddy, order);
+    ret = _pmem_split(&pmem->zones[zone].buddy, order);
     if ( ret < 0 ) {
         /* Restore cr3 then unlock */
         set_cr3(cr3);
@@ -203,29 +221,40 @@ arch_pmem_alloc_pages(int domain, int order)
     }
 
     /* Obtain the contiguous pages from the head */
-    a = pmem->domains[domain].buddy.heads[order];
-    pmem->domains[domain].buddy.heads[order] = a->next;
-    if ( NULL != pmem->domains[domain].buddy.heads[order] ) {
-        pmem->domains[domain].buddy.heads[order]->prev = NULL;
+    a = pmem->zones[zone].buddy.heads[order];
+    pmem->zones[zone].buddy.heads[order] = a->next;
+    if ( NULL != pmem->zones[zone].buddy.heads[order] ) {
+        pmem->zones[zone].buddy.heads[order]->prev = NULL;
     }
 
     /* Restore cr3 */
     set_cr3(cr3);
     _enable_page_global();
 
-    /* Unlock */
+    /* Mark the allocated memory as used, and set the order */
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        /* Assert that the page is not used */
+        if ( pmem->pages[PAGE_INDEX(a) + i].used ) {
+            /* Raise kernel panic */
+            panic("Fatal: arch_pmem_alloc_pages()");
+        }
+        pmem->pages[PAGE_INDEX(a) + i].used = 1;
+    }
+    pmem->pages[PAGE_INDEX(a)].order = order;
+
+    /* Release the lock */
     spin_unlock(&pmem->lock);
 
     return a;
 }
 
 /*
- * Allocate a page
+ * Allocate a page from the zone
  */
 void *
-arch_pmem_alloc_page(int domain)
+arch_pmem_alloc_page(int zone)
 {
-    return arch_pmem_alloc_pages(domain, 0);
+    return arch_pmem_alloc_pages(zone, 0);
 }
 
 
@@ -234,7 +263,7 @@ arch_pmem_alloc_page(int domain)
  *
  * SYNOPSIS
  *      void
- *      arch_pmem_free_pages(void *page, int domain, int order);
+ *      arch_pmem_free_pages(void *page);
  *
  * DESCRIPTION
  *      The arch_pmem_free_pages() function deallocates superpages pointed by
@@ -244,10 +273,18 @@ arch_pmem_alloc_page(int domain)
  *      The arch_pmem_free_pages() function does not return a value.
  */
 void
-arch_pmem_free_pages(void *page, int domain, int order)
+arch_pmem_free_pages(void *page)
 {
-    struct pmem_page_althdr *list;
+    int zone;
+    int order;
     void *cr3;
+    u64 i;
+
+    /* Obtain the order of the page */
+    order = pmem->pages[PAGE_INDEX(page)].order;
+
+    /* Resolve the zone of the pages to be released */
+    zone = _pmem_page_zone(page);
 
     /* If the order exceeds its maximum, that's something wrong. */
     if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
@@ -266,10 +303,15 @@ arch_pmem_free_pages(void *page, int domain, int order)
     set_cr3(pmem->arch);
 
     /* Return it to the buddy system */
-    _pmem_return_to_buddy(pmem, page, domain, order);
+    _pmem_return_to_buddy(pmem, page, zone, order);
 
     /* Merge buddies if possible */
-    _pmem_merge(&pmem->domains[domain].buddy, page, order);
+    _pmem_merge(&pmem->zones[zone].buddy, page, order);
+
+    /* Clear the used flag */
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        pmem->pages[PAGE_INDEX(page) + i].used = 0;
+    }
 
     /* Restore cr3 */
     set_cr3(cr3);
@@ -321,8 +363,8 @@ _find_pmem_region(struct bootinfo *bi, u64 sz)
         bse = &bi->sysaddrmap.entries[i];
         if ( BSE_USABLE == bse->type ) {
             /* Available space from a to b */
-            a = CEIL(bse->base, SUPERPAGESIZE);
-            b = FLOOR(bse->base + bse->len, SUPERPAGESIZE);
+            a = CEIL(bse->base, PAGESIZE);
+            b = FLOOR(bse->base + bse->len, PAGESIZE);
 
             if ( b < PMEM_LBOUND ) {
                 /* Skip below the lower bound */
@@ -357,88 +399,130 @@ _find_pmem_region(struct bootinfo *bi, u64 sz)
  * Initialize all pages
  */
 static int
-_init_pages(struct bootinfo *bi, struct pmem *pm, struct acpi *acpi, u64 pmbase,
-            u64 pmsz)
+_init_pages(struct bootinfo *bi, struct pmem *pm, u64 pmbase, u64 pmsz)
 {
     struct bootinfo_sysaddrmap_entry *bse;
     u64 i;
+    u64 j;
     u64 a;
     u64 b;
-    int ret;
 
     /* Check system address map obitaned from BIOS */
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
         if ( BSE_USABLE == bse->type ) {
             /* Available */
-            a = CEIL(bse->base, PAGESIZE) / PAGESIZE;
-            b = FLOOR(bse->base + bse->len, PAGESIZE) / PAGESIZE;
+            a = DIV_CEIL(bse->base, PAGESIZE);
+            b = DIV_FLOOR(bse->base + bse->len, PAGESIZE);
 
-            ret = _init_pages_range(a, b, pm, acpi, pmbase, pmsz);
+            /* Mark usable pages */
+            for ( j = a; j < b; j++ ) {
+                if ( j >= pm->nr ) {
+                    /* Overflowed page.  This must not be reached because the
+                       number of pages should properly counted, but doublecheck
+                       it here. */
+                    return -1;
+                }
+                pm->pages[j].usable = 1;
+                pm->pages[j].order = PMEM_INVAL_BUDDY_ORDER;
+
+                /* Mark the pages below the lower bound as used */
+                if ( PAGE_ADDR(j + 1) < PMEM_LBOUND ) {
+                    pm->pages[j].used = 1;
+                }
+            }
         }
+    }
+
+    /* Mark the pages used by the pmem data structure */
+    for ( i = PAGE_INDEX(pmbase); i <= PAGE_INDEX(pmbase + pmsz - 1); i++ ) {
+        pm->pages[i].used = 1;
     }
 
     return 0;
 }
 
 /*
- * Initialize pages in the range from page a through page b
+ * Return the number of usable pages in the power of 2
  */
 static int
-_init_pages_range(u64 a, u64 b, struct pmem *pm, struct acpi *acpi,
-                  u64 pmbase, u64 pmsz)
+_aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
 {
+    int o;
     u64 i;
-    int prox;
     u64 pxbase;
     u64 pxlen;
-    struct pmem_page_althdr *list;
+    int prox;
 
-    /* Let the proximity domain be resolve in the first loop. */
-    pxbase = 0;
-    pxlen = 0;
-    prox = -1;
-
-    for ( i = a; i < b; i++ ) {
-        if ( i >= pm->nr ) {
-            /* Overflowed page */
+    /* NUMA-conscious zones */
+    if ( acpi_is_numa(acpi) ) {
+        /* Resolve the proximity domain of the first page */
+        prox = acpi_memory_prox_domain(acpi, PAGE_ADDR(pg), &pxbase, &pxlen);
+        if ( prox < 0 ) {
+            /* No proximity domain; then return -1, meaning unusable page,
+               here. */
             return -1;
         }
-        /* Check this page is not wired */
-        if ( PAGE_ADDR(i + 1) < PMEM_LBOUND ) {
-            /* This page is wired. */
-            continue;
-        } else if ( (PAGE_ADDR(i) >= pmbase
-                     && PAGE_ADDR(i + 1) <= pmbase + pmsz)
-                    || (PAGE_ADDR(i) <= pmbase && PAGE_ADDR(i + 1) > pmbase )
-                    || (PAGE_ADDR(i) < pmbase + pmsz
-                        && PAGE_ADDR(i + 1) >= pmbase + pmsz ) ) {
-            /* This page is used by the pmem data structure. */
+        *zone = PMEM_ZONE_NUMA(prox);
+    } else {
+        prox = 0;
+        pxbase = 0;
+        pxlen = PAGE_ADDR(pm->nr);
+        *zone = PMEM_ZONE_NUMA(prox);
+    }
+
+    for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
+        /* Try the order of o */
+        for ( i = pg; i < pg + (1ULL << o); i++ ) {
+            /* Check if this page is usable */
+            if ( !pm->pages[i].usable || pm->pages[i].used ) {
+                /* It contains unusable page, then return the current order
+                   minus 1 immediately. */
+                return o - 1;
+            }
+            /* Check the proximity domain */
+            if ( PAGE_ADDR(i) < pxbase || PAGE_ADDR(i + 1) > pxbase + pxlen ) {
+                /* This page is (perhaps) based on a different proximity domain,
+                   then return the current order minus 1 immedicately. */
+                return o - 1;
+            }
+        }
+
+        /* Test whether the next order is feasible; feasible if it is properly
+           aligned and the pages are within the range of the physical memory
+           space. */
+        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > pm->nr ) {
+            /* Infeasible, then return the current order immediately */
+            return o;
+        }
+    }
+
+    return o;
+}
+
+/*
+ * Initialize all pages
+ */
+static int
+_init_pmem_zone_buddy(struct pmem *pm, struct acpi *acpi)
+{
+    u64 i;
+    int o;
+    int zone;
+
+    for ( i = 0; i < pm->nr; i += (1ULL << o) ) {
+        /* Find the maximum contiguous usable pages fitting to the alignment of
+           the buddy system */
+        o = _aligned_usable_pages(pm, acpi, i, &zone);
+        if ( o < 0 ) {
+            /* Skip an unusable page */
+            o = 0;
             continue;
         }
 
-        /* Check the proximity domain of the page */
-        if ( PAGE_ADDR(i) >= pxbase && PAGE_ADDR(i + 1) <= pxbase + pxlen ) {
-            /* This page is within the previously resolved memory space. */
-            /* Return it to the buddy system */
-            _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), prox, 0);
-            _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
-        } else {
-            /* This page is out of the range of the previously resolved
-               proximity domain, then resolve it now. */
-            prox = acpi_memory_prox_domain(acpi, PAGE_ADDR(i), &pxbase, &pxlen);
-            if ( prox >= 0 ) {
-                /* The proximity domain is resolved, then add it to the buddy
-                   system. */
-                _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), prox, 0);
-                _pmem_merge(&pm->domains[prox].buddy, (void *)PAGE_ADDR(i), 0);
-            } else {
-                /* No proximity domain; then clear the stored base and length
-                   to force resolve the proximity domain in the next loop. */
-                pxbase = 0;
-                pxlen = 0;
-            }
-        }
+        /* Add usable pages to the buddy */
+        _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), zone, o);
+        _pmem_merge(&pm->zones[zone].buddy, (void *)PAGE_ADDR(i), o);
     }
 
     return 0;
@@ -474,7 +558,7 @@ _count_linear_page_tables(u64 sz)
  * Prepare a page table of the linear address space
  */
 static int
-_prepare_linear_page_tables(u64 *pt, u64 sz)
+_prepare_linear_page_table(u64 *pt, u64 sz)
 {
     int npd;
     int npdpt;
@@ -650,22 +734,99 @@ _pmem_merge(struct pmem_buddy *buddy, void *addr, int o)
 }
 
 /*
- * Return 2^order pages to the buddy system of the specified domain
+ * Return 2^order pages to the buddy system of the specified zone
  */
 static void
-_pmem_return_to_buddy(struct pmem *pm, void *addr, int domain, int order)
+_pmem_return_to_buddy(struct pmem *pm, void *addr, int zone, int order)
 {
     struct pmem_page_althdr *list;
 
     /* Return it to the buddy system */
-    list = pm->domains[domain].buddy.heads[order];
+    list = pm->zones[zone].buddy.heads[order];
     /* Prepend the returned pages */
-    pm->domains[domain].buddy.heads[order] = addr;
-    pm->domains[domain].buddy.heads[order]->prev = NULL;
-    pm->domains[domain].buddy.heads[order]->next = list;
+    pm->zones[zone].buddy.heads[order] = addr;
+    pm->zones[zone].buddy.heads[order]->prev = NULL;
+    pm->zones[zone].buddy.heads[order]->next = list;
     if ( NULL != list ) {
         list->prev = addr;
     }
+}
+
+/*
+ * Resolve the zone of the page
+ */
+static int
+_pmem_page_zone(void *page)
+{
+    if ( (u64)page < 0x1000000 ) {
+        /* DMA */
+        return PMEM_ZONE_DMA;
+    } else if ( (u64)page < 0x100000000ULL ) {
+        /* Low address memory space */
+        return PMEM_ZONE_LOWMEM;
+    } else {
+        /* High address memory space */
+        if ( 0 ) {
+            /* FIXME: Referring to the zone map */
+            return PMEM_ZONE_NUMA(0);
+        } else {
+            return PMEM_ZONE_UMA;
+        }
+    }
+}
+
+/*
+ * Calculate the memory size required by pmem structure, including the spaces
+ * pointed by the structure
+ */
+static u64
+_pmem_size(int nt, u64 npg, int nzme)
+{
+    u64 pmsz;
+
+    /* Calculate the required memory size for pages
+     *   - Page table: (Page table size) * (# of entries)
+     *   - Page info.: (Page structure size) * (# of pages)
+     *   - Zone map: (Zone map entry size) * (# of entries)
+     *   - Self: Physical memory structure
+     */
+    pmsz = nt * PMEM_PTSIZE
+        + npg * sizeof(struct pmem_page)
+        + sizeof(struct pmem_zone_map_entry) * nzme
+        + sizeof(struct pmem);
+
+    return pmsz;
+}
+
+/*
+ * Initialize the physical memory
+ */
+static struct pmem*
+_pmem_init(u64 base, int nt, u64 npg, int nzme)
+{
+    struct pmem *pm;
+    struct pmem pmtmp;
+
+    /* Setup the memory page management structure */
+    kmemset(&pmtmp, 0, sizeof(struct pmem));
+    /* Page table */
+    pmtmp.arch = (void *)base;
+    base += nt * PMEM_PTSIZE;
+    /* Page */
+    pmtmp.nr = npg;
+    pmtmp.pages = (struct pmem_page *)base;
+    kmemset(pmtmp.pages, 0, sizeof(struct pmem_page) * npg);
+    base += npg * sizeof(struct pmem_page);
+    /* Zone map */
+    pmtmp.zmap.nr = nzme;
+    pmtmp.zmap.entries = (struct pmem_zone_map_entry *)base;
+    kmemset(pmtmp.zmap.entries, 0, sizeof(struct pmem_zone_map_entry) * nzme);
+    base += nzme * sizeof(struct pmem_zone_map_entry);
+    /* Physical memory */
+    pm = (struct pmem *)base;
+    kmemcpy(pm, &pmtmp, sizeof(struct pmem));
+
+    return pm;
 }
 
 /*

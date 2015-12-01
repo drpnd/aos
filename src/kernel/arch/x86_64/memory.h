@@ -38,7 +38,7 @@
 #define PHYS_MEM_PAGESIZE       (1ULL << 21)
 
 /* Page table constants */
-#define PMEM_PTESIZE    4096
+#define PMEM_PTSIZE     4096
 #define PMEM_PTNENT     512
 #define PMEM_PML4       39
 #define PMEM_PDPT       30
@@ -49,7 +49,7 @@
 struct pmem * arch_pmem_init(struct bootinfo *, struct acpi *);
 void * arch_pmem_alloc_pages(int, int);
 void * arch_pmem_alloc_page(int);
-void arch_pmem_free_pages(void *, int, int);
+void arch_pmem_free_pages(void *);
 u64 kmem_paddr(u64);
 
 #endif /* _KERNEL_MEMORY_H */

@@ -410,7 +410,7 @@ kmem_alloc_pages(int order)
     /* Kernel page */
     kpage = _kpage_alloc(order);
     if ( NULL == kpage ) {
-        pmem->proto.free_pages(ppage, 0, order);
+        pmem->proto.free_pages(ppage);
         return NULL;
     }
 
@@ -428,7 +428,7 @@ kmem_alloc_pages(int order)
         vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
     } else {
         /* Error */
-        pmem->proto.free_pages(ppage, 0, order);
+        pmem->proto.free_pages(ppage);
         _kpage_free(kpage);
         return NULL;
     }
@@ -442,7 +442,7 @@ kmem_alloc_pages(int order)
             for ( ; i >= 0; i-- ) {
                 kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem->proto.free_pages(ppage, 0, order);
+            pmem->proto.free_pages(ppage);
             _kpage_free(kpage);
             return NULL;
         }
@@ -1119,7 +1119,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
             for ( ; i >= 0; i-- ) {
                 vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem->proto.free_pages(paddr, 0, order);
+            pmem->proto.free_pages(paddr);
             _vmem_page_free(vmem, vpage);
             return NULL;
         }
