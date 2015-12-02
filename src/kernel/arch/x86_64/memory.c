@@ -79,7 +79,7 @@ struct pmem *
 arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct pmem *pm;
-    u64 nr;
+    u64 npg;
     u64 base;
     u64 sz;
     u64 pmsz;
@@ -105,18 +105,18 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         return NULL;
     }
 
-    /* Calculate the number of pages */
-    nr = DIV_CEIL(sz, PAGESIZE);
+    /* Calculate the number of pages from the upper-bound of the memory space */
+    npg = DIV_CEIL(sz, PAGESIZE);
 
-    /* Initialize the memory zone map */
+    /* Count the number of entries in ACPI SRAT for memory zone mapping */
     nzme = acpi_memory_count_entries(acpi);
     if ( nzme < 0 ) {
-        /* UMA */
+        /* It's UMA, then we use a single zone. */
         nzme = 0;
     }
 
     /* Calculate the required memory size for pages */
-    pmsz = _pmem_size(nt, nr, nzme);
+    pmsz = _pmem_size(nt, npg, nzme);
 
     /* Fine the available region for the pmem data structure */
     base = _find_pmem_region(bi, pmsz);
@@ -126,9 +126,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Setup the memory page management structure */
-    pm = (struct pmem *)(base + nt * PMEM_PTSIZE
-                         + nr * sizeof(struct pmem_page));
-    pm = _pmem_init(base, nt, nr, nzme);
+    pm = _pmem_init(base, nt, npg, nzme);
 
     /* Update the zone map information */
     acpi_memory_zone_map(acpi, &pm->zmap);
@@ -139,7 +137,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
         return NULL;
     }
 
-    /* Linear addressing */
+    /* Set the page table of linear addressing */
     set_cr3(pm->arch);
 
     /* Initialize all available pages */
