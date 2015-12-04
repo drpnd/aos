@@ -62,13 +62,14 @@
 /* 2^16 objects in a cache */
 #define KMEM_SLAB_NR_OBJ_ORDER  4
 
-#define KMEM_MAX_BUDDY_ORDER    18
+#define KMEM_MAX_BUDDY_ORDER    21
 #define KMEM_REGION_SIZE        512
 
-#define VMEM_MAX_BUDDY_ORDER    9
+#define VMEM_MAX_BUDDY_ORDER    18
 
 #define VMEM_USED               1
 #define VMEM_GLOBAL             (1<<1)
+#define VMEM_SUPERPAGE          (1<<2)
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -124,8 +125,10 @@ struct fildes {
  * Virtual page
  */
 struct vmem_page {
-    /* Physical address */
+    /* Physical address: least significant bits are used for flags */
     reg_t addr;
+    /* Order */
+    int order;
     /* Type */
     int type;
     /* Back-link to the corresponding region */
@@ -164,20 +167,14 @@ struct vmem_space {
 };
 
 /*
- * Physical page structure header
- */
-struct pmem_page_althdr {
-    struct pmem_page_althdr *prev;
-    struct pmem_page_althdr *next;
-};
-
-/*
  * Physical page
  */
 struct pmem_page {
-    u8 usable:1;
-    u8 used:1;
-    u8 order:6;
+    u8 reserved;
+    u8 flags;
+    /* Buddy system */
+    u16 order;
+    u32 next;
 };
 
 /*
@@ -237,21 +234,19 @@ struct pmem {
     /* The number of pages */
     size_t nr;
 
-    /* pages */
+    /* Physical pages */
     struct pmem_page *pages;
-
-    /* Zones (NUMA domains) */
-    struct pmem_zone zones[PMEM_NUMA_MAX_DOMAINS];
-
-    /* Architecture specific data structure (e.g., page table)  */
-    void *arch;
-
-    /* Protocol set to operate the physical memory */
-    struct pmem_proto proto;
 
     /* Zone map */
     struct pmem_zone_map zmap;
+
+    /* Zones (NUMA domains) */
+    struct pmem_zone zones[PMEM_NUMA_MAX_DOMAINS];
 };
+
+
+
+
 
 /*
  * A slab object
@@ -328,6 +323,14 @@ struct kmem_region {
     struct kmem_region *next;
 };
 
+
+/*
+ * Free pages in kmem region
+ */
+struct kmem_free_page {
+    struct kmem_free_page *next;
+};
+
 /*
  * Kernel memory
  */
@@ -342,11 +345,21 @@ struct kmem {
     /* Regions */
     struct kmem_page region1[KMEM_REGION_SIZE];
     struct kmem_page region2[KMEM_REGION_SIZE];
+
     /* Buddy system */
     struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
 
     /* Slab allocator */
     struct kmem_slab_root slab;
+
+    void *arch;
+
+
+    /* Virtual memory */
+    struct vmem_space *space;
+
+    /* Free pages */
+    struct kmem_free_page *free_pgs;
 };
 
 /*
@@ -453,6 +466,13 @@ typedef void (*kevent_handler_f)(void);
 struct kevent_handlers {
     /* Interrupt vector table */
     kevent_handler_f ivt[NR_IV];
+};
+
+/* Global variables */
+struct kernel_variables {
+    struct pmem *pmem;
+    struct proc_table *proc_table;
+    struct ktask_root *ktask_root;
 };
 
 /* Global variable */

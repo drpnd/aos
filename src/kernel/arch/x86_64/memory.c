@@ -41,6 +41,8 @@
 /*
  * Prototype declarations
  */
+static struct kmem * _kmem_init(u64, u64);
+static int _pmem_alloc(struct bootinfo *, void **, u64 *);
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static u64 _find_pmem_region(struct bootinfo *, u64 );
 static int
@@ -48,15 +50,106 @@ _init_pages(struct bootinfo *, struct pmem *, u64, u64);
 static int _init_pmem_zone_buddy(struct pmem *, struct acpi *);
 static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
 static int _count_linear_page_tables(u64);
-static int _prepare_linear_page_table(u64 *, u64);
+static int _prepare_kernel_page_table(u64 *, u64);
 static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
 static void _pmem_return_to_buddy(struct pmem *, void *, int, int);
 static int _pmem_page_zone(void *);
-static u64 _pmem_size(int, u64, int);
-static struct pmem * _pmem_init(u64, int, u64, int);
+static u64 _pmem_size(u64, int);
+static struct pmem * _pmem_init(u64, u64, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
+
+/*
+ * Initialize the memory management module
+ *
+ * SYNOPSIS
+ *      int
+ *      arch_memory_init(struct bootinfo *bi, struct acpi *acpi);
+ *
+ * DESCRIPTION
+ *      The arch_memory_init() function initializes the memory management module
+ *      including physical and kernel memory.
+ *
+ * RETURN VALUES
+ *      If successful, the arch_memory_init() function returns the value of 0.
+ *      Otherwise, it returns the value of -1.
+ */
+int
+arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
+{
+    void *pmbase;
+    u64 pmsz;
+    int ret;
+
+    /* Allocate the physical memory management data structure */
+    ret = _pmem_alloc(bi, &pmbase, &pmsz);
+    if ( ret < 0 ) {
+        return -1;
+    }
+
+    /* Initialize the kernel page table */
+    int pt;
+    int pt2m;
+    int pt4k;
+
+    pt = DIV_CEIL(pmsz, 4096);
+    pt2m = pt / 4096;
+    pt4k = pt % 4096;
+
+    if ( pt2m >= 8 ) {
+        /* Use 2 MiB page table for huge memory machines */
+    }
+
+    return 0;
+}
+
+/*
+ * Allocate physical memory management data structure
+ *
+ * SYNOPSIS
+ *      static int
+ *      _pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz);
+ *
+ * DESCRIPTION
+ *      The _pmem_alloc() function allocates a space for the physical memory
+ *      manager from the memory map information bi inherited from the boot
+ *      monitor.  The base address and the size of the allocated memory space is
+ *      returned through the second and third arguments, base and pmsz.
+ *
+ * RETURN VALUES
+ *      If successful, the _pmem_alloc() function returns the value of 0.  It
+ *      returns the value of -1 on failure.
+ */
+static int
+_pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz)
+{
+    u64 sz;
+    u64 npg;
+
+    /* Check the number of address map entries */
+    if ( bi->sysaddrmap.nr <= 0 ) {
+        return -1;
+    }
+
+    /* Obtain memory (space) size from the system address map */
+    sz = _resolve_phys_mem_size(bi);
+
+    /* Calculate the number of pages from the upper-bound of the memory space */
+    npg = DIV_CEIL(sz, PAGESIZE);
+
+    /* Calculate the size required by the pmem and pmem_page structures */
+    *pmsz = sizeof(struct pmem) + npg * sizeof(struct pmem_page);
+
+    /* Fine the available region for the pmem data structure */
+    *base = (void *)_find_pmem_region(bi, *pmsz);
+    /* Could not find available pages for the management structure */
+    if ( NULL == *base ) {
+        return -1;
+    }
+
+    return 0;
+}
 
 /*
  * Initialize physical memory
@@ -79,13 +172,23 @@ struct pmem *
 arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct pmem *pm;
+    struct kmem *km;
     u64 npg;
     u64 base;
     u64 sz;
     u64 pmsz;
-    int nt;
     int ret;
     int nzme;
+
+    /* Allocate physical memory management data structure */
+    ret = _pmem_alloc(bi, &base, &pmsz);
+    if ( ret < 0 ) {
+        return NULL;
+    }
+    km = _kmem_init(base, pmsz);
+
+    /* to kernel page table */
+    panic("stop here for refactoring");
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
@@ -95,15 +198,8 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     /* Disable the global page feature */
     _disable_page_global();
 
-    /* Obtain memory size from the system address map */
+    /* Obtain memory (space) size from the system address map */
     sz = _resolve_phys_mem_size(bi);
-
-    /* Calculate the number of page tables to map the physical memory space into
-       the linear address */
-    nt = _count_linear_page_tables(sz);
-    if ( nt < 0 ) {
-        return NULL;
-    }
 
     /* Calculate the number of pages from the upper-bound of the memory space */
     npg = DIV_CEIL(sz, PAGESIZE);
@@ -116,7 +212,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Calculate the required memory size for pages */
-    pmsz = _pmem_size(nt, npg, nzme);
+    pmsz = _pmem_size(npg, nzme);
 
     /* Fine the available region for the pmem data structure */
     base = _find_pmem_region(bi, pmsz);
@@ -126,19 +222,20 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Setup the memory page management structure */
-    pm = _pmem_init(base, nt, npg, nzme);
+    //pm = _pmem_init(base, npg, nzme);
 
     /* Update the zone map information */
     acpi_memory_zone_map(acpi, &pm->zmap);
 
-    /* Prepare a page table for linear addressing */
-    ret = _prepare_linear_page_table(pm->arch, sz);
+    /* Prepare a page table for kernel */
+    //ret = _prepare_kernel_page_table(pm->arch, sz);
+    ret = -1;
     if ( ret < 0 ) {
         return NULL;
     }
 
-    /* Set the page table of linear addressing */
-    set_cr3(pm->arch);
+    /* Set the page table of kernel */
+    //set_cr3(pm->arch);
 
     /* Initialize all available pages */
     ret = _init_pages(bi, pm, base, pmsz);
@@ -151,13 +248,169 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
        PMEM_LBOUND, and the space used by pmem. */
     ret = _init_pmem_zone_buddy(pm, acpi);
 
-    /* Set the page allocation/release functions */
-    pm->proto.alloc_pages = arch_pmem_alloc_pages;
-    pm->proto.alloc_page = arch_pmem_alloc_page;
-    pm->proto.free_pages = arch_pmem_free_pages;
-
     return pm;
 }
+
+
+/* Initialize virtual memory space for kernel */
+static struct kmem *
+_kmem_init(u64 pmbase, u64 pmsz)
+{
+    u64 i;
+    u64 off;
+    struct kmem *kmem;
+    struct vmem_space *space;
+    struct vmem_region *reg_low;
+    struct vmem_region *reg_pmem;
+    struct vmem_region *reg_kernel;
+    struct vmem_page *pgs_low;
+    struct vmem_page *pgs_pmem;
+    struct vmem_page *pgs_kernel;
+    struct kmem_free_page *fpg;
+
+    /* Get the kernel memory base address */
+    off = 0;
+
+    /* Kernel memory space */
+    kmem = (struct kmem *)(KMEM_BASE + off);
+    off += sizeof(struct kmem);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(kmem, 0, sizeof(struct kmem));
+
+    /* Virtual memory space */
+    space = (struct vmem_space *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_space);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(space, 0, sizeof(struct vmem_space));
+
+    /* Low address space (below 32 MiB): Note that this operating system has
+       ``two'' kernel regions shared  unlike other UNIX-like systems, regions
+       from 0 to 1 GiB and from 3 to 4 GiB.  The first region could be removed
+       by relocating the kernel, but this version of our operating system does
+       not do it. */
+    reg_low = (struct vmem_region *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_region);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(reg_low, 0, sizeof(struct vmem_region));
+    reg_low->start = (void *)0;
+    reg_low->len = PMEM_LBOUND;
+
+    /* Physical pages: This region is not placed at the kernel region because
+       this is not directly referred from user-land processes (e.g., through
+       system calls). */
+    reg_pmem = (struct vmem_region *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_region);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(reg_pmem, 0, sizeof(struct vmem_region));
+    reg_pmem->start = (void *)0x40000000ULL;
+    reg_pmem->len = CEIL(pmsz, PAGESIZE);
+
+    /* Kernel address space (3-4 GiB) */
+    reg_kernel = (struct vmem_region *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_region);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(reg_kernel, 0, sizeof(struct vmem_region));
+    reg_kernel->start = (void *)0xc0000000ULL;
+    reg_kernel->len = 0x40000000ULL;
+
+    /* Page-alignment */
+    off = CEIL(off, PAGESIZE);
+
+    /* Prepare page data structures */
+    pgs_low = (struct vmem_page *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_page) * DIV_CEIL(PMEM_LBOUND, PAGESIZE);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(pgs_low, 0, sizeof(struct vmem_page)
+            * DIV_CEIL(PMEM_LBOUND, PAGESIZE));
+    pgs_pmem = (struct vmem_page *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_page) * DIV_CEIL(pmsz, PAGESIZE);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(pgs_pmem, 0, sizeof(struct vmem_page) * DIV_CEIL(pmsz, PAGESIZE));
+    pgs_kernel = (struct vmem_page *)(KMEM_BASE + off);
+    off += sizeof(struct vmem_page) * DIV_CEIL(0x40000000ULL, PAGESIZE);
+    if ( off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(pgs_kernel, 0, sizeof(struct vmem_page)
+            * DIV_CEIL(0x40000000ULL, PAGESIZE));
+
+    /* Page-alignment */
+    off = CEIL(off, PAGESIZE);
+
+    /* Add the remaining pages to the free page list */
+    kmem->free_pgs = NULL;
+    for ( i = DIV_CEIL(off, PAGESIZE);
+          i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE) - 1; i++ ) {
+        /* Prepend a page */
+        fpg = (struct kmem_free_page *)(KMEM_BASE + PAGESIZE * i);
+        fpg->next = kmem->free_pgs;
+        kmem->free_pgs = fpg;
+    }
+
+    /* Create the chain of regions */
+    space->first_region = reg_low;
+    reg_low->next = reg_pmem;
+    reg_pmem->next = reg_kernel;
+    reg_kernel->next = NULL;
+
+    /* Set the virtual memory space to the kmem data structure */
+    kmem->space = space;
+
+    /* Initialize the page mapping to the kernel space */
+    for ( i = 0; i < DIV_CEIL(PMEM_LBOUND, PAGESIZE); i++ ) {
+        pgs_low[i].addr = PAGE_ADDR(i);
+        pgs_low[i].region = reg_low;
+        pgs_low[i].order = 0;
+        pgs_low[i].type = 0;
+        pgs_low[i].next = NULL;
+    }
+    for ( i = 0; i < DIV_CEIL(pmsz, PAGESIZE); i++ ) {
+        pgs_pmem[i].addr = pmbase + PAGE_ADDR(i);
+        pgs_pmem[i].region = reg_pmem;
+        pgs_pmem[i].order = 0;
+        pgs_pmem[i].type = 0;
+        pgs_pmem[i].next = NULL;
+    }
+    for ( i = 0; i < DIV_CEIL(0x40000000ULL, PAGESIZE); i++ ) {
+        pgs_kernel[i].addr = 0;
+        pgs_kernel[i].region = reg_kernel;
+        pgs_kernel[i].order = 0;
+        pgs_kernel[i].type = 0;
+        pgs_kernel[i].next = NULL;
+    }
+
+
+    return kmem;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
  * Allocate 2^order physical pages from the zone
@@ -176,7 +429,7 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
 void *
 arch_pmem_alloc_pages(int zone, int order)
 {
-    struct pmem_page_althdr *a;
+    void *a;
     void *cr3;
     int ret;
     u64 i;
@@ -202,6 +455,7 @@ arch_pmem_alloc_pages(int zone, int order)
     /* Take the lock */
     spin_lock(&pmem->lock);
 
+#if 0
     /* Save the cr3 */
     cr3 = get_cr3();
 
@@ -239,6 +493,7 @@ arch_pmem_alloc_pages(int zone, int order)
         pmem->pages[PAGE_INDEX(a) + i].used = 1;
     }
     pmem->pages[PAGE_INDEX(a)].order = order;
+#endif
 
     /* Release the lock */
     spin_unlock(&pmem->lock);
@@ -292,7 +547,7 @@ arch_pmem_free_pages(void *page)
 
     /* Lock */
     spin_lock(&pmem->lock);
-
+#if 0
     /* Save the cr3 */
     cr3 = get_cr3();
 
@@ -314,7 +569,7 @@ arch_pmem_free_pages(void *page)
     /* Restore cr3 */
     set_cr3(cr3);
     _enable_page_global();
-
+#endif
     /* Unlock */
     spin_unlock(&pmem->lock);
 }
@@ -421,12 +676,12 @@ _init_pages(struct bootinfo *bi, struct pmem *pm, u64 pmbase, u64 pmsz)
                        it here. */
                     return -1;
                 }
-                pm->pages[j].usable = 1;
+                //pm->pages[j].usable = 1;
                 pm->pages[j].order = PMEM_INVAL_BUDDY_ORDER;
 
                 /* Mark the pages below the lower bound as used */
                 if ( PAGE_ADDR(j + 1) < PMEM_LBOUND ) {
-                    pm->pages[j].used = 1;
+                    //pm->pages[j].used = 1;
                 }
             }
         }
@@ -434,7 +689,7 @@ _init_pages(struct bootinfo *bi, struct pmem *pm, u64 pmbase, u64 pmsz)
 
     /* Mark the pages used by the pmem data structure */
     for ( i = PAGE_INDEX(pmbase); i <= PAGE_INDEX(pmbase + pmsz - 1); i++ ) {
-        pm->pages[i].used = 1;
+        //pm->pages[i].used = 1;
     }
 
     return 0;
@@ -452,6 +707,7 @@ _aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
     u64 pxlen;
     int prox;
 
+#if 0
     /* NUMA-conscious zones */
     if ( acpi_is_numa(acpi) ) {
         /* Resolve the proximity domain of the first page */
@@ -494,6 +750,7 @@ _aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
             return o;
         }
     }
+#endif
 
     return o;
 }
@@ -553,10 +810,10 @@ _count_linear_page_tables(u64 sz)
 }
 
 /*
- * Prepare a page table of the linear address space
+ * Prepare a page table of the kernel space
  */
 static int
-_prepare_linear_page_table(u64 *pt, u64 sz)
+_prepare_kernel_page_table(u64 *pt, u64 sz)
 {
     int npd;
     int npdpt;
@@ -596,6 +853,7 @@ _prepare_linear_page_table(u64 *pt, u64 sz)
     return 0;
 }
 
+#if 0
 /*
  * Split the buddies so that we get at least one buddy at the order of o
  */
@@ -749,6 +1007,7 @@ _pmem_return_to_buddy(struct pmem *pm, void *addr, int zone, int order)
         list->prev = addr;
     }
 }
+#endif
 
 /*
  * Resolve the zone of the page
@@ -778,7 +1037,7 @@ _pmem_page_zone(void *page)
  * pointed by the structure
  */
 static u64
-_pmem_size(int nt, u64 npg, int nzme)
+_pmem_size(u64 npg, int nzme)
 {
     u64 pmsz;
 
@@ -788,8 +1047,7 @@ _pmem_size(int nt, u64 npg, int nzme)
      *   - Zone map: (Zone map entry size) * (# of entries)
      *   - Self: Physical memory structure
      */
-    pmsz = nt * PMEM_PTSIZE
-        + npg * sizeof(struct pmem_page)
+    pmsz = npg * sizeof(struct pmem_page)
         + sizeof(struct pmem_zone_map_entry) * nzme
         + sizeof(struct pmem);
 
@@ -799,17 +1057,14 @@ _pmem_size(int nt, u64 npg, int nzme)
 /*
  * Initialize the physical memory
  */
-static struct pmem*
-_pmem_init(u64 base, int nt, u64 npg, int nzme)
+static struct pmem *
+_pmem_init(u64 base, u64 npg, int nzme)
 {
     struct pmem *pm;
     struct pmem pmtmp;
 
     /* Setup the memory page management structure */
     kmemset(&pmtmp, 0, sizeof(struct pmem));
-    /* Page table */
-    pmtmp.arch = (void *)base;
-    base += nt * PMEM_PTSIZE;
     /* Page */
     pmtmp.nr = npg;
     pmtmp.pages = (struct pmem_page *)base;

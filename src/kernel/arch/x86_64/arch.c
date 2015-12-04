@@ -162,6 +162,7 @@ bsp_init(void)
               "memory.");
         return;
     }
+#if 0
     if ( pmem_init(pmem) < 0 ) {
         panic("Fatal: Could not initialize the physical memory.");
         return;
@@ -171,6 +172,7 @@ bsp_init(void)
         panic("Fatal: Could not initialize the kernel memory.");
         return;
     }
+#endif
 
     /* Initialize I/O APIC */
     ioapic_init();

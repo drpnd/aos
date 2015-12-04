@@ -40,14 +40,21 @@ int vmem_remap(struct vmem_space *, u64, u64, int);
 u64 vmem_paddr(struct vmem_space *, u64);
 
 
-/*
- * Build buddy system
- */
-int
-pmem_init(struct pmem *pm)
+
+/* Temporary for refactoring */
+void *
+pmem_alloc_pages(int x, int y)
 {
-    return 0;
+    return NULL;
 }
+void *
+pmem_alloc_page(int x)
+{
+    return NULL;
+}
+void
+pmem_free_pages(void *a)
+{}
 
 
 /*
@@ -402,7 +409,7 @@ kmem_alloc_pages(int order)
     int ret;
 
     /* Allocate a physical page */
-    ppage = pmem->proto.alloc_pages(0, order);
+    ppage = pmem_alloc_pages(0, order);
     if ( NULL == ppage ) {
         return NULL;
     }
@@ -410,7 +417,7 @@ kmem_alloc_pages(int order)
     /* Kernel page */
     kpage = _kpage_alloc(order);
     if ( NULL == kpage ) {
-        pmem->proto.free_pages(ppage);
+        pmem_free_pages(ppage);
         return NULL;
     }
 
@@ -428,7 +435,7 @@ kmem_alloc_pages(int order)
         vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
     } else {
         /* Error */
-        pmem->proto.free_pages(ppage);
+        pmem_free_pages(ppage);
         _kpage_free(kpage);
         return NULL;
     }
@@ -442,7 +449,7 @@ kmem_alloc_pages(int order)
             for ( ; i >= 0; i-- ) {
                 kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem->proto.free_pages(ppage);
+            pmem_free_pages(ppage);
             _kpage_free(kpage);
             return NULL;
         }
@@ -1097,7 +1104,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     }
 
     /* Allocate physical page */
-    paddr = pmem->proto.alloc_pages(0, order);
+    paddr = pmem_alloc_pages(0, order);
     if ( NULL == paddr ) {
         _vmem_page_free(vmem, vpage);
         return NULL;
@@ -1119,7 +1126,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
             for ( ; i >= 0; i-- ) {
                 vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
             }
-            pmem->proto.free_pages(paddr);
+            pmem_free_pages(paddr);
             _vmem_page_free(vmem, vpage);
             return NULL;
         }
