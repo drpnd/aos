@@ -70,9 +70,10 @@
 
 #define VMEM_MAX_BUDDY_ORDER    18
 
-#define VMEM_USED               1
-#define VMEM_GLOBAL             (1<<1)
-#define VMEM_SUPERPAGE          (1<<2)
+#define VMEM_USABLE             (1)
+#define VMEM_USED               (1<<1)
+#define VMEM_GLOBAL             (1<<2)
+#define VMEM_SUPERPAGE          (1<<3)
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -146,7 +147,7 @@ struct vmem_page {
 struct vmem_region {
     /* Region information */
     ptr_t start;
-    size_t len;
+    size_t len;                 /* Constant multiplication of PAGESIZE */
 
     /* Pages belonging to this region */
     struct vmem_page *pages;
@@ -315,7 +316,7 @@ struct kmem_page {
  * Kernel memory region
  */
 struct kmem_region {
-    /* Region information */
+    /* Region information; must be page-aligned */
     ptr_t start;
     size_t len;
 
@@ -334,6 +335,7 @@ struct kmem_region {
  * Free pages in kmem region
  */
 struct kmem_free_page {
+    void *paddr;
     struct kmem_free_page *next;
 };
 

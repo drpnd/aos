@@ -161,6 +161,7 @@ bsp_init(void)
               "memory.");
         return;
     }
+
 #if 0
     if ( pmem_init(pmem) < 0 ) {
         panic("Fatal: Could not initialize the physical memory.");
@@ -190,6 +191,7 @@ bsp_init(void)
 
     /* Initialize the local APIC */
     lapic_init();
+    //lapic_base_addr(); // to page table
 
     /* Setup system call */
     for ( i = 0; i < SYS_MAXSYSCALL; i++ ) {

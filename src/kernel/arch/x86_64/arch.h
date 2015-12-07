@@ -43,6 +43,10 @@
 #define KMEM_BASE               0x00100000ULL
 #define KMEM_MAX_SIZE           0x00d00000ULL
 
+#define KMEM_REGION_PMEM_BASE   0x40000000ULL
+#define KMEM_REGION_KERNEL_BASE 0xc0000000ULL
+#define KMEM_REGION_KERNEL_SIZE 0x40000000ULL
+
 /* Maximum number of processors supported in this operating system */
 #define MAX_PROCESSORS          256
 
@@ -195,9 +199,9 @@ struct arch_kmem {
     /* Physical addresses of the page directories */
     u64 *pml4;
     u64 *pdpt;
-    u64 *pd[4];
+    u64 *pd[4];                 /* Superpage */
     /* Virtual address */
-    u64 *vpd[4];
+    u64 *vpd[4];                /* Superpage */
 };
 
 /*

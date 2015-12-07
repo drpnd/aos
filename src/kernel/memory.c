@@ -1011,7 +1011,7 @@ vmem_region_create(void)
     /* Initialize the all pages */
     for ( i = 0; i < region->len / SUPERPAGESIZE; i++ ) {
         pages[i].addr = 0;
-        pages[i].type = 0;
+        //pages[i].type = 0;
         pages[i].next = NULL;
         pages[i].region = region;
     }
@@ -1118,7 +1118,7 @@ vmem_alloc_pages(struct vmem_space *vmem, int order)
     tmp = vpage;
     for ( i = 0; i < (1LL << order); i++ ) {
         tmp->addr = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
-        tmp->type = VMEM_USED;
+        //tmp->type = VMEM_USED;
         ret = vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE,
                          (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
         if ( ret < 0 ) {
@@ -1230,6 +1230,7 @@ vmem_remap_(struct vmem_space *vmem, void *vaddr, reg_t paddr, int flag)
     /* Search the corresponding page */
     page = _vmem_search_page(vmem, vaddr);
 
+#if 0
     if ( VMEM_USED == page->type ) {
         /* The specified page is already mapped */
         return -ENOMEM;
@@ -1238,6 +1239,8 @@ vmem_remap_(struct vmem_space *vmem, void *vaddr, reg_t paddr, int flag)
     /* Align and map the page to a physical address */
     page->addr = (paddr / SUPERPAGESIZE) * SUPERPAGESIZE;
     page->type = VMEM_USED;
+
+#endif
 
     /* FIXME: Virtual address of the page table entries must be set up and
        stored here.  Then, translate to the physical addresss. */
