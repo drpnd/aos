@@ -145,13 +145,18 @@ bootmon:
 	addl	$4,%ebx
 	loop	1b
 
+	xorl	%eax,%eax
+	movl	%eax,(BOOTINFO_MM_NUM)
+	movl	%eax,(BOOTINFO_MM_NUM+4)
+	movl	%eax,(BOOTINFO_MM_PTR)
+	movl	%eax,(BOOTINFO_MM_PTR+4)
 	/* Load memory map entries */
 	movw	%ax,%es
-	movw	$BOOTINFO_BASE+BOOTINFO_SIZE,%ax
-	movw	%ax,(BOOTINFO_BASE+8)
+	movw	$BOOTINFO_MM_TBL,%ax
+	movw	%ax,(BOOTINFO_MM_PTR)
 	movw	%ax,%di
 	call	load_mm		/* Load system address map to %es:%di */
-	movw	%ax,(BOOTINFO_BASE)
+	movw	%ax,(BOOTINFO_MM_NUM)
 	jmp	boot16
 
 /* Load memory map entries from BIOS
@@ -159,6 +164,7 @@ bootmon:
  *     %es:%di: Destination
  *   Return:
  *     %ax: The number of entries
+ *     CF: set if an error occurs
  */
 load_mm:
 	pushl	%ebx
@@ -176,7 +182,7 @@ load_mm.1:
 	movl	$MME_SIZE,%ecx		/* Set the buffer size */
 	int	$0x15			/* Query system address map */
 	jc	load_mm.error		/* Could not load the address map */
-	cmpl	$MME_SIZE,%eax		/* Check the signature SMAP */
+	cmpl	$MME_SIGN,%eax		/* Check the signature SMAP */
 	jne	load_mm.error
 
 	cmpl	$24,%ecx		/* Check the read buffer size */
