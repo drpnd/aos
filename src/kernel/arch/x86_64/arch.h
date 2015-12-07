@@ -189,6 +189,18 @@ struct arch_page_dir {
 };
 
 /*
+ * Kernel memory
+ */
+struct arch_kmem {
+    /* Physical addresses of the page directories */
+    u64 *pml4;
+    u64 *pdpt;
+    u64 *pd[4];
+    /* Virtual address */
+    u64 *vpd[4];
+};
+
+/*
  * Virtual memory
  */
 struct arch_vmem_space {

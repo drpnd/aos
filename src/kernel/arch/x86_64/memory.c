@@ -26,10 +26,15 @@
 #include "memory.h"
 #include "../../kernel.h"
 
+#define KMEM_LOW_P2V(a)     (a)
 #define FLOOR(val, base)        (((val) / (base)) * (base))
 #define CEIL(val, base)         ((((val) - 1) / (base) + 1) * (base))
 #define DIV_FLOOR(val, base)    ((val) / (base))
 #define DIV_CEIL(val, base)     (((val) - 1) / (base) + 1)
+
+#define KMEM_DIR_RW(a)          ((a) | 0x007ULL)
+#define KMEM_PG_RW(a)           ((a) | 0x083ULL)
+#define KMEM_PG_GRW(a)          ((a) | 0x183ULL)
 
 /* Type of memory area */
 #define BSE_USABLE              1
@@ -41,10 +46,12 @@
 /*
  * Prototype declarations
  */
-static struct kmem * _kmem_init(u64, u64);
+static struct kmem * _kmem_init(void *, u64);
+static int _kmem_pgt_init(struct arch_kmem **, u64 *);
 static int _pmem_alloc(struct bootinfo *, void **, u64 *);
+static void _vmem_region_init(struct vmem_region *, u64, u64, int);
 static u64 _resolve_phys_mem_size(struct bootinfo *);
-static u64 _find_pmem_region(struct bootinfo *, u64 );
+static void * _find_pmem_region(struct bootinfo *, u64 );
 static int
 _init_pages(struct bootinfo *, struct pmem *, u64, u64);
 static int _init_pmem_zone_buddy(struct pmem *, struct acpi *);
@@ -61,101 +68,10 @@ static void _enable_page_global(void);
 static void _disable_page_global(void);
 
 /*
- * Initialize the memory management module
- *
- * SYNOPSIS
- *      int
- *      arch_memory_init(struct bootinfo *bi, struct acpi *acpi);
- *
- * DESCRIPTION
- *      The arch_memory_init() function initializes the memory management module
- *      including physical and kernel memory.
- *
- * RETURN VALUES
- *      If successful, the arch_memory_init() function returns the value of 0.
- *      Otherwise, it returns the value of -1.
- */
-int
-arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
-{
-    void *pmbase;
-    u64 pmsz;
-    int ret;
-
-    /* Allocate the physical memory management data structure */
-    ret = _pmem_alloc(bi, &pmbase, &pmsz);
-    if ( ret < 0 ) {
-        return -1;
-    }
-
-    /* Initialize the kernel page table */
-    int pt;
-    int pt2m;
-    int pt4k;
-
-    pt = DIV_CEIL(pmsz, 4096);
-    pt2m = pt / 4096;
-    pt4k = pt % 4096;
-
-    if ( pt2m >= 8 ) {
-        /* Use 2 MiB page table for huge memory machines */
-    }
-
-    return 0;
-}
-
-/*
- * Allocate physical memory management data structure
- *
- * SYNOPSIS
- *      static int
- *      _pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz);
- *
- * DESCRIPTION
- *      The _pmem_alloc() function allocates a space for the physical memory
- *      manager from the memory map information bi inherited from the boot
- *      monitor.  The base address and the size of the allocated memory space is
- *      returned through the second and third arguments, base and pmsz.
- *
- * RETURN VALUES
- *      If successful, the _pmem_alloc() function returns the value of 0.  It
- *      returns the value of -1 on failure.
- */
-static int
-_pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz)
-{
-    u64 sz;
-    u64 npg;
-
-    /* Check the number of address map entries */
-    if ( bi->sysaddrmap.nr <= 0 ) {
-        return -1;
-    }
-
-    /* Obtain memory (space) size from the system address map */
-    sz = _resolve_phys_mem_size(bi);
-
-    /* Calculate the number of pages from the upper-bound of the memory space */
-    npg = DIV_CEIL(sz, PAGESIZE);
-
-    /* Calculate the size required by the pmem and pmem_page structures */
-    *pmsz = sizeof(struct pmem) + npg * sizeof(struct pmem_page);
-
-    /* Fine the available region for the pmem data structure */
-    *base = (void *)_find_pmem_region(bi, *pmsz);
-    /* Could not find available pages for the management structure */
-    if ( NULL == *base ) {
-        return -1;
-    }
-
-    return 0;
-}
-
-/*
  * Initialize physical memory
  *
  * SYNOPSIS
- *      struct pmem *
+ *      int
  *      arch_pmem_init(struct bootinfo *bi, struct acpi *acpi);
  *
  * DESCRIPTION
@@ -165,16 +81,16 @@ _pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz)
  *      memory spaces.
  *
  * RETURN VALUES
- *      If successful, the arch_pmem_init() function returns the pointer to the
- *      physical memory manager.  It returns NULL on failure.
+ *      If successful, the arch_pmem_init() function returns the value of 0.
+ *      It returns the value of -1 on failure.
  */
-struct pmem *
-arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
+int
+arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct pmem *pm;
     struct kmem *km;
     u64 npg;
-    u64 base;
+    void *base;
     u64 sz;
     u64 pmsz;
     int ret;
@@ -183,17 +99,25 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     /* Allocate physical memory management data structure */
     ret = _pmem_alloc(bi, &base, &pmsz);
     if ( ret < 0 ) {
-        return NULL;
+        return -1;
     }
+
+    /* Initialize the kernel memory management data structure */
     km = _kmem_init(base, pmsz);
+    if ( NULL == km ) {
+        return -1;
+    }
+
+
 
     /* to kernel page table */
     panic("stop here for refactoring");
 
     /* Check the number of address map entries */
     if ( bi->sysaddrmap.nr <= 0 ) {
-        return NULL;
+        return -1;
     }
+
 
     /* Disable the global page feature */
     _disable_page_global();
@@ -251,13 +175,60 @@ arch_pmem_init(struct bootinfo *bi, struct acpi *acpi)
     return pm;
 }
 
+/*
+ * Allocate physical memory management data structure
+ *
+ * SYNOPSIS
+ *      static int
+ *      _pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz);
+ *
+ * DESCRIPTION
+ *      The _pmem_alloc() function allocates a space for the physical memory
+ *      manager from the memory map information bi inherited from the boot
+ *      monitor.  The base address and the size of the allocated memory space is
+ *      returned through the second and third arguments, base and pmsz.
+ *
+ * RETURN VALUES
+ *      If successful, the _pmem_alloc() function returns the value of 0.  It
+ *      returns the value of -1 on failure.
+ */
+static int
+_pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz)
+{
+    u64 sz;
+    u64 npg;
+
+    /* Check the number of address map entries */
+    if ( bi->sysaddrmap.nr <= 0 ) {
+        return -1;
+    }
+
+    /* Obtain memory (space) size from the system address map */
+    sz = _resolve_phys_mem_size(bi);
+
+    /* Calculate the number of pages from the upper-bound of the memory space */
+    npg = DIV_CEIL(sz, PAGESIZE);
+
+    /* Calculate the size required by the pmem and pmem_page structures */
+    *pmsz = sizeof(struct pmem) + npg * sizeof(struct pmem_page);
+
+    /* Fine the available region for the pmem data structure */
+    *base = _find_pmem_region(bi, *pmsz);
+    /* Could not find available pages for the management structure */
+    if ( NULL == *base ) {
+        return -1;
+    }
+
+    return 0;
+}
 
 /* Initialize virtual memory space for kernel */
 static struct kmem *
-_kmem_init(u64 pmbase, u64 pmsz)
+_kmem_init(void *pmbase, u64 pmsz)
 {
     u64 i;
     u64 off;
+    struct arch_kmem *akmem;
     struct kmem *kmem;
     struct vmem_space *space;
     struct vmem_region *reg_low;
@@ -267,20 +238,30 @@ _kmem_init(u64 pmbase, u64 pmsz)
     struct vmem_page *pgs_pmem;
     struct vmem_page *pgs_kernel;
     struct kmem_free_page *fpg;
+    int ret;
 
     /* Get the kernel memory base address */
     off = 0;
 
+    /* Prepare the minimum page table */
+    ret = _kmem_pgt_init(&akmem, &off);
+    if ( ret < 0 ) {
+        return NULL;
+    }
+
     /* Kernel memory space */
-    kmem = (struct kmem *)(KMEM_BASE + off);
+    kmem = (struct kmem *)KMEM_LOW_P2V(KMEM_BASE + off);
     off += sizeof(struct kmem);
     if ( off > KMEM_MAX_SIZE ) {
         return NULL;
     }
     kmemset(kmem, 0, sizeof(struct kmem));
 
+    /* Set the architecture-specific kernel memory management data structure */
+    kmem->arch = akmem;
+
     /* Virtual memory space */
-    space = (struct vmem_space *)(KMEM_BASE + off);
+    space = (struct vmem_space *)KMEM_LOW_P2V(KMEM_BASE + off);
     off += sizeof(struct vmem_space);
     if ( off > KMEM_MAX_SIZE ) {
         return NULL;
@@ -292,7 +273,7 @@ _kmem_init(u64 pmbase, u64 pmsz)
        from 0 to 1 GiB and from 3 to 4 GiB.  The first region could be removed
        by relocating the kernel, but this version of our operating system does
        not do it. */
-    reg_low = (struct vmem_region *)(KMEM_BASE + off);
+    reg_low = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + off);
     off += sizeof(struct vmem_region);
     if ( off > KMEM_MAX_SIZE ) {
         return NULL;
@@ -361,6 +342,11 @@ _kmem_init(u64 pmbase, u64 pmsz)
         kmem->free_pgs = fpg;
     }
 
+    /* Set the allocated pages to each region */
+    reg_low->pages = pgs_low;
+    reg_pmem->pages = pgs_pmem;
+    reg_kernel->pages = pgs_kernel;
+
     /* Create the chain of regions */
     space->first_region = reg_low;
     reg_low->next = reg_pmem;
@@ -370,32 +356,134 @@ _kmem_init(u64 pmbase, u64 pmsz)
     /* Set the virtual memory space to the kmem data structure */
     kmem->space = space;
 
-    /* Initialize the page mapping to the kernel space */
-    for ( i = 0; i < DIV_CEIL(PMEM_LBOUND, PAGESIZE); i++ ) {
-        pgs_low[i].addr = PAGE_ADDR(i);
-        pgs_low[i].region = reg_low;
-        pgs_low[i].order = 0;
-        pgs_low[i].type = 0;
-        pgs_low[i].next = NULL;
-    }
-    for ( i = 0; i < DIV_CEIL(pmsz, PAGESIZE); i++ ) {
-        pgs_pmem[i].addr = pmbase + PAGE_ADDR(i);
-        pgs_pmem[i].region = reg_pmem;
-        pgs_pmem[i].order = 0;
-        pgs_pmem[i].type = 0;
-        pgs_pmem[i].next = NULL;
-    }
-    for ( i = 0; i < DIV_CEIL(0x40000000ULL, PAGESIZE); i++ ) {
-        pgs_kernel[i].addr = 0;
-        pgs_kernel[i].region = reg_kernel;
-        pgs_kernel[i].order = 0;
-        pgs_kernel[i].type = 0;
-        pgs_kernel[i].next = NULL;
-    }
-
+    _vmem_region_init(reg_low, 0, PMEM_LBOUND, VMEM_GLOBAL | VMEM_USED);
+    _vmem_region_init(reg_pmem, (u64)pmbase, pmsz, VMEM_USED);
+    _vmem_region_init(reg_kernel, KMEM_KERNEL_BASE, KMEM_KERNEL_SIZE,
+                      VMEM_GLOBAL | VMEM_USED);
 
     return kmem;
 }
+
+/*
+ * Initialize virtual memory space for kernel (minimal initialization)
+ *
+ * SYNOPSIS
+ *      static int
+ *      _kmem_pgt_init(struct arch_kmem **akmem, u64 *off);
+ *
+ * DESCRIPTION
+ *      The _kmem_pgt_init() function initializes the page table for the kernel
+ *      memory.  It creates the mapping entries from 0 to 4 GiB memory space of
+ *      virtual memory with 2 MiB paging, and enables the low address space
+ *      (0-32 MiB).
+ *
+ * RETURN VALUES
+ *      If successful, the _kmem_pgt_init() function returns the value of 0.  It
+ *      returns the value of -1 on failure.
+ */
+static int
+_kmem_pgt_init(struct arch_kmem **akmem, u64 *off)
+{
+    struct arch_kmem stkmem;
+    int i;
+    u64 *ptr;
+    int nspg;
+    int pgtsz;
+
+
+    /* Architecture-specific kernel memory management  */
+    *akmem = (struct arch_kmem *)KMEM_LOW_P2V(KMEM_BASE + *off);
+    *off += sizeof(struct arch_kmem);
+    if ( *off > KMEM_MAX_SIZE ) {
+        return -1;
+    }
+
+    /* Page-alignment */
+    *off = CEIL(*off, PAGESIZE);
+
+    /* Page table: Allocate 10 blocks (6 for keeping physical address, and 4 for
+       keeping virtual address) */
+    pgtsz = PAGESIZE * 6;
+    ptr = (u64 *)(KMEM_BASE + *off);
+    *off += pgtsz;
+    if ( *off > KMEM_MAX_SIZE ) {
+        return -1;
+    }
+    kmemset(ptr, 0, pgtsz);
+
+    /* Set physical addresses to page directories */
+    stkmem.pml4 = ptr;
+    stkmem.pdpt = ptr + 512;
+    for ( i = 0; i < 4; i++ ) {
+        stkmem.pd[i] = ptr + 1024 + 512 * i;
+    }
+    /* Page directories with virtual address */
+    for ( i = 0; i < 4; i++ ) {
+        stkmem.vpd[i] = (u64 *)KMEM_LOW_P2V(ptr + 3072 + 512 * i);
+    }
+
+    /* Setup physical page table */
+    stkmem.pml4[0] = KMEM_DIR_RW((u64)stkmem.pdpt);
+    for ( i = 0; i < 4; i++ ) {
+        stkmem.pdpt[i] = KMEM_DIR_RW((u64)stkmem.pd[i]);
+    }
+    /* Superpage for the region from 0-32 MiB */
+    nspg = DIV_CEIL(PMEM_LBOUND, SUPERPAGESIZE);
+    if ( nspg > 512 ) {
+        /* The low memory address space for kernel memory is too large. */
+        return -1;
+    }
+    /* Page directories for 0-32 MiB; must be consistent with KMEM_LOW_P2V */
+    for ( i = 0; i < nspg; i++ ) {
+        stkmem.pd[0][i] = KMEM_PG_GRW(SUPERPAGE_ADDR(i));
+    }
+    /* Page directories from 32 MiB to 1 GiB */
+    for ( ; i < 512; i++ ) {
+        stkmem.pd[0][i] = 0;
+    }
+
+    /* Set the constructured page table */
+    set_cr3(stkmem.pml4);
+
+    /* Setup virtual page table */
+    kmemset(stkmem.vpd, 0, PAGESIZE * 4);
+    for ( i = 0; i < nspg; i++ ) {
+        stkmem.vpd[0][i] = KMEM_PG_GRW(KMEM_LOW_P2V(SUPERPAGE_ADDR(i)));
+    }
+
+    /* Copy */
+    kmemcpy(akmem, &stkmem, sizeof(struct arch_kmem));
+
+    return 0;
+}
+
+
+/*
+ * Initialize a virtual memory region
+ */
+static void
+_vmem_region_init(struct vmem_region *region, u64 base, u64 size, int flags)
+{
+    u64 i;
+
+    for ( i = 0; i < DIV_CEIL(size, PAGESIZE); i++ ) {
+        if ( flags ) {
+            /* Flags are specified, then mapping */
+            region->pages[i].addr = base + PAGE_ADDR(i);
+            region->pages[i].flags = flags;
+        } else {
+            /* Flags are not specified, then NULL mapping */
+            region->pages[i].addr = 0;
+            region->pages[i].flags = 0;
+        }
+        region->pages[i].region = region;
+        region->pages[i].order = PMEM_INVAL_BUDDY_ORDER;
+        region->pages[i].next = NULL;
+    }
+}
+
+
+
 
 
 
@@ -600,7 +688,7 @@ _resolve_phys_mem_size(struct bootinfo *bi)
 /*
  * Find the memory region for the pmem data structure
  */
-static u64
+static void *
 _find_pmem_region(struct bootinfo *bi, u64 sz)
 {
     struct bootinfo_sysaddrmap_entry *bse;
@@ -645,7 +733,7 @@ _find_pmem_region(struct bootinfo *bi, u64 sz)
         }
     }
 
-    return addr;
+    return (void *)addr;
 }
 
 /*
@@ -1145,13 +1233,13 @@ arch_kmem_init(void)
     for ( i = 0; i < 512; i++ ) {
         if ( SUPERPAGE_ADDR(i) < PMEM_LBOUND ) {
             region[0]->pages[i].addr = SUPERPAGE_ADDR(i);
-            region[0]->pages[i].type = 1;
+            region[0]->pages[i].flags = 1;
         } else {
             region[0]->pages[i].addr = 0;
-            region[0]->pages[i].type = 0;
+            region[0]->pages[i].flags = 0;
         }
         region[1]->pages[i].addr = SUPERPAGE_ADDR(i) + (3ULL << 30);
-        region[1]->pages[i].type = 0;
+        region[1]->pages[i].flags = 0;
     }
 
     return kmem;

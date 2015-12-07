@@ -156,8 +156,7 @@ bsp_init(void)
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
     /* Initialize the physical memory manager */
-    pmem = arch_pmem_init(bi, &arch_acpi);
-    if ( NULL == pmem ) {
+    if ( arch_memory_init(bi, &arch_acpi) < 0 ) {
         panic("Fatal: Could not initialize the machine-specific physical "
               "memory.");
         return;

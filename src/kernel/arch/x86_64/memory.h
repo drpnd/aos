@@ -29,14 +29,6 @@
 #include "arch.h"
 #include "../../kernel.h"
 
-#define PHYS_MEM_ZONE_DMA       0
-#define PHYS_MEM_ZONE_NORMAL    1
-#define PHYS_MEM_ZONE_HIGHMEM   2
-#define PHYS_MEM_NR_ZONES       3
-
-/* Page size for the physical page management */
-#define PHYS_MEM_PAGESIZE       (1ULL << 21)
-
 /* Page table constants */
 #define PMEM_PTSIZE     4096
 #define PMEM_PTNENT     512
@@ -46,7 +38,7 @@
 #define PMEM_PT         12
 
 /* in memory.c */
-struct pmem * arch_pmem_init(struct bootinfo *, struct acpi *);
+int arch_memory_init(struct bootinfo *, struct acpi *);
 void * arch_pmem_alloc_pages(int, int);
 void * arch_pmem_alloc_page(int);
 void arch_pmem_free_pages(void *);

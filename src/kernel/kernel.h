@@ -28,9 +28,9 @@
 #include <aos/types.h>
 #include <sys/resource.h>
 
-/* Page size */
-#define PAGESIZE                4096ULL
-#define SUPERPAGESIZE           (1ULL << 21)
+/* Page size: Must be consistent with the architecture's page size */
+#define PAGESIZE                4096ULL         /* 4 KiB */
+#define SUPERPAGESIZE           (1ULL << 21)    /* 2 MiB */
 
 #define PAGE_ADDR(i)            (PAGESIZE * (i))
 #define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (i))
@@ -64,6 +64,9 @@
 
 #define KMEM_MAX_BUDDY_ORDER    21
 #define KMEM_REGION_SIZE        512
+
+#define KMEM_KERNEL_BASE        0xc0000000ULL
+#define KMEM_KERNEL_SIZE        0x40000000ULL
 
 #define VMEM_MAX_BUDDY_ORDER    18
 
@@ -129,8 +132,8 @@ struct vmem_page {
     reg_t addr;
     /* Order */
     int order;
-    /* Type */
-    int type;
+    /* Flags */
+    int flags;
     /* Back-link to the corresponding region */
     struct vmem_region *region;
     /* Buddy system */
@@ -161,6 +164,9 @@ struct vmem_region {
 struct vmem_space {
     /* Virtual memory region */
     struct vmem_region *first_region;
+
+    /* Virtual page table */
+    void *vmap;
 
     /* Architecture specific data structure (e.g., page table)  */
     void *arch;
@@ -352,8 +358,8 @@ struct kmem {
     /* Slab allocator */
     struct kmem_slab_root slab;
 
+    /* Architecture-specific data structure of kernel memory */
     void *arch;
-
 
     /* Virtual memory */
     struct vmem_space *space;
