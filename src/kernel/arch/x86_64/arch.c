@@ -42,6 +42,9 @@ void *syscall_table[SYS_MAXSYSCALL];
 /* ACPI structure */
 struct acpi arch_acpi;
 
+/* Multiprocessor enabled */
+int mp_enabled;
+
 #define FLOOR(val, base)        ((val) / (base)) * (base)
 #define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 
@@ -80,9 +83,11 @@ panic(char *s)
     /* Disable interrupt */
     cli();
 
-    /* Notify other processors to stop */
-    /* Send IPI and halt self */
-    lapic_send_fixed_ipi(IV_CRASH);
+    if ( mp_enabled ) {
+        /* Notify other processors to stop */
+        /* Send IPI and halt self */
+        lapic_send_fixed_ipi(IV_CRASH);
+    }
 
     /* Print out the message string directly */
     video = (u16 *)VIDEO_COLOR;
@@ -116,6 +121,9 @@ bsp_init(void)
     struct bootinfo *bi;
     struct p_data *pdata;
     long long i;
+
+    /* Reset */
+    mp_enabled = 0;
 
     /* Ensure the i8254 timer is stopped */
     i8254_stop_timer();
@@ -259,6 +267,9 @@ bsp_init(void)
         panic("Fatal: Could not initialize the ramfs.");
         return;
     }
+
+    /* Enable MP */
+    mp_enabled = 1;
 
     /* Load trampoline code */
     _load_trampoline();
