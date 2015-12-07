@@ -347,9 +347,6 @@ struct kmem {
     spinlock_t lock;
     spinlock_t slab_lock;
 
-    /* Kernel memory region(s) */
-    struct vmem_region *first_region;
-
     /* Regions */
     struct kmem_page region1[KMEM_REGION_SIZE];
     struct kmem_page region2[KMEM_REGION_SIZE];
