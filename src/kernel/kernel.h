@@ -37,17 +37,14 @@
 #define PAGE_INDEX(a)           ((u64)(a) / PAGESIZE)
 #define SUPERPAGE_INDEX(a)      ((u64)(a) / SUPERPAGESIZE)
 
-#define PMEM_USED               1ULL            /* Managed by buddy system */
-#define PMEM_WIRED              (1ULL<<1)       /* Wired (kernel use) */
-#define PMEM_ALLOC              (1ULL<<2)       /* Allocated */
-#define PMEM_SLAB               (1ULL<<3)       /* For slab */
-#define PMEM_UNAVAIL            (1ULL<<16)      /* Unavailable space */
-#define PMEM_IS_FREE(x)         (0 == (x)->flags ? 1 : 0)
+#define PMEM_USABLE             (1)             /* Usable */
+#define PMEM_USED               (1<<1)          /* Used */
+#define PMEM_IS_FREE(x)         (PMEM_USABLE == (x)->flags ? 1 : 0)
 
 #define PMEM_MAX_BUDDY_ORDER    18
 #define PMEM_INVAL_BUDDY_ORDER  0x3f
 
-#define PMEM_NUMA_MAX_DOMAINS   256
+#define PMEM_NUMA_MAX_DOMAINS   16
 #define PMEM_ZONE_DMA           0
 #define PMEM_ZONE_LOWMEM        1
 #define PMEM_ZONE_UMA           2
@@ -74,6 +71,9 @@
 #define VMEM_USED               (1<<1)
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
+
+#define VMEM_REGION_BITMAP      1
+#define VMEM_REGION_BUDDY       2
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -149,6 +149,13 @@ struct vmem_region {
     ptr_t start;
     size_t len;                 /* Constant multiplication of PAGESIZE */
 
+    /* Type of the region */
+    int type;
+
+    /* Capacity and the number of used pages */
+    size_t total_pgs;
+    size_t used_pgs;
+
     /* Pages belonging to this region */
     struct vmem_page *pages;
 
@@ -177,12 +184,12 @@ struct vmem_space {
  * Physical page
  */
 struct pmem_page {
-    u8 reserved;
+    u16 zone;
     u8 flags;
     /* Buddy system */
-    u16 order;
+    u8 order;
     u32 next;
-};
+} __attribute__((packed));
 
 /*
  * Buddy system
@@ -248,12 +255,8 @@ struct pmem {
     struct pmem_zone_map zmap;
 
     /* Zones (NUMA domains) */
-    struct pmem_zone zones[PMEM_NUMA_MAX_DOMAINS];
+    struct pmem_zone zones[PMEM_MAX_ZONES];
 };
-
-
-
-
 
 /*
  * A slab object
@@ -299,20 +302,6 @@ struct kmem_slab_root {
 };
 
 /*
- * Kernel memory page
- */
-struct kmem_page {
-    /* Physical address */
-    reg_t address;
-    /* Type */
-    int type;
-    /* Back-link to the corresponding region */
-    struct kmem_region *region;
-    /* Buddy system */
-    struct kmem_page *next;
-};
-
-/*
  * Kernel memory region
  */
 struct kmem_region {
@@ -347,10 +336,6 @@ struct kmem {
     spinlock_t lock;
     spinlock_t slab_lock;
 
-    /* Regions */
-    struct kmem_page region1[KMEM_REGION_SIZE];
-    struct kmem_page region2[KMEM_REGION_SIZE];
-
     /* Buddy system */
     struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
 
@@ -365,6 +350,9 @@ struct kmem {
 
     /* Free pages */
     struct kmem_free_page *free_pgs;
+
+    /* Physical memory */
+    struct pmem *pmem;
 };
 
 /*

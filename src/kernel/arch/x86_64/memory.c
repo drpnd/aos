@@ -37,7 +37,7 @@
 #define KMEM_PG_GRW(a)          ((a) | 0x183ULL)
 #define KMEM_IS_PAGE(a)         ((a) & 0x080ULL)
 #define KMEM_IS_PRESENT(a)      ((a) & 0x001ULL)
-#define KMEM_PT(a)              (u64 *)((a) & 0xfffffffffffffe00ULL)
+#define KMEM_PT(a)              (u64 *)((a) & 0x7ffffffffffffe00ULL)
 
 /* Type of memory area */
 #define BSE_USABLE              1
@@ -57,21 +57,17 @@ static struct vmem_space * _kmem_vmem_space_create(void *, u64, u64 *);
 static int _kmem_vmem_space_pgt_reflect(struct kmem *);
 static int _kmem_vmem_map(struct kmem *, u64, u64, int);
 static int _pmem_alloc(struct bootinfo *, void **, u64 *);
-static int _pmem_init(struct kmem *, struct bootinfo *);
+static int
+_pmem_init(struct kmem *, struct bootinfo *, struct acpi *, void *, u64);
 
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static void * _find_pmem_region(struct bootinfo *, u64 );
-static int
-_init_pages(struct bootinfo *, struct pmem *, u64, u64);
 static int _init_pmem_zone_buddy(struct pmem *, struct acpi *);
 static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
-static int _count_linear_page_tables(u64);
-static int _prepare_kernel_page_table(u64 *, u64);
 static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
 static void _pmem_return_to_buddy(struct pmem *, void *, int, int);
-static int _pmem_page_zone(void *);
-static u64 _pmem_size(u64, int);
+static __inline__ int _pmem_page_zone(void *, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
 
@@ -262,32 +258,12 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
     }
 
     /* Initialize the physical pages */
-    ret = _pmem_init(kmem, bi);
+    ret = _pmem_init(kmem, bi, acpi, base, pmsz);
     if ( ret < 0 ) {
         return -1;
     }
 
     panic("stop here for refactoring");
-
-
-    struct bootinfo_sysaddrmap_entry *bse;
-    u64 addr;
-    u64 i;
-    /* Obtain memory size */
-    addr = 0;
-    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
-        bse = &bi->sysaddrmap.entries[i];
-        if ( bse->base + bse->len > addr ) {
-            /* Get the highest address */
-            addr = bse->base + bse->len;
-        }
-        if ( bse->base > 0xdfff0000ULL ) {
-            //__asm__ ("movq %%rax,%%dr0" :: "a"(bse->type));
-            //__asm__ ("movq %%rax,%%dr1" :: "a"(bse->base));
-            //__asm__ ("movq %%rax,%%dr2" :: "a"(bse->len));
-            //panic("aaa");
-        }
-    }
 
 
     /* Search all PCI devices */
@@ -309,9 +285,6 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
         /* It's UMA, then we use a single zone. */
         nzme = 0;
     }
-
-    /* Calculate the required memory size for pages */
-    pmsz = _pmem_size(npg, nzme);
 
     /* Fine the available region for the pmem data structure */
     base = _find_pmem_region(bi, pmsz);
@@ -336,11 +309,6 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
     /* Set the page table of kernel */
     //set_cr3(pm->arch);
 
-    /* Initialize all available pages */
-    ret = _init_pages(bi, pm, base, pmsz);
-    if ( ret < 0 ) {
-        return NULL;
-    }
 
     /* Initialize all usable pages with the buddy system except for wired
        memory.  Note that the wired memory space is the range from 0 to
@@ -441,13 +409,15 @@ _kmem_init(void *pmbase, u64 pmsz)
     /* Add the remaining pages to the free page list */
     kmem->free_pgs = NULL;
     for ( i = DIV_CEIL(off, PAGESIZE);
-          i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE) - 1; i++ ) {
+          i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE); i++ ) {
         /* Prepend a page */
         fpg = (struct kmem_free_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
         fpg->paddr = (void *)(KMEM_BASE + PAGE_ADDR(i));
         fpg->next = kmem->free_pgs;
         kmem->free_pgs = fpg;
     }
+
+    /* Create buddy system for kernel memory */
 
     /* Reflect the regions to the page table */
     ret = _kmem_vmem_space_pgt_reflect(kmem);
@@ -576,7 +546,7 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(space, 0, sizeof(struct vmem_space));
 
     /* Low address space (below 32 MiB): Note that this operating system has
-       ``two'' kernel regions shared  unlike other UNIX-like systems, regions
+       ``two'' kernel regions shared unlike other UNIX-like systems, regions
        from 0 to 1 GiB and from 3 to 4 GiB.  The first region could be removed
        by relocating the kernel, but this version of our operating system does
        not do it. */
@@ -588,6 +558,9 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_low, 0, sizeof(struct vmem_region));
     reg_low->start = (void *)0;
     reg_low->len = CEIL(PMEM_LBOUND, SUPERPAGESIZE);
+    reg_low->type = VMEM_REGION_BITMAP;
+    reg_low->total_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
+    reg_low->used_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
 
     /* Physical pages: This region is not placed at the kernel region because
        this is not directly referred from user-land processes (e.g., through
@@ -600,6 +573,9 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_pmem, 0, sizeof(struct vmem_region));
     reg_pmem->start = (void *)KMEM_REGION_PMEM_BASE;
     reg_pmem->len = CEIL(pmsz, PAGESIZE);
+    reg_pmem->type = VMEM_REGION_BITMAP;
+    reg_pmem->total_pgs = DIV_CEIL(pmsz, PAGESIZE);
+    reg_pmem->used_pgs = DIV_CEIL(pmsz, PAGESIZE);
 
     /* Kernel address space (3-4 GiB) */
     reg_kernel = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
@@ -610,6 +586,9 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_kernel, 0, sizeof(struct vmem_region));
     reg_kernel->start = (void *)KMEM_REGION_KERNEL_BASE;
     reg_kernel->len = KMEM_REGION_KERNEL_SIZE;
+    reg_kernel->type = VMEM_REGION_BITMAP;
+    reg_kernel->total_pgs = KMEM_REGION_KERNEL_SIZE / PAGESIZE;
+    reg_kernel->used_pgs = 0;
 
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
@@ -617,13 +596,13 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     /* Initialize the pages in this region.  Note that the (super)pages in this
        region have already been configured in the kernel's page table. */
     pgs_low = (struct vmem_page *)KMEM_LOW_P2V(KMEM_BASE + *off);
-    *off += sizeof(struct vmem_page) * DIV_CEIL(PMEM_LBOUND, PAGESIZE);
+    *off += sizeof(struct vmem_page) * DIV_CEIL(reg_low->len, PAGESIZE);
     if ( *off > KMEM_MAX_SIZE ) {
         return NULL;
     }
     kmemset(pgs_low, 0, sizeof(struct vmem_page)
-            * DIV_CEIL(PMEM_LBOUND, PAGESIZE));
-    for ( i = 0; i < DIV_CEIL(PMEM_LBOUND, PAGESIZE); i++ ) {
+            * DIV_CEIL(reg_low->len, PAGESIZE));
+    for ( i = 0; i < DIV_CEIL(reg_low->len, PAGESIZE); i++ ) {
         pgs_low[i].addr = KMEM_LOW_P2V(PAGE_ADDR(i) + (reg_t)reg_low->start);
         pgs_low[i].order = PMEM_INVAL_BUDDY_ORDER;
         pgs_low[i].flags = VMEM_USED | VMEM_GLOBAL | VMEM_SUPERPAGE;
@@ -633,12 +612,13 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
 
     /* Prepare page data structures for physical memory management region */
     pgs_pmem = (struct vmem_page *)KMEM_LOW_P2V(KMEM_BASE + *off);
-    *off += sizeof(struct vmem_page) * DIV_CEIL(pmsz, PAGESIZE);
+    *off += sizeof(struct vmem_page) * DIV_CEIL(reg_pmem->len, PAGESIZE);
     if ( *off > KMEM_MAX_SIZE ) {
         return NULL;
     }
-    kmemset(pgs_pmem, 0, sizeof(struct vmem_page) * DIV_CEIL(pmsz, PAGESIZE));
-    for ( i = 0; i < DIV_CEIL(pmsz, PAGESIZE); i++ ) {
+    kmemset(pgs_pmem, 0, sizeof(struct vmem_page)
+            * DIV_CEIL(reg_pmem->len, PAGESIZE));
+    for ( i = 0; i < DIV_CEIL(reg_pmem->len, PAGESIZE); i++ ) {
         pgs_pmem[i].addr = (reg_t)pmbase + PAGE_ADDR(i);
         pgs_pmem[i].order = PMEM_INVAL_BUDDY_ORDER;
         pgs_pmem[i].flags = VMEM_USABLE | VMEM_USED;
@@ -648,13 +628,19 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
 
     /* Prepare page data structures for kernel memory region */
     pgs_kernel = (struct vmem_page *)KMEM_LOW_P2V(KMEM_BASE + *off);
-    *off += sizeof(struct vmem_page)
-        * DIV_CEIL(KMEM_REGION_KERNEL_SIZE, PAGESIZE);
+    *off += sizeof(struct vmem_page) * DIV_CEIL(reg_kernel->len, PAGESIZE);
     if ( *off > KMEM_MAX_SIZE ) {
         return NULL;
     }
     kmemset(pgs_kernel, 0, sizeof(struct vmem_page)
-            * DIV_CEIL(KMEM_REGION_KERNEL_SIZE, PAGESIZE));
+            * DIV_CEIL(reg_kernel->len, PAGESIZE));
+    for ( i = 0; i < DIV_CEIL(reg_kernel->len, PAGESIZE); i++ ) {
+        pgs_kernel[i].addr = (reg_t)reg_kernel->start + PAGE_ADDR(i);
+        pgs_kernel[i].order = PMEM_INVAL_BUDDY_ORDER;
+        pgs_kernel[i].flags = VMEM_USABLE;
+        pgs_kernel[i].region = reg_kernel;
+        pgs_kernel[i].next = NULL;
+    }
 
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
@@ -744,13 +730,20 @@ _kmem_page_free(struct kmem *kmem, void *paddr)
  * Map a virtual page to a physical page
  */
 static int
-_kmem_vmem_map(struct kmem *kmem, u64 vpg, u64 ppg, int flags)
+_kmem_vmem_map(struct kmem *kmem, u64 vpg, u64 paddr, int flags)
 {
     struct arch_kmem *akmem;
     int idxpd;
     int idxp;
     int idx;
     u64 *pt;
+    u64 *vpt;
+
+    /* Check the physical address argument */
+    if ( 0 != (paddr % PAGESIZE) ) {
+        /* Invalid physical address */
+        return -1;
+    }
 
     /* Get the architecture-specific kernel memory manager */
     akmem = (struct arch_kmem *)kmem->arch;
@@ -768,19 +761,25 @@ _kmem_vmem_map(struct kmem *kmem, u64 vpg, u64 ppg, int flags)
          || KMEM_IS_PAGE(akmem->pd[idxpd][idxp]) ) {
         /* Not present or 2 MiB page, then create a new page table */
         pt = _kmem_page_alloc(kmem);
+        /* Get the virtual address */
+        vpt = KMEM_LOW_P2V(pt);
         if ( NULL == pt ) {
             return -1;
         }
+        /* Update the entry */
+        akmem->pd[idxpd][idxp] = KMEM_DIR_RW((u64)pt);
+        akmem->vpd[idxpd][idxp] = KMEM_DIR_RW((u64)vpt);
     } else {
         /* Directory */
-        pt = KMEM_PT(akmem->vpd[idxpd][idxp]);
+        pt = KMEM_PT(akmem->pd[idxpd][idxp]);
+        vpt = KMEM_PT(akmem->vpd[idxpd][idxp]);
     }
 
     /* Remapping */
     if ( flags & VMEM_GLOBAL ) {
-        pt[idx] = KMEM_PG_GRW(ppg);
+        pt[idx] = KMEM_PG_GRW(paddr);
     } else {
-        pt[idx] = KMEM_PG_RW(ppg);
+        pt[idx] = KMEM_PG_RW(paddr);
     }
 
     /* Invalidate the page */
@@ -793,28 +792,131 @@ _kmem_vmem_map(struct kmem *kmem, u64 vpg, u64 ppg, int flags)
  * Initialize physical memory
  */
 static int
-_pmem_init(struct kmem *kmem, struct bootinfo *bi)
+_pmem_init(struct kmem *kmem, struct bootinfo *bi, struct acpi *acpi,
+           void *pmbase, u64 pmsz)
 {
     struct bootinfo_sysaddrmap_entry *bse;
     u64 i;
+    u64 sz;
+    u64 npg;
+    struct pmem *pmem;
+    u64 a;
+    u64 b;
+    u64 pg;
+    u64 pxbase;
+    u64 pxlen;
+    int prox;
 
-    return -1;
-    u64 *x = KMEM_REGION_PMEM_BASE;
-    __asm__ ("movq %%rax,%%dr0" :: "a"(*x));
+    /* Obtain memory (space) size from the system address map */
+    sz = _resolve_phys_mem_size(bi);
 
-    /* Obtain memory size */
+    /* Calculate the number of pages from the upper-bound of the memory space */
+    npg = DIV_CEIL(sz, PAGESIZE);
+
+    /* Physical memory */
+    pmem = (struct pmem *)(KMEM_REGION_PMEM_BASE
+                           + npg * sizeof(struct pmem_page));
+    pmem->nr = npg;
+    pmem->pages = (struct pmem_page *)KMEM_REGION_PMEM_BASE;
+
+    /* Mark as used for the pmem pages */
+    for ( i = 0; i < DIV_CEIL(pmsz, PAGESIZE); i++ ) {
+        pg = DIV_FLOOR((u64)pmbase, PAGESIZE) + i;
+        pmem->pages[pg].flags |= PMEM_USED;
+    }
+
+    /* Mark the usable region */
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
-        if ( bse->base > 0xdfff0000ULL ) {
-            //__asm__ ("movq %%rax,%%dr0" :: "a"(bse->type));
-            //__asm__ ("movq %%rax,%%dr1" :: "a"(bse->base));
-            //__asm__ ("movq %%rax,%%dr2" :: "a"(bse->len));
-            //panic("aaa");
+        if ( BSE_USABLE == bse->type ) {
+            a = DIV_CEIL(bse->base, PAGESIZE);
+            b = DIV_FLOOR(bse->base + bse->len, PAGESIZE);
+            for ( pg = a; pg < b; pg++ ) {
+                pmem->pages[pg].flags |= PMEM_USABLE;
+            }
         }
     }
 
+    /* FIXME */
+    int ret;
+    ret = _kmem_vmem_map(kmem, PAGE_INDEX(0x7e254000), 0x7e254000, 0);
+
+    /* Set physical memory manager */
+    kmem->pmem = pmem;
+
+    /* Resolve the zone of each page */
+    if ( acpi_is_numa(acpi) ) {
+        /* NUMA */
+        prox = -1;
+        for ( i = 0; i < pmem->nr; i++ ) {
+            if ( prox < 0 || !(PAGE_ADDR(i) >= pxbase
+                               && PAGE_ADDR(i + 1) <= pxbase + pxlen) ) {
+                /* Resolve the proximity domain of the page */
+                prox = acpi_memory_prox_domain(acpi, PAGE_ADDR(i), &pxbase,
+                                               &pxlen);
+                if ( prox < 0 || !(PAGE_ADDR(i) >= pxbase
+                                   && PAGE_ADDR(i + 1) <= pxbase + pxlen) ) {
+                    /* No proximity domain; meaning unusable page. */
+                    continue;
+                }
+            }
+            pmem->pages[i].zone = _pmem_page_zone((void *)PAGE_ADDR(i), prox);
+        }
+    } else {
+        /* UMA */
+        for ( i = 0; i < pmem->nr; i++ ) {
+            pmem->pages[i].zone = _pmem_page_zone((void *)PAGE_ADDR(i), -1);
+        }
+    }
+
+    /* Initialize the buddy system */
+
+#if 0
+    for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
+        /* Try the order of o */
+        for ( i = pg; i < pg + (1ULL << o); i++ ) {
+            /* Check if this page is usable */
+            if ( !pm->pages[i].usable || pm->pages[i].used ) {
+                /* It contains unusable page, then return the current order
+                   minus 1 immediately. */
+                return o - 1;
+            }
+            /* Check the proximity domain */
+            if ( PAGE_ADDR(i) < pxbase || PAGE_ADDR(i + 1) > pxbase + pxlen ) {
+                /* This page is (perhaps) based on a different proximity domain,
+                   then return the current order minus 1 immedicately. */
+                return o - 1;
+            }
+        }
+
+        /* Test whether the next order is feasible; feasible if it is properly
+           aligned and the pages are within the range of the physical memory
+           space. */
+        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > pm->nr ) {
+            /* Infeasible, then return the current order immediately */
+            return o;
+        }
+    }
+#endif
+
     return 0;
 }
+
+/*
+ * Construct buddy system for physical memory
+ */
+static int
+_pmem_buddy_init(struct pmem *pmem)
+{
+    return -1;
+}
+
+
+
+
+
+
+
 
 
 
@@ -954,7 +1056,7 @@ arch_pmem_free_pages(void *page)
     order = pmem->pages[PAGE_INDEX(page)].order;
 
     /* Resolve the zone of the pages to be released */
-    zone = _pmem_page_zone(page);
+    //zone = _pmem_page_zone(page);
 
     /* If the order exceeds its maximum, that's something wrong. */
     if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
@@ -1015,7 +1117,7 @@ _resolve_phys_mem_size(struct bootinfo *bi)
 }
 
 /*
- * Find the memory region for the pmem data structure
+ * Find the memory region (page-aligned) for the pmem data structure
  */
 static void *
 _find_pmem_region(struct bootinfo *bi, u64 sz)
@@ -1063,53 +1165,6 @@ _find_pmem_region(struct bootinfo *bi, u64 sz)
     }
 
     return (void *)addr;
-}
-
-/*
- * Initialize all pages
- */
-static int
-_init_pages(struct bootinfo *bi, struct pmem *pm, u64 pmbase, u64 pmsz)
-{
-    struct bootinfo_sysaddrmap_entry *bse;
-    u64 i;
-    u64 j;
-    u64 a;
-    u64 b;
-
-    /* Check system address map obitaned from BIOS */
-    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
-        bse = &bi->sysaddrmap.entries[i];
-        if ( BSE_USABLE == bse->type ) {
-            /* Available */
-            a = DIV_CEIL(bse->base, PAGESIZE);
-            b = DIV_FLOOR(bse->base + bse->len, PAGESIZE);
-
-            /* Mark usable pages */
-            for ( j = a; j < b; j++ ) {
-                if ( j >= pm->nr ) {
-                    /* Overflowed page.  This must not be reached because the
-                       number of pages should properly counted, but doublecheck
-                       it here. */
-                    return -1;
-                }
-                //pm->pages[j].usable = 1;
-                pm->pages[j].order = PMEM_INVAL_BUDDY_ORDER;
-
-                /* Mark the pages below the lower bound as used */
-                if ( PAGE_ADDR(j + 1) < PMEM_LBOUND ) {
-                    //pm->pages[j].used = 1;
-                }
-            }
-        }
-    }
-
-    /* Mark the pages used by the pmem data structure */
-    for ( i = PAGE_INDEX(pmbase); i <= PAGE_INDEX(pmbase + pmsz - 1); i++ ) {
-        //pm->pages[i].used = 1;
-    }
-
-    return 0;
 }
 
 /*
@@ -1195,76 +1250,6 @@ _init_pmem_zone_buddy(struct pmem *pm, struct acpi *acpi)
         /* Add usable pages to the buddy */
         _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), zone, o);
         _pmem_merge(&pm->zones[zone].buddy, (void *)PAGE_ADDR(i), o);
-    }
-
-    return 0;
-}
-
-/*
- * Count the total number of tables required for linear address mapping
- */
-static int
-_count_linear_page_tables(u64 sz)
-{
-    int npd;
-    int npdpt;
-    int npml4;
-    int n;
-
-    /* Calculate the number of tables at each level */
-    npd = DIV_CEIL(sz, 1ULL << PMEM_PD);
-    npdpt = DIV_CEIL(npd, PMEM_PTNENT);
-    npml4 = DIV_CEIL(npdpt, PMEM_PTNENT);
-    if ( npml4 > 512 ) {
-        /* Cannot have multiple blocks for PML4 */
-        return -1;
-    }
-
-    /* Total number of tables */
-    n = npd + npdpt + npml4;
-
-    return n;
-}
-
-/*
- * Prepare a page table of the kernel space
- */
-static int
-_prepare_kernel_page_table(u64 *pt, u64 sz)
-{
-    int npd;
-    int npdpt;
-    int npml4;
-    int i;
-    u64 *pml4;
-    u64 *pdpt;
-    u64 *pd;
-
-    /* Calculate the number of tables at each level */
-    npd = DIV_CEIL(sz, 1ULL << PMEM_PD);
-    npdpt = DIV_CEIL(npd, PMEM_PTNENT);
-    npml4 = DIV_CEIL(npdpt, PMEM_PTNENT);
-    if ( npml4 > 512 ) {
-        /* Cannot have multiple blocks for PML4 */
-        return -1;
-    }
-
-    /* Pointers */
-    pml4 = pt;
-    pdpt = pml4 + PMEM_PTNENT;
-    pd = pdpt + PMEM_PTNENT * npml4;
-
-    /* PML4 */
-    for ( i = 0; i < npml4; i++ ) {
-        pml4[i] = (u64)(pdpt + i * PMEM_PTNENT) | 0x7;
-    }
-    /* PDPT */
-    for ( i = 0; i < npdpt; i++ ) {
-        pdpt[i] = (u64)(pd + i * PMEM_PTNENT) | 0x7;
-    }
-    /* PD */
-    for ( i = 0; i < npd; i++ ) {
-        pd[i] = ((1ULL << PMEM_PD) * i) | 0x83;
     }
 
     return 0;
@@ -1429,8 +1414,8 @@ _pmem_return_to_buddy(struct pmem *pm, void *addr, int zone, int order)
 /*
  * Resolve the zone of the page
  */
-static int
-_pmem_page_zone(void *page)
+static __inline__ int
+_pmem_page_zone(void *page, int prox)
 {
     if ( (u64)page < 0x1000000 ) {
         /* DMA */
@@ -1440,35 +1425,12 @@ _pmem_page_zone(void *page)
         return PMEM_ZONE_LOWMEM;
     } else {
         /* High address memory space */
-        if ( 0 ) {
-            /* FIXME: Referring to the zone map */
-            return PMEM_ZONE_NUMA(0);
+        if ( prox >= 0 ) {
+            return PMEM_ZONE_NUMA(prox);
         } else {
             return PMEM_ZONE_UMA;
         }
     }
-}
-
-/*
- * Calculate the memory size required by pmem structure, including the spaces
- * pointed by the structure
- */
-static u64
-_pmem_size(u64 npg, int nzme)
-{
-    u64 pmsz;
-
-    /* Calculate the required memory size for pages
-     *   - Page table: (Page table size) * (# of entries)
-     *   - Page info.: (Page structure size) * (# of pages)
-     *   - Zone map: (Zone map entry size) * (# of entries)
-     *   - Self: Physical memory structure
-     */
-    pmsz = npg * sizeof(struct pmem_page)
-        + sizeof(struct pmem_zone_map_entry) * nzme
-        + sizeof(struct pmem);
-
-    return pmsz;
 }
 
 /*
@@ -1489,61 +1451,6 @@ _disable_page_global(void)
 {
     /* Disable the global page feature */
     set_cr4(get_cr4() & ~CR4_PGE);
-}
-
-/*
- * Initialize the kernel memory
- */
-struct kmem *
-arch_kmem_init(void)
-{
-    struct kmem *kmem;
-    struct vmem_region *region[2];
-    int i;
-
-    /* Check the size of the kmem data structure first */
-    if ( sizeof(struct kmem) + sizeof(struct vmem_region) * 2
-         + sizeof(struct kmem_page) * 1024 > KMEM_MAX_SIZE ) {
-        return NULL;
-    }
-
-    /* Initialize the kmem data structure */
-    kmem = (struct kmem *)KMEM_BASE;
-    kmemset(kmem, 0, sizeof(struct kmem));
-
-    /* Prepare regions: Note that this operating system has two kernel regions
-       unlike other UNIX-like systems in the region from 0 to 1 GiB and from 3
-       to 4 GiB.  The first region could be removed by relocating the kernel,
-       but this operating system does not do it. */
-    region[0] = (struct vmem_region *)(KMEM_BASE + sizeof(struct kmem));
-    region[1] = (struct vmem_region *)(KMEM_BASE + sizeof(struct kmem)
-                                       + sizeof(struct vmem_region));
-    region[0]->start = (ptr_t)0;
-    region[0]->len = (1ULL << 30);
-    region[0]->pages = (struct vmem_page *)(KMEM_BASE + sizeof(struct kmem)
-                                            + sizeof(struct vmem_region) * 2);
-    region[0]->next = region[1];
-    region[1]->start = (ptr_t)(3ULL << 30);
-    region[1]->len = (1ULL << 30);
-    region[1]->pages = (struct vmem_page *)(KMEM_BASE + sizeof(struct kmem)
-                                            + sizeof(struct vmem_region) * 2
-                                            + sizeof(struct vmem_page) * 512);
-    region[1]->next = NULL;
-
-    /* 512 pages in a region */
-    for ( i = 0; i < 512; i++ ) {
-        if ( SUPERPAGE_ADDR(i) < PMEM_LBOUND ) {
-            region[0]->pages[i].addr = SUPERPAGE_ADDR(i);
-            region[0]->pages[i].flags = 1;
-        } else {
-            region[0]->pages[i].addr = 0;
-            region[0]->pages[i].flags = 0;
-        }
-        region[1]->pages[i].addr = SUPERPAGE_ADDR(i) + (3ULL << 30);
-        region[1]->pages[i].flags = 0;
-    }
-
-    return kmem;
 }
 
 

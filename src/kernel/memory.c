@@ -57,250 +57,6 @@ pmem_free_pages(void *a)
 {}
 
 
-/*
- * Split the buddies so that we get at least one buddy at the order of o
- */
-static int
-_kpage_split(int o)
-{
-    int ret;
-    struct kmem_page *next;
-
-    /* Check the head of the current order */
-    if ( NULL != kmem->heads[o] ) {
-        /* At least one memory block (buddy) is available in this order. */
-        return 0;
-    }
-
-    /* Check the order */
-    if ( o + 1 >= KMEM_MAX_BUDDY_ORDER ) {
-        /* No space available */
-        return -1;
-    }
-
-    /* Check the upper order */
-    if ( NULL == kmem->heads[o + 1] ) {
-        /* The upper order is also empty, then try to split one more upper. */
-        ret = _kpage_split(o + 1);
-        if ( ret < 0 ) {
-            /* Cannot get any */
-            return ret;
-        }
-    }
-
-    /* Save next at the upper order */
-    next = kmem->heads[o + 1]->next;
-    /* Split into two */
-    kmem->heads[o] = kmem->heads[o + 1];
-    kmem->heads[o]->next = kmem->heads[o] + (1 << o);
-    kmem->heads[o]->next->next = NULL;
-    /* Remove the split one from the upper order */
-    kmem->heads[o + 1] = next;
-
-    return 0;
-}
-
-/*
- * Merge buddies onto the upper order on if possible
- */
-static void
-_kpage_merge(struct kmem_page *off, int o)
-{
-    int found;
-    struct kmem_page *p0;
-    struct kmem_page *p0p;
-    struct kmem_page *p1p;
-    struct kmem_page *p1;
-    struct kmem_page *prev;
-    struct kmem_page *list;
-    struct kmem_page *region;
-
-    if ( o + 1 >= KMEM_MAX_BUDDY_ORDER ) {
-        /* Reached the maximum order */
-        return;
-    }
-
-    /* Check the region */
-    if ( off - kmem->region1 >= 0
-         && off - kmem->region1 < KMEM_REGION_SIZE ) {
-        /* Region 1 */
-        region = kmem->region1;
-    } else if ( off - kmem->region2 >= 0
-                && off - kmem->region2 < KMEM_REGION_SIZE ) {
-        /* Region 2 */
-        region = kmem->region2;
-    } else {
-        /* Fatal error: Not to be reached here */
-        return;
-    }
-
-    /* Get the first page of the upper order */
-    p0 = region + ((off - region) / (1 << (o + 1)) * (1 << (o + 1)));
-    /* Get the neighboring buddy */
-    p1 = p0 + (1 << o);
-
-    /* Check the current level and remove the pairs */
-    list = kmem->heads[o];
-    found = 0;
-    prev = NULL;
-    while ( NULL != list ) {
-        if ( p0 == list || p1 == list ) {
-            /* Preserve the pointer to the previous entry */
-            if ( p0 == list ) {
-                p0p = prev;
-            } else {
-                p1p = prev;
-            }
-            /* Found */
-            found++;
-            if ( 2 == found ) {
-                /* Found both */
-                break;
-            }
-        }
-        /* Go to the next one */
-        list = list->next;
-    }
-    if ( 2 != found ) {
-        /* Either of the buddy is not free */
-        return;
-    }
-
-    /* Remove both from the list */
-    if ( p0p == NULL ) {
-        /* Head */
-        kmem->heads[o] = p0->next;
-    } else {
-        /* Otherwise */
-        list = p0p;
-        list->next = p0->next;
-    }
-    if ( p1p == NULL ) {
-        /* Head */
-        kmem->heads[o] = p1->next;
-    } else {
-        /* Otherwise */
-        list = p1p;
-        list->next = p1->next;
-    }
-
-    /* Prepend it to the upper order */
-    p0->next = kmem->heads[o + 1];
-    kmem->heads[o + 1] = p0;
-
-    /* Try to merge the upper order of buddies */
-    _kpage_merge(p0, o + 1);
-}
-
-/*
- * Search available kernel pages
- */
-static struct kmem_page *
-_kpage_alloc(int n)
-{
-    struct kmem_page *page;
-    struct kmem_page *region;
-    ssize_t i;
-    int ret;
-
-    if ( n < 0 || n > KMEM_MAX_BUDDY_ORDER ) {
-        /* Invalid order */
-        return NULL;
-    }
-
-    /* Lock */
-    spin_lock(&kmem->lock);
-
-    /* Split first if needed */
-    ret = _kpage_split(n);
-    if ( ret < 0 ) {
-        /* No memory available */
-        spin_unlock(&kmem->lock);
-        return NULL;
-    }
-
-    /* Return this block */
-    page = kmem->heads[n];
-
-    /* Get the region */
-    if ( page - kmem->region1 >= 0
-         && page - kmem->region1 < KMEM_REGION_SIZE ) {
-        /* Region 1 */
-        region = kmem->region1;
-    } else if ( page - kmem->region2 >= 0
-                && page - kmem->region2 < KMEM_REGION_SIZE ) {
-        /* Region 2 */
-        region = kmem->region2;
-    } else {
-        /* Fatal error: Not to be reached here */
-        spin_unlock(&kmem->lock);
-        return NULL;
-    }
-    /* Remove the found pages from the list */
-    kmem->heads[n] = page->next;
-
-    /* Manage the contiguous pages in a list */
-    for ( i = 0; i < (1LL << n) - 1; i++ ) {
-        region[page - region + i].next = &region[page - region + i + 1];
-    }
-    region[page - region + i].next = NULL;
-
-    /* Unlock */
-    spin_unlock(&kmem->lock);
-
-    return page;
-}
-
-static void
-_kpage_free(struct kmem_page *page)
-{
-    struct kmem_page *list;
-    int order;
-    ssize_t n;
-    int i;
-
-    /* Count the number of pages */
-    list = page;
-    n = 0;
-    while ( NULL != list ) {
-        n++;
-        list = list->next;
-    }
-
-    /* Resolve the order from the number of the pages */
-    order = -1;
-    for ( i = 0; i <= KMEM_MAX_BUDDY_ORDER; i++ ) {
-        if ( n == (1LL << i) ) {
-            order = i;
-            break;
-        }
-    }
-
-    /* If the order exceeds its maximum, that's something wrong. */
-    if ( order > KMEM_MAX_BUDDY_ORDER || order < 0 ) {
-        /* Something is wrong... */
-        return;
-    }
-
-    /* Lock */
-    spin_lock(&kmem->lock);
-
-    /* Return it to the buddy system */
-    list = kmem->heads[order];
-    /* Prepend the returned pages */
-    kmem->heads[order] = page;
-    kmem->heads[order]->next = list;
-
-    /* Merge buddies if possible */
-    _kpage_merge(page, order);
-
-    /* Unlock */
-    spin_unlock(&kmem->lock);
-}
-
-
-
-
 
 /*
  * Initialize the kernel memory
@@ -343,7 +99,7 @@ kmem_init(void)
             kmem->region2[i].type = 0;
         }
     }
-#endif
+
     /* Build the buddy system */
     for ( i = KMEM_REGION_SIZE - 1; i >= 0; i-- ) {
         if ( 0 == kmem->region2[i].type ) {
@@ -383,7 +139,7 @@ kmem_init(void)
             }
         }
     }
-
+#endif
     /* Slab */
     for ( i = 0; i < KMEM_SLAB_ORDER; i++ ) {
         kmem->slab.gslabs[i].partial = NULL;
@@ -421,6 +177,7 @@ kmem_alloc_pages(int order)
         return NULL;
     }
 
+#if 0
     if ( kpage - kmem->region1 >= 0
          && kpage - kmem->region1 < KMEM_REGION_SIZE ) {
         /* Region 1 */
@@ -454,7 +211,7 @@ kmem_alloc_pages(int order)
             return NULL;
         }
     }
-
+#endif
     return vaddr;
 }
 
@@ -467,7 +224,7 @@ kmem_free_pages(void *vaddr)
     int pgnr;
     u64 paddr;
     struct kmem_page *kpage;
-
+#if 0
     /* Resolve physical page */
     pgnr = (u64)vaddr / SUPERPAGESIZE;
     if ( pgnr < 512 ) {
@@ -479,8 +236,8 @@ kmem_free_pages(void *vaddr)
     } else {
         return;
     }
-
-    _kpage_free(kpage);
+#endif
+    //_kpage_free(kpage);
     paddr = kmem_paddr((u64)vaddr);
     //pmem_free_pages(&pmem->superpages[(u64)paddr / SUPERPAGESIZE]);
 }

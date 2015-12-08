@@ -165,22 +165,9 @@ bsp_init(void)
 
     /* Initialize the physical memory manager */
     if ( arch_memory_init(bi, &arch_acpi) < 0 ) {
-        panic("Fatal: Could not initialize the machine-specific physical "
-              "memory.");
+        panic("Fatal: Could not initialize the memory manager.");
         return;
     }
-
-#if 0
-    if ( pmem_init(pmem) < 0 ) {
-        panic("Fatal: Could not initialize the physical memory.");
-        return;
-    }
-    /* Initialize the kernel memory manager */
-    if ( kmem_init() < 0 ) {
-        panic("Fatal: Could not initialize the kernel memory.");
-        return;
-    }
-#endif
 
     /* Initialize I/O APIC */
     ioapic_init();

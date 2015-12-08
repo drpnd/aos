@@ -62,6 +62,15 @@ lapic_init(void)
 }
 
 /*
+ * Return the APIC_BASE address
+ */
+u64
+lapic_base_addr(void)
+{
+    return apic_base;
+}
+
+/*
  * Send INIT IPI
  */
 void
