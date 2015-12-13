@@ -28,6 +28,11 @@
 #include <aos/types.h>
 #include <sys/resource.h>
 
+#define FLOOR(val, base)        (((val) / (base)) * (base))
+#define CEIL(val, base)         ((((val) - 1) / (base) + 1) * (base))
+#define DIV_FLOOR(val, base)    ((val) / (base))
+#define DIV_CEIL(val, base)     (((val) - 1) / (base) + 1)
+
 /* Page size: Must be consistent with the architecture's page size */
 #define PAGESIZE                4096ULL         /* 4 KiB */
 #define SUPERPAGESIZE           (1ULL << 21)    /* 2 MiB */
@@ -191,7 +196,7 @@ struct pmem_page {
  * Buddy system
  */
 struct pmem_buddy {
-    struct pmem_page_althdr *heads[PMEM_MAX_BUDDY_ORDER + 1];
+    struct pmem_page *heads[PMEM_MAX_BUDDY_ORDER + 1];
 };
 
 /*

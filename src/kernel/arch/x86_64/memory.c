@@ -27,10 +27,6 @@
 #include "../../kernel.h"
 
 #define KMEM_LOW_P2V(a)     (a)
-#define FLOOR(val, base)        (((val) / (base)) * (base))
-#define CEIL(val, base)         ((((val) - 1) / (base) + 1) * (base))
-#define DIV_FLOOR(val, base)    ((val) / (base))
-#define DIV_CEIL(val, base)     (((val) - 1) / (base) + 1)
 
 #define KMEM_DIR_RW(a)          ((a) | 0x007ULL)
 #define KMEM_PG_RW(a)           ((a) | 0x083ULL)
@@ -57,15 +53,14 @@ static struct vmem_space * _kmem_vmem_space_create(void *, u64, u64 *);
 static int _kmem_vmem_space_pgt_reflect(struct kmem *);
 static int _kmem_vmem_map(struct kmem *, u64, u64, int);
 static int _pmem_alloc(struct bootinfo *, void **, u64 *);
+static int _pmem_buddy_split(struct pmem *, struct pmem_buddy *, int);
 static int
 _pmem_init(struct kmem *, struct bootinfo *, struct acpi *, void *, u64);
-
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static void * _find_pmem_region(struct bootinfo *, u64 );
 static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
-static int _pmem_split(struct pmem_buddy *, int);
-static void _pmem_merge(struct pmem_buddy *, void *, int);
-static void _pmem_return_to_buddy(struct pmem *, void *, int, int);
+static void
+_pmem_buddy_merge(struct pmem *, struct pmem_buddy *, struct pmem_page *, int);
 static __inline__ int _pmem_page_zone(void *, int);
 static void _enable_page_global(void);
 static void _disable_page_global(void);
@@ -891,7 +886,35 @@ _pmem_buddy_init(struct pmem *pmem)
 }
 
 
+/*
+ * Count the physical memory order for buddy system
+ */
+static int
+_pmem_buddy_order(struct pmem *pmem, size_t pg)
+{
+    int o;
+    size_t i;
 
+    /* Check the order for contiguous usable pages */
+    for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
+        for ( i = pg; i < pg + (1ULL << o); i++ ) {
+            if ( !PMEM_IS_FREE(&pmem->pages[i]) ) {
+                /* It contains an unusable page, then return the current order
+                   minus 1, immediately. */
+                return o - 1;
+            }
+        }
+        /* Test whether the next order is feasible; feasible if it is properly
+           aligned and the pages are within the range of this zone. */
+        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > pmem->nr ) {
+            /* Infeasible, then return the current order immediately */
+            return o;
+        }
+    }
+
+    /* Return the maximum order */
+    return o;
+}
 
 
 
@@ -1207,6 +1230,156 @@ _aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
 
     return o;
 }
+
+
+
+
+
+/*
+ * Split the buddies so that we get at least one buddy at the order of o
+ */
+static int
+_pmem_buddy_split(struct pmem *pmem, struct pmem_buddy *buddy, int o)
+{
+    int ret;
+    struct pmem_page *p0;
+    struct pmem_page *p1;
+    u32 next;
+    size_t i;
+
+    /* Check the head ofthe current order */
+    if ( NULL != buddy->heads[o] ) {
+        /* At least one memory block is avaiable in this order, then nothing to
+           do here. */
+        return 0;
+    }
+
+    /* Check the order */
+    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
+        /* No space available */
+        return -1;
+    }
+
+    /* Check the upper order */
+    if ( NULL == buddy->heads[o + 1] ) {
+        /* The upper order is also empty, then try to split buddy at the one
+           more upper buddy. */
+        ret = _pmem_buddy_split(pmem, buddy, o + 1);
+        if ( ret < 0 ) {
+            /* Cannot get any */
+            return ret;
+        }
+    }
+
+    /* Save next at the upper order */
+    next = buddy->heads[o + 1]->next;
+    /* Split it into two */
+    p0 = buddy->heads[o + 1];
+    p1 = p0 + (1ULL << o);
+
+    /* Set the order for all the pages in the pair */
+    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
+        p0[i].order = o;
+    }
+
+    /* Insert it to the list */
+    p0->next = p1 - pmem->pages;
+    p1->next = buddy->heads[o] - pmem->pages;
+    buddy->heads[o] = p0;
+    /* Remove the split one from the upper order */
+    buddy->heads[o + 1] = &pmem->pages[next];
+
+    return 0;
+}
+
+/*
+ * Merge buddies onto the upper order if possible
+ */
+static void
+_pmem_buddy_merge(struct pmem *pmem, struct pmem_buddy *buddy,
+                  struct pmem_page *off, int o)
+{
+    struct pmem_page *p0;
+    struct pmem_page *p1;
+    struct pmem_page *prev;
+    struct pmem_page *list;
+    size_t pi;
+    size_t i;
+
+    /* Check the order first */
+    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
+        /* Reached the maximum order, then do not merge anymore */
+        return;
+    }
+
+    /* Check the page whether it's within the physical memory space */
+    pi = off - pmem->pages;
+    if ( pi >= pmem->nr ) {
+        /* Out of the physical memory region */
+        return;
+    }
+
+    /* Get the first page of the buddy at the upper order */
+    p0 = &pmem->pages[FLOOR(pi, PAGESIZE)];
+
+    /* Get the neighboring buddy */
+    p1 = p0 + (1ULL << o);
+
+    /* Ensure that p0 and p1 are free */
+    if ( !PMEM_IS_FREE(p0) || !PMEM_IS_FREE(p1) ) {
+        return;
+    }
+
+    /* Check the order of p1 */
+    if ( p0->order != o || p1->order != o ) {
+        /* Cannot merge because of the order mismatch */
+        return;
+    }
+
+    /* Remove both of the pair from the list of current order */
+    /* Try to remove p0 */
+    list = buddy->heads[o];
+    prev = NULL;
+    while ( NULL != list ) {
+        if ( p0 == list ) {
+            if ( NULL == prev ) {
+                buddy->heads[o] = &pmem->pages[p0->next];
+            } else {
+                prev->next = p0->next;
+            }
+            break;
+        }
+        /* Go to the next one */
+        prev = list;
+        list = &pmem->pages[list->next];
+    }
+    /* Try to remove p1 */
+    list = buddy->heads[o];
+    prev = NULL;
+    while ( NULL != list ) {
+        if ( p1 == list ) {
+            if ( NULL == prev ) {
+                buddy->heads[o] = &pmem->pages[p1->next];
+            } else {
+                prev->next = p1->next;
+            }
+            break;
+        }
+        /* Go to the next one */
+        prev = list;
+        list = &pmem->pages[list->next];
+    }
+
+    /* Set the order for all the pages in the pair */
+    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
+        p0[i].order = o + 1;
+    }
+
+    /* Try to merge the upper order of buddies */
+    _pmem_buddy_merge(pmem, buddy, p0, o + 1);
+}
+
+
 
 
 #if 0
