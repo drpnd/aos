@@ -62,7 +62,6 @@ _pmem_init(struct kmem *, struct bootinfo *, struct acpi *, void *, u64);
 
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static void * _find_pmem_region(struct bootinfo *, u64 );
-static int _init_pmem_zone_buddy(struct pmem *, struct acpi *);
 static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
 static int _pmem_split(struct pmem_buddy *, int);
 static void _pmem_merge(struct pmem_buddy *, void *, int);
@@ -238,12 +237,9 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
 {
     struct pmem *pm;
     struct kmem *kmem;
-    u64 npg;
     void *base;
-    u64 sz;
     u64 pmsz;
     int ret;
-    int nzme;
 
     /* Allocate physical memory management data structure */
     ret = _pmem_alloc(bi, &base, &pmsz);
@@ -265,57 +261,7 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
 
     panic("stop here for refactoring");
 
-
-    /* Search all PCI devices */
-    pci_check_all_buses();
-
-
-    /* Disable the global page feature */
-    _disable_page_global();
-
-    /* Obtain memory (space) size from the system address map */
-    sz = _resolve_phys_mem_size(bi);
-
-    /* Calculate the number of pages from the upper-bound of the memory space */
-    npg = DIV_CEIL(sz, PAGESIZE);
-
-    /* Count the number of entries in ACPI SRAT for memory zone mapping */
-    nzme = acpi_memory_count_entries(acpi);
-    if ( nzme < 0 ) {
-        /* It's UMA, then we use a single zone. */
-        nzme = 0;
-    }
-
-    /* Fine the available region for the pmem data structure */
-    base = _find_pmem_region(bi, pmsz);
-    /* Could not find available pages for the management structure */
-    if ( 0 == base ) {
-        return NULL;
-    }
-
-    /* Setup the memory page management structure */
-    //pm = _pmem_init(base, npg, nzme);
-
-    /* Update the zone map information */
-    acpi_memory_zone_map(acpi, &pm->zmap);
-
-    /* Prepare a page table for kernel */
-    //ret = _prepare_kernel_page_table(pm->arch, sz);
-    ret = -1;
-    if ( ret < 0 ) {
-        return NULL;
-    }
-
-    /* Set the page table of kernel */
-    //set_cr3(pm->arch);
-
-
-    /* Initialize all usable pages with the buddy system except for wired
-       memory.  Note that the wired memory space is the range from 0 to
-       PMEM_LBOUND, and the space used by pmem. */
-    ret = _init_pmem_zone_buddy(pm, acpi);
-
-    return pm;
+    return 0;
 }
 
 /*
@@ -417,6 +363,13 @@ _kmem_init(void *pmbase, u64 pmsz)
         kmem->free_pgs = fpg;
     }
 
+    /* Initialize slab */
+    for ( i = 0; i < KMEM_SLAB_ORDER; i++ ) {
+        kmem->slab.gslabs[i].partial = NULL;
+        kmem->slab.gslabs[i].full = NULL;
+        kmem->slab.gslabs[i].free = NULL;
+    }
+
     /* Create buddy system for kernel memory */
 
     /* Reflect the regions to the page table */
@@ -505,8 +458,15 @@ _kmem_pgt_init(struct arch_kmem **akmem, u64 *off)
         stkmem.pd[0][i] = 0;
     }
 
+
+    /* Disable the global page feature */
+    _disable_page_global();
+
     /* Set the constructured page table */
     set_cr3(stkmem.pml4);
+
+    /* Enable the global page feature */
+    _enable_page_global();
 
     /* Setup virtual page table */
     for ( i = 0; i < 4; i++ ) {
@@ -558,7 +518,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_low, 0, sizeof(struct vmem_region));
     reg_low->start = (void *)0;
     reg_low->len = CEIL(PMEM_LBOUND, SUPERPAGESIZE);
-    reg_low->type = VMEM_REGION_BITMAP;
     reg_low->total_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
     reg_low->used_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
 
@@ -573,7 +532,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_pmem, 0, sizeof(struct vmem_region));
     reg_pmem->start = (void *)KMEM_REGION_PMEM_BASE;
     reg_pmem->len = CEIL(pmsz, PAGESIZE);
-    reg_pmem->type = VMEM_REGION_BITMAP;
     reg_pmem->total_pgs = DIV_CEIL(pmsz, PAGESIZE);
     reg_pmem->used_pgs = DIV_CEIL(pmsz, PAGESIZE);
 
@@ -586,7 +544,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_kernel, 0, sizeof(struct vmem_region));
     reg_kernel->start = (void *)KMEM_REGION_KERNEL_BASE;
     reg_kernel->len = KMEM_REGION_KERNEL_SIZE;
-    reg_kernel->type = VMEM_REGION_BITMAP;
     reg_kernel->total_pgs = KMEM_REGION_KERNEL_SIZE / PAGESIZE;
     reg_kernel->used_pgs = 0;
 
@@ -837,9 +794,12 @@ _pmem_init(struct kmem *kmem, struct bootinfo *bi, struct acpi *acpi,
         }
     }
 
-    /* FIXME */
+    /* FIXME: ACPI region... */
     int ret;
     ret = _kmem_vmem_map(kmem, PAGE_INDEX(0x7e254000), 0x7e254000, 0);
+    if ( ret < 0 ) {
+        return -1;
+    }
 
     /* Set physical memory manager */
     kmem->pmem = pmem;
@@ -869,7 +829,8 @@ _pmem_init(struct kmem *kmem, struct bootinfo *bi, struct acpi *acpi,
         }
     }
 
-    /* Initialize the buddy system */
+    /* Initialize all usable pages with the buddy system */
+    //ret = _init_pmem_zone_buddy(pm, acpi);
 
 #if 0
     for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
@@ -908,6 +869,24 @@ _pmem_init(struct kmem *kmem, struct bootinfo *bi, struct acpi *acpi,
 static int
 _pmem_buddy_init(struct pmem *pmem)
 {
+    u64 i;
+    int o;
+
+    for ( i = 0; i < pmem->nr; i += (1ULL << o) ) {
+        /* Find the maximum contiguous usable pages fitting to the alignment of
+           the buddy system */
+        //o = _aligned_usable_pages(pmem, acpi, i, &zone);
+        if ( o < 0 ) {
+            /* Skip an unusable page */
+            o = 0;
+            continue;
+        }
+
+        /* Add usable pages to the buddy */
+        //_pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), zone, o);
+        //_pmem_merge(&pm->zones[zone].buddy, (void *)PAGE_ADDR(i), o);
+    }
+
     return -1;
 }
 
@@ -930,7 +909,7 @@ _pmem_buddy_init(struct pmem *pmem)
 
 
 
-
+#if 0
 /*
  * Allocate 2^order physical pages from the zone
  *
@@ -1092,6 +1071,8 @@ arch_pmem_free_pages(void *page)
     /* Unlock */
     spin_unlock(&pmem->lock);
 }
+#endif
+
 
 /*
  * Find the upper bound (highest address) of the memory region
@@ -1227,33 +1208,6 @@ _aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
     return o;
 }
 
-/*
- * Initialize all pages
- */
-static int
-_init_pmem_zone_buddy(struct pmem *pm, struct acpi *acpi)
-{
-    u64 i;
-    int o;
-    int zone;
-
-    for ( i = 0; i < pm->nr; i += (1ULL << o) ) {
-        /* Find the maximum contiguous usable pages fitting to the alignment of
-           the buddy system */
-        o = _aligned_usable_pages(pm, acpi, i, &zone);
-        if ( o < 0 ) {
-            /* Skip an unusable page */
-            o = 0;
-            continue;
-        }
-
-        /* Add usable pages to the buddy */
-        _pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), zone, o);
-        _pmem_merge(&pm->zones[zone].buddy, (void *)PAGE_ADDR(i), o);
-    }
-
-    return 0;
-}
 
 #if 0
 /*

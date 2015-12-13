@@ -71,9 +71,7 @@
 #define VMEM_USED               (1<<1)
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
-
-#define VMEM_REGION_BITMAP      1
-#define VMEM_REGION_BUDDY       2
+#define VMEM_IS_FREE(x)         (VMEM_USABLE == (x)->flags)
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -139,6 +137,7 @@ struct vmem_page {
     struct vmem_region *region;
     /* Buddy system */
     struct vmem_page *next;
+    struct vmem_page *prev;
 };
 
 /*
@@ -148,9 +147,6 @@ struct vmem_region {
     /* Region information */
     ptr_t start;
     size_t len;                 /* Constant multiplication of PAGESIZE */
-
-    /* Type of the region */
-    int type;
 
     /* Capacity and the number of used pages */
     size_t total_pgs;
@@ -252,7 +248,7 @@ struct pmem {
     struct pmem_page *pages;
 
     /* Zone map */
-    struct pmem_zone_map zmap;
+    struct pmem_zone_map *zmap;
 
     /* Zones (NUMA domains) */
     struct pmem_zone zones[PMEM_MAX_ZONES];
@@ -302,25 +298,6 @@ struct kmem_slab_root {
 };
 
 /*
- * Kernel memory region
- */
-struct kmem_region {
-    /* Region information; must be page-aligned */
-    ptr_t start;
-    size_t len;
-
-    /* Pages belonging to this region */
-    struct kmem_page *pages;
-
-    /* Buddy system */
-    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
-
-    /* Pointer to the next region */
-    struct kmem_region *next;
-};
-
-
-/*
  * Free pages in kmem region
  */
 struct kmem_free_page {
@@ -335,9 +312,6 @@ struct kmem {
     /* Lock */
     spinlock_t lock;
     spinlock_t slab_lock;
-
-    /* Buddy system */
-    struct kmem_page *heads[KMEM_MAX_BUDDY_ORDER + 1];
 
     /* Slab allocator */
     struct kmem_slab_root slab;
@@ -501,6 +475,7 @@ struct vmem_region * vmem_region_create(void);
 struct vmem_space * vmem_space_create(void);
 void vmem_space_delete(struct vmem_space *);
 struct vmem_page * vmem_alloc_pages(struct vmem_space *, int);
+int vmem_buddy_init(struct vmem_region *);
 
 /* in ramfs.c */
 int ramfs_init(u64 *);
