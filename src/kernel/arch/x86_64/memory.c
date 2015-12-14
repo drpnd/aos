@@ -56,9 +56,10 @@ static int _pmem_alloc(struct bootinfo *, void **, u64 *);
 static int _pmem_buddy_split(struct pmem *, struct pmem_buddy *, int);
 static int
 _pmem_init(struct kmem *, struct bootinfo *, struct acpi *, void *, u64);
+static int _pmem_buddy_init(struct pmem *);
+static int _pmem_buddy_order(struct pmem *, size_t);
 static u64 _resolve_phys_mem_size(struct bootinfo *);
 static void * _find_pmem_region(struct bootinfo *, u64 );
-static int _aligned_usable_pages(struct pmem *, struct acpi *, u64, int *);
 static void
 _pmem_buddy_merge(struct pmem *, struct pmem_buddy *, struct pmem_page *, int);
 static __inline__ int _pmem_page_zone(void *, int);
@@ -304,6 +305,80 @@ _pmem_alloc(struct bootinfo *bi, void **base, u64 *pmsz)
     }
 
     return 0;
+}
+
+/*
+ * Find the upper bound (highest address) of the memory region
+ */
+static u64
+_resolve_phys_mem_size(struct bootinfo *bi)
+{
+    struct bootinfo_sysaddrmap_entry *bse;
+    u64 addr;
+    u64 i;
+
+    /* Obtain memory size */
+    addr = 0;
+    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
+        bse = &bi->sysaddrmap.entries[i];
+        if ( bse->base + bse->len > addr ) {
+            /* Get the highest address */
+            addr = bse->base + bse->len;
+        }
+    }
+
+    return addr;
+}
+
+/*
+ * Find the memory region (page-aligned) for the pmem data structure
+ */
+static void *
+_find_pmem_region(struct bootinfo *bi, u64 sz)
+{
+    struct bootinfo_sysaddrmap_entry *bse;
+    u64 addr;
+    u64 i;
+    u64 a;
+    u64 b;
+
+    /* Search free space system address map obitaned from BIOS for the memory
+       allocator (calculated above) */
+    addr = 0;
+    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
+        bse = &bi->sysaddrmap.entries[i];
+        if ( BSE_USABLE == bse->type ) {
+            /* Available space from a to b */
+            a = CEIL(bse->base, PAGESIZE);
+            b = FLOOR(bse->base + bse->len, PAGESIZE);
+
+            if ( b < PMEM_LBOUND ) {
+                /* Skip below the lower bound */
+                continue;
+            } else if ( a < PMEM_LBOUND ) {
+                /* Check the space from the lower bound to b */
+                if ( b - PMEM_LBOUND >= sz ) {
+                    /* Found */
+                    addr = PMEM_LBOUND;
+                    break;
+                } else {
+                    /* Not found, then search another space */
+                    continue;
+                }
+            } else {
+                if ( b - a >= sz ) {
+                    /* Found */
+                    addr = a;
+                    break;
+                } else {
+                    /* Not found, then search another space */
+                    continue;
+                }
+            }
+        }
+    }
+
+    return (void *)addr;
 }
 
 /* Initialize virtual memory space for kernel */
@@ -825,35 +900,10 @@ _pmem_init(struct kmem *kmem, struct bootinfo *bi, struct acpi *acpi,
     }
 
     /* Initialize all usable pages with the buddy system */
-    //ret = _init_pmem_zone_buddy(pm, acpi);
-
-#if 0
-    for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
-        /* Try the order of o */
-        for ( i = pg; i < pg + (1ULL << o); i++ ) {
-            /* Check if this page is usable */
-            if ( !pm->pages[i].usable || pm->pages[i].used ) {
-                /* It contains unusable page, then return the current order
-                   minus 1 immediately. */
-                return o - 1;
-            }
-            /* Check the proximity domain */
-            if ( PAGE_ADDR(i) < pxbase || PAGE_ADDR(i + 1) > pxbase + pxlen ) {
-                /* This page is (perhaps) based on a different proximity domain,
-                   then return the current order minus 1 immedicately. */
-                return o - 1;
-            }
-        }
-
-        /* Test whether the next order is feasible; feasible if it is properly
-           aligned and the pages are within the range of the physical memory
-           space. */
-        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > pm->nr ) {
-            /* Infeasible, then return the current order immediately */
-            return o;
-        }
+    ret = _pmem_buddy_init(pmem);
+    if ( ret < 0 ) {
+        return -1;
     }
-#endif
 
     return 0;
 }
@@ -865,26 +915,29 @@ static int
 _pmem_buddy_init(struct pmem *pmem)
 {
     u64 i;
+    u64 j;
     int o;
 
     for ( i = 0; i < pmem->nr; i += (1ULL << o) ) {
         /* Find the maximum contiguous usable pages fitting to the alignment of
            the buddy system */
-        //o = _aligned_usable_pages(pmem, acpi, i, &zone);
+        o = _pmem_buddy_order(pmem, i);
         if ( o < 0 ) {
-            /* Skip an unusable page */
+            /* This page is not usable, then skip it. */
             o = 0;
-            continue;
+        } else {
+            /* This page is usable. */
+            for ( j = 0; j < (1ULL << 0); j++ ) {
+                pmem->pages[i + j].order = o;
+            }
+            /* Add this to the buddy system at the order of o */
+            pmem->pages[i].next = pmem->zones[0].buddy.heads[o] - pmem->pages;
+            pmem->zones[0].buddy.heads[o] = &pmem->pages[i];
         }
-
-        /* Add usable pages to the buddy */
-        //_pmem_return_to_buddy(pm, (void *)PAGE_ADDR(i), zone, o);
-        //_pmem_merge(&pm->zones[zone].buddy, (void *)PAGE_ADDR(i), o);
     }
 
-    return -1;
+    return 0;
 }
-
 
 /*
  * Count the physical memory order for buddy system
@@ -1097,139 +1150,7 @@ arch_pmem_free_pages(void *page)
 #endif
 
 
-/*
- * Find the upper bound (highest address) of the memory region
- */
-static u64
-_resolve_phys_mem_size(struct bootinfo *bi)
-{
-    struct bootinfo_sysaddrmap_entry *bse;
-    u64 addr;
-    u64 i;
 
-    /* Obtain memory size */
-    addr = 0;
-    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
-        bse = &bi->sysaddrmap.entries[i];
-        if ( bse->base + bse->len > addr ) {
-            /* Get the highest address */
-            addr = bse->base + bse->len;
-        }
-    }
-
-    return addr;
-}
-
-/*
- * Find the memory region (page-aligned) for the pmem data structure
- */
-static void *
-_find_pmem_region(struct bootinfo *bi, u64 sz)
-{
-    struct bootinfo_sysaddrmap_entry *bse;
-    u64 addr;
-    u64 i;
-    u64 a;
-    u64 b;
-
-    /* Search free space system address map obitaned from BIOS for the memory
-       allocator (calculated above) */
-    addr = 0;
-    for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
-        bse = &bi->sysaddrmap.entries[i];
-        if ( BSE_USABLE == bse->type ) {
-            /* Available space from a to b */
-            a = CEIL(bse->base, PAGESIZE);
-            b = FLOOR(bse->base + bse->len, PAGESIZE);
-
-            if ( b < PMEM_LBOUND ) {
-                /* Skip below the lower bound */
-                continue;
-            } else if ( a < PMEM_LBOUND ) {
-                /* Check the space from the lower bound to b */
-                if ( b - PMEM_LBOUND >= sz ) {
-                    /* Found */
-                    addr = PMEM_LBOUND;
-                    break;
-                } else {
-                    /* Not found, then search another space */
-                    continue;
-                }
-            } else {
-                if ( b - a >= sz ) {
-                    /* Found */
-                    addr = a;
-                    break;
-                } else {
-                    /* Not found, then search another space */
-                    continue;
-                }
-            }
-        }
-    }
-
-    return (void *)addr;
-}
-
-/*
- * Return the number of usable pages in the power of 2
- */
-static int
-_aligned_usable_pages(struct pmem *pm, struct acpi *acpi, u64 pg, int *zone)
-{
-    int o;
-    u64 i;
-    u64 pxbase;
-    u64 pxlen;
-    int prox;
-
-#if 0
-    /* NUMA-conscious zones */
-    if ( acpi_is_numa(acpi) ) {
-        /* Resolve the proximity domain of the first page */
-        prox = acpi_memory_prox_domain(acpi, PAGE_ADDR(pg), &pxbase, &pxlen);
-        if ( prox < 0 ) {
-            /* No proximity domain; then return -1, meaning unusable page,
-               here. */
-            return -1;
-        }
-        *zone = PMEM_ZONE_NUMA(prox);
-    } else {
-        prox = 0;
-        pxbase = 0;
-        pxlen = PAGE_ADDR(pm->nr);
-        *zone = PMEM_ZONE_NUMA(prox);
-    }
-
-    for ( o = 0; o <= PMEM_MAX_BUDDY_ORDER; o++ ) {
-        /* Try the order of o */
-        for ( i = pg; i < pg + (1ULL << o); i++ ) {
-            /* Check if this page is usable */
-            if ( !pm->pages[i].usable || pm->pages[i].used ) {
-                /* It contains unusable page, then return the current order
-                   minus 1 immediately. */
-                return o - 1;
-            }
-            /* Check the proximity domain */
-            if ( PAGE_ADDR(i) < pxbase || PAGE_ADDR(i + 1) > pxbase + pxlen ) {
-                /* This page is (perhaps) based on a different proximity domain,
-                   then return the current order minus 1 immedicately. */
-                return o - 1;
-            }
-        }
-
-        /* Test whether the next order is feasible; feasible if it is properly
-           aligned and the pages are within the range of the physical memory
-           space. */
-        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > pm->nr ) {
-            /* Infeasible, then return the current order immediately */
-            return o;
-        }
-    }
-#endif
-
-    return o;
-}
 
 
 
@@ -1380,144 +1301,7 @@ _pmem_buddy_merge(struct pmem *pmem, struct pmem_buddy *buddy,
 }
 
 
-
-
 #if 0
-/*
- * Split the buddies so that we get at least one buddy at the order of o
- */
-static int
-_pmem_split(struct pmem_buddy *buddy, int o)
-{
-    int ret;
-    struct pmem_page_althdr *next;
-
-    /* Check the head of the current order */
-    if ( NULL != buddy->heads[o] ) {
-        /* At least one memory block (buddy) is available in this order. */
-        return 0;
-    }
-
-    /* Check the order */
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* No space available */
-        return -1;
-    }
-
-    /* Check the upper order */
-    if ( NULL == buddy->heads[o + 1] ) {
-        /* The upper order is also empty, then try to split one more upper. */
-        ret = _pmem_split(buddy, o + 1);
-        if ( ret < 0 ) {
-            /* Cannot get any */
-            return ret;
-        }
-    }
-
-    /* Save next at the upper order */
-    next = buddy->heads[o + 1]->next;
-    /* Split into two */
-    buddy->heads[o] = buddy->heads[o + 1];
-    buddy->heads[o]->prev = NULL;
-    buddy->heads[o]->next = (struct pmem_page_althdr *)
-        ((u64)buddy->heads[o] + PAGESIZE * (1ULL << o));
-    buddy->heads[o]->next->prev = buddy->heads[o];
-    buddy->heads[o]->next->next = NULL;
-    /* Remove the split one from the upper order */
-    buddy->heads[o + 1] = next;
-    if ( NULL != buddy->heads[o + 1] ) {
-        buddy->heads[o + 1]->prev = NULL;
-    }
-
-    return 0;
-}
-
-/*
- * Merge buddies onto the upper order on if possible
- */
-static void
-_pmem_merge(struct pmem_buddy *buddy, void *addr, int o)
-{
-    int found;
-    u64 a0;
-    u64 a1;
-    struct pmem_page_althdr *p0;
-    struct pmem_page_althdr *p1;
-    struct pmem_page_althdr *list;
-
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* Reached the maximum order, then terminate */
-        return;
-    }
-
-    /* Get the first page of the upper order buddy */
-    a0 = FLOOR((u64)addr, PAGESIZE * (1ULL << (o + 1)));
-    /* Get the neighboring page of the buddy */
-    a1 = a0 + PAGESIZE * (1ULL << o);
-
-    /* Convert pages to the page alternative headers */
-    p0 = (struct pmem_page_althdr *)a0;
-    p1 = (struct pmem_page_althdr *)a1;
-
-    /* Check the current level and remove the pairs */
-    list = buddy->heads[o];
-    found = 0;
-    while ( NULL != list ) {
-        if ( p0 == list || p1 == list ) {
-            /* Found */
-            found++;
-            if ( 2 == found ) {
-                /* Found both */
-                break;
-            }
-        }
-        /* Go to the next one */
-        list = list->next;
-    }
-    if ( 2 != found ) {
-        /* Either of the buddy is not free, then terminate */
-        return;
-    }
-
-    /* Remove both from the list at the current order */
-    if ( p0->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p0->prev;
-        list->next = p0->next;
-        if ( NULL != p0->next ) {
-            p0->next->prev = list;
-        }
-    }
-    if ( p1->prev == NULL ) {
-        /* Head */
-        buddy->heads[o] = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = buddy->heads[o];
-        }
-    } else {
-        /* Otherwise */
-        list = p1->prev;
-        list->next = p1->next;
-        if ( NULL != p1->next ) {
-            p1->next->prev = list;
-        }
-    }
-
-    /* Prepend it to the upper order */
-    p0->prev = NULL;
-    p0->next = buddy->heads[o + 1];
-    buddy->heads[o + 1] = p0;
-
-    /* Try to merge the upper order of buddies */
-    _pmem_merge(buddy, p0, o + 1);
-}
-
 /*
  * Return 2^order pages to the buddy system of the specified zone
  */
@@ -1800,44 +1584,6 @@ vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
     invlpg((void *)(vaddr & 0xffffffffffe00000ULL));
 
     return 0;
-}
-
-/*
- * Resolve the physical address
- */
-u64
-vmem_paddr(struct vmem_space *vmem, u64 vaddr)
-{
-    int pml4;
-    int pdpt;
-    int pd;
-    u64 *ent;
-
-    pml4 = (vaddr >> 39);
-    pdpt = (vaddr >> 30) & 0x1ff;
-    pd = (vaddr >> 21) & 0x1ff;
-
-    /* PML4 */
-    ent = ((struct arch_vmem_space *)vmem->arch)->pgt;
-    if ( !(ent[pml4] & 0x1) ) {
-        /* Not present */
-        return -1;
-    }
-    /* PDPT */
-    /* FIXME: This is the physical address, but must be virtual address */
-    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
-    if ( 0x1 != (ent[pdpt] & 0x81) ) {
-        /* Not present, or 1-Gbyte page */
-        return -1;
-    }
-    /* PD */
-    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
-    if ( 0x81 != (ent[pd] & 0x81) ) {
-        /* Not present, or 4-Kbyte page */
-        return -1;
-    }
-
-    return (ent[pd] & 0xffffffffffe00000ULL) | (vaddr & 0x1fffffULL);
 }
 
 /*

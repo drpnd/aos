@@ -674,36 +674,6 @@ _vmem_search_page(struct vmem_space *vmem, void *vaddr)
 }
 
 /*
- * Remap virtual memory space in the page table
- */
-int
-vmem_remap_(struct vmem_space *vmem, void *vaddr, reg_t paddr, int flag)
-{
-    /* Research the corresponding region */
-    struct vmem_page *page;
-
-    /* Search the corresponding page */
-    page = _vmem_search_page(vmem, vaddr);
-
-#if 0
-    if ( VMEM_USED == page->type ) {
-        /* The specified page is already mapped */
-        return -ENOMEM;
-    }
-
-    /* Align and map the page to a physical address */
-    page->addr = (paddr / SUPERPAGESIZE) * SUPERPAGESIZE;
-    page->type = VMEM_USED;
-
-#endif
-
-    /* FIXME: Virtual address of the page table entries must be set up and
-       stored here.  Then, translate to the physical addresss. */
-
-    return 0;
-}
-
-/*
  * Map the page
  */
 void *
@@ -712,37 +682,6 @@ kmem_map(void *a, size_t len)
     struct kmem *kmem;
 
     return NULL;
-}
-static void *
-_kmem_map(struct kmem *kmem, void *a, size_t len)
-{
-    void *pg;
-    struct vmem_region *reg;
-    size_t i;
-
-    /* Reset the return value with NULL */
-    pg = NULL;
-
-    /* Take the lock for kernel memory management */
-    spin_lock(&kmem->lock);
-
-    /* Search the regions where is capable to allocate vacant pages */
-    reg = kmem->space->first_region;
-    while ( NULL != reg ) {
-        /* Search vacant pages from this region */
-        for ( i = 0; i < reg->total_pgs; i++ ) {
-            if ( VMEM_IS_FREE(&reg->pages[i]) ) {
-
-            }
-        }
-
-        reg = reg->next;
-    }
-
-    /* Release the lock */
-    spin_unlock(&kmem->lock);
-
-    return pg;
 }
 static void *
 _kmem_get_free_pages(struct kmem *kmem, size_t len)
@@ -1143,12 +1082,13 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
     /* Calculate the size of the region */
     sz = sizeof(struct vmem_region) + sizeof(struct vmem_page) * n;
 
-    npg = DIV_CEIL(sz, PAGESIZE);
+    /* FIXME: Find the physical pages */
+    //kmalloc(sz);
+    //npg = DIV_CEIL(sz, PAGESIZE);
     //reg->len = n * PAGESIZE;
 
     return NULL;
 }
-
 
 /*
  * Local variables:
