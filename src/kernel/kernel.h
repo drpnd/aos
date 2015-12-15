@@ -54,7 +54,8 @@
 #define PMEM_ZONE_LOWMEM        1
 #define PMEM_ZONE_UMA           2
 #define PMEM_ZONE_NUMA(d)       (3 + (d))
-#define PMEM_MAX_ZONES          (3 + PMEM_NUMA_MAX_DOMAINS)
+#define PMEM_NUM_ZONES          (3 + PMEM_NUMA_MAX_DOMAINS)
+#define PMEM_INVAL_INDEX        0xffffffffUL
 
 
 /* 32 (2^5) byte is the minimum object size of a slab object */
@@ -71,6 +72,7 @@
 #define KMEM_KERNEL_SIZE        0x40000000ULL
 
 #define VMEM_MAX_BUDDY_ORDER    18
+#define VMEM_INVAL_BUDDY_ORDER  0x3f
 
 #define VMEM_USABLE             (1)
 #define VMEM_USED               (1<<1)
@@ -116,6 +118,14 @@
 #define EACCES                  13
 #define EFAULT                  14
 #define EINVAL                  22
+
+/*
+ * String
+ */
+struct kstring {
+    void *base;
+    size_t sz;
+};
 
 /*
  * File descriptor
@@ -196,7 +206,8 @@ struct pmem_page {
  * Buddy system
  */
 struct pmem_buddy {
-    struct pmem_page *heads[PMEM_MAX_BUDDY_ORDER + 1];
+    u32 heads[PMEM_MAX_BUDDY_ORDER + 1];
+    //struct pmem_page *heads[PMEM_MAX_BUDDY_ORDER + 1];
 };
 
 /*
@@ -208,23 +219,6 @@ struct pmem_zone {
     /* Statistics */
     size_t total;
     size_t used;
-};
-
-/*
- * An entry of zone map
- */
-struct pmem_zone_map_entry {
-    u64 pgbase;
-    u64 pglen;
-    int zone;
-};
-
-/*
- * Physical memory zone map
- */
-struct pmem_zone_map {
-    struct pmem_zone_map_entry *entries;
-    int nr;
 };
 
 /*
@@ -252,11 +246,8 @@ struct pmem {
     /* Physical pages */
     struct pmem_page *pages;
 
-    /* Zone map */
-    struct pmem_zone_map *zmap;
-
     /* Zones (NUMA domains) */
-    struct pmem_zone zones[PMEM_MAX_ZONES];
+    struct pmem_zone zones[PMEM_NUM_ZONES];
 };
 
 /*
@@ -481,6 +472,8 @@ struct vmem_space * vmem_space_create(void);
 void vmem_space_delete(struct vmem_space *);
 struct vmem_page * vmem_alloc_pages(struct vmem_space *, int);
 int vmem_buddy_init(struct vmem_region *);
+
+void * pmem_alloc_pages(int, int);
 
 /* in ramfs.c */
 int ramfs_init(u64 *);

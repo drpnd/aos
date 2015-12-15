@@ -111,6 +111,8 @@ task_clone(struct ktask *ot)
     }
     t->ktask->arch = t;
 
+    return NULL;
+#if 0
     /* Copy the kernel and user stacks */
     kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
             KSTACK_SIZE);
@@ -180,6 +182,7 @@ task_clone(struct ktask *ot)
     //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     return t->ktask;
+#endif
 }
 
 /*
@@ -443,8 +446,8 @@ proc_create(const char *path, const char *name, pid_t pid)
     proc_table->lastpid = pid;
 
     /* Set the page table */
-    set_cr3((void *)kmem_paddr(
-                (u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt));
+    //set_cr3((void *)kmem_paddr(
+    //(u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt));
 
     /* Create an architecture-specific task data structure */
     t = kmalloc(sizeof(struct arch_task));
@@ -533,7 +536,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     t->rp->cs = cs;
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
-    t->cr3 = kmem_paddr((u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt);
+    //t->cr3 = kmem_paddr((u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt);
 
     return 0;
 

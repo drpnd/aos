@@ -36,6 +36,9 @@
 #define APIC_INITTMR            0x380
 #define APIC_CURTMR             0x390
 
+#define IOAPIC_VBASE            0xfec00000ULL
+#define IOAPIC_VSIZE            0x00001000ULL
+
 #define APIC_LVT_DISABLE        0x10000
 #define APIC_LVT_ONESHOT        0x00000000
 #define APIC_LVT_PERIODIC       0x00020000

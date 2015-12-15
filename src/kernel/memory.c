@@ -24,17 +24,10 @@
 #include <aos/const.h>
 #include "kernel.h"
 
-struct pmem *pmem;
-struct kmem *kmem;
+struct kmem *g_kmem;
 
-#define PMEM_SUPERPAGE_ADDRESS(p)                               \
-    (void *)(SUPERPAGESIZE * (size_t)((p) - pmem->superpages));
-
-#define FLOOR(val, base)        ((val) / (base)) * (base)
-#define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
 u64 binorder(u64);
 int kmem_remap(u64, u64, int);
-u64 kmem_paddr(u64);
 int vmem_arch_init(struct vmem_space *);
 int vmem_remap(struct vmem_space *, u64, u64, int);
 u64 vmem_paddr(struct vmem_space *, u64);
@@ -44,22 +37,73 @@ static void _vmem_buddy_merge(struct vmem_region *, struct vmem_page *, int);
 static int _vmem_buddy_order(struct vmem_region *, size_t);
 static void * _vmem_buddy_alloc(struct vmem_space *, int);
 
+static int _pmem_buddy_split(struct pmem *, struct pmem_buddy *, int);
+static void
+_pmem_buddy_merge(struct pmem *, struct pmem_buddy *, struct pmem_page *, int);
 
 
 /* Temporary for refactoring */
 void *
-pmem_alloc_pages(int x, int y)
+pmem_alloc_pages(int zone, int order)
 {
-    return NULL;
+    int ret;
+    u32 idx;
+    struct pmem_page *pg;
+    struct pmem *pmem;
+    size_t i;
+
+    /* Get the pmem data structure from the global variable */
+    pmem = g_kmem->pmem;
+
+    /* Check the order */
+    if ( order > PMEM_MAX_BUDDY_ORDER ) {
+        return NULL;
+    }
+
+    /* Split the upper-order's buddy first if needed */
+    ret = _pmem_buddy_split(pmem, &pmem->zones[zone].buddy, order);
+    if ( ret < 0 ) {
+        return NULL;
+    }
+
+    /* Obtain the contiguous pages from the head */
+    idx = pmem->zones[zone].buddy.heads[order];
+    if ( PMEM_INVAL_INDEX == idx ) {
+        return NULL;
+    }
+    pmem->zones[zone].buddy.heads[order] = pmem->pages[idx].next;
+
+    /* Ensure the allocated pages are free */
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        if ( !PMEM_IS_FREE(&pmem->pages[idx + i])
+             || pmem->pages[idx + i].order != order ) {
+            return NULL;
+        }
+    }
+    /* Mark as used */
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        pmem->pages[idx + i].flags |= PMEM_USED;
+    }
+
+    __asm__ ("movq %%rax,%%dr0" :: "a"(idx));
+
+    return (void *)PAGE_ADDR(idx);
 }
 void *
-pmem_alloc_page(int x)
+pmem_alloc_page(int zone)
 {
-    return NULL;
+    return pmem_alloc_pages(zone, 0);
 }
 void
 pmem_free_pages(void *a)
-{}
+{
+    off_t idx;
+
+    /* Get the index of the first page of the memory space to be released */
+    idx = PAGE_INDEX(a);
+
+    
+}
 
 /*
  * Allocate kernel pages
@@ -67,6 +111,8 @@ pmem_free_pages(void *a)
 void *
 kmem_alloc_pages(int order)
 {
+    return NULL;
+
     struct kmem_page *kpage;
     void *ppage;
     void *vaddr;
@@ -75,6 +121,7 @@ kmem_alloc_pages(int order)
     off_t off;
     int ret;
 
+#if 0
     /* Allocate a physical page */
     ppage = pmem_alloc_pages(0, order);
     if ( NULL == ppage ) {
@@ -87,7 +134,7 @@ kmem_alloc_pages(int order)
         pmem_free_pages(ppage);
         return NULL;
     }
-
+#endif
 #if 0
     if ( kpage - kmem->region1 >= 0
          && kpage - kmem->region1 < KMEM_REGION_SIZE ) {
@@ -149,7 +196,7 @@ kmem_free_pages(void *vaddr)
     }
 #endif
     //_kpage_free(kpage);
-    paddr = kmem_paddr((u64)vaddr);
+    //paddr = kmem_paddr((u64)vaddr);
     //pmem_free_pages(&pmem->superpages[(u64)paddr / SUPERPAGESIZE]);
 }
 
@@ -191,13 +238,13 @@ kmalloc(size_t size)
     }
 
     /* Lock */
-    spin_lock(&kmem->slab_lock);
+    spin_lock(&g_kmem->slab_lock);
 
     if ( o < KMEM_SLAB_ORDER ) {
         /* Small object: Slab allocator */
-        if ( NULL != kmem->slab.gslabs[o].partial ) {
+        if ( NULL != g_kmem->slab.gslabs[o].partial ) {
             /* Partial list is available. */
-            hdr = kmem->slab.gslabs[o].partial;
+            hdr = g_kmem->slab.gslabs[o].partial;
             ptr = (void *)((u64)hdr->obj_head + hdr->free
                            * (1 << (o + KMEM_SLAB_BASE_ORDER)));
             hdr->marks[hdr->free] = 1;
@@ -205,10 +252,10 @@ kmalloc(size_t size)
             if ( hdr->nr <= hdr->nused ) {
                 /* Becomes full */
                 hdr->free = -1;
-                kmem->slab.gslabs[o].partial = hdr->next;
+                g_kmem->slab.gslabs[o].partial = hdr->next;
                 /* Prepend to the full list */
-                hdr->next = kmem->slab.gslabs[o].full;
-                kmem->slab.gslabs[o].full = hdr;
+                hdr->next = g_kmem->slab.gslabs[o].full;
+                g_kmem->slab.gslabs[o].full = hdr;
             } else {
                 /* Search free space for the next allocation */
                 for ( i = 0; i < hdr->nr; i++ ) {
@@ -218,9 +265,9 @@ kmalloc(size_t size)
                     }
                 }
             }
-        } else if ( NULL != kmem->slab.gslabs[o].free ) {
+        } else if ( NULL != g_kmem->slab.gslabs[o].free ) {
             /* Partial list is empty, but free list is available. */
-            hdr = kmem->slab.gslabs[o].free;
+            hdr = g_kmem->slab.gslabs[o].free;
             ptr = (void *)((u64)hdr->obj_head + hdr->free
                            * (1 << (o + KMEM_SLAB_BASE_ORDER)));
             hdr->marks[hdr->free] = 1;
@@ -228,14 +275,14 @@ kmalloc(size_t size)
             if ( hdr->nr <= hdr->nused ) {
                 /* Becomes full */
                 hdr->free = -1;
-                kmem->slab.gslabs[o].partial = hdr->next;
+                g_kmem->slab.gslabs[o].partial = hdr->next;
                 /* Prepend to the full list */
-                hdr->next = kmem->slab.gslabs[o].full;
-                kmem->slab.gslabs[o].full = hdr;
+                hdr->next = g_kmem->slab.gslabs[o].full;
+                g_kmem->slab.gslabs[o].full = hdr;
             } else {
                 /* Prepend to the partial list */
-                hdr->next = kmem->slab.gslabs[o].partial;
-                kmem->slab.gslabs[o].partial = hdr;
+                hdr->next = g_kmem->slab.gslabs[o].partial;
+                g_kmem->slab.gslabs[o].partial = hdr;
                 /* Search free space for the next allocation */
                 for ( i = 0; i < hdr->nr; i++ ) {
                     if ( 0 == hdr->marks[i] ) {
@@ -254,7 +301,7 @@ kmalloc(size_t size)
             hdr = kmem_alloc_pages(nr);
             if ( NULL == hdr ) {
                 /* Unlock before return */
-                spin_unlock(&kmem->slab_lock);
+                spin_unlock(&g_kmem->slab_lock);
                 return NULL;
             }
             /* Calculate the number of slab objects in this block; N.B., + 1 in
@@ -281,14 +328,14 @@ kmalloc(size_t size)
             if ( hdr->nr <= hdr->nused ) {
                 /* Becomes full */
                 hdr->free = -1;
-                kmem->slab.gslabs[o].partial = hdr->next;
+                g_kmem->slab.gslabs[o].partial = hdr->next;
                 /* Prepend to the full list */
-                hdr->next = kmem->slab.gslabs[o].full;
-                kmem->slab.gslabs[o].full = hdr;
+                hdr->next = g_kmem->slab.gslabs[o].full;
+                g_kmem->slab.gslabs[o].full = hdr;
             } else {
                 /* Prepend to the partial list */
-                hdr->next = kmem->slab.gslabs[o].partial;
-                kmem->slab.gslabs[o].partial = hdr;
+                hdr->next = g_kmem->slab.gslabs[o].partial;
+                g_kmem->slab.gslabs[o].partial = hdr;
                 /* Search free space for the next allocation */
                 for ( i = 0; i < hdr->nr; i++ ) {
                     if ( 0 == hdr->marks[i] ) {
@@ -305,7 +352,7 @@ kmalloc(size_t size)
     }
 
     /* Unlock */
-    spin_unlock(&kmem->slab_lock);
+    spin_unlock(&g_kmem->slab_lock);
 
     return ptr;
 }
@@ -334,7 +381,7 @@ kfree(void *ptr)
     struct kmem_slab **hdrp;
 
     /* Lock */
-    spin_lock(&kmem->slab_lock);
+    spin_lock(&g_kmem->slab_lock);
 
     if ( 0 == (u64)ptr % SUPERPAGESIZE ) {
         /* Free pages */
@@ -345,7 +392,7 @@ kfree(void *ptr)
             asz = (1 << (i + KMEM_SLAB_BASE_ORDER));
 
             /* Search from partial */
-            hdrp = &kmem->slab.gslabs[i].partial;
+            hdrp = &g_kmem->slab.gslabs[i].partial;
 
             /* Continue until the corresponding object found */
             while ( NULL != *hdrp ) {
@@ -366,17 +413,17 @@ kfree(void *ptr)
                     if ( hdr->nused <= 0 ) {
                         /* To free list */
                         *hdrp = hdr->next;
-                        hdr->next = kmem->slab.gslabs[i].free;
-                        kmem->slab.gslabs[i].free = hdr;
+                        hdr->next = g_kmem->slab.gslabs[i].free;
+                        g_kmem->slab.gslabs[i].free = hdr;
                     }
-                    spin_unlock(&kmem->slab_lock);
+                    spin_unlock(&g_kmem->slab_lock);
                     return;
                 }
                 hdrp = &hdr->next;
             }
 
             /* Search from full */
-            hdrp = &kmem->slab.gslabs[i].full;
+            hdrp = &g_kmem->slab.gslabs[i].full;
 
             /* Continue until the corresponding object found */
             while ( NULL != *hdrp ) {
@@ -397,15 +444,15 @@ kfree(void *ptr)
                     if ( hdr->nused <= 0 ) {
                         /* To free list */
                         *hdrp = hdr->next;
-                        hdr->next = kmem->slab.gslabs[i].free;
-                        kmem->slab.gslabs[i].free = hdr;
+                        hdr->next = g_kmem->slab.gslabs[i].free;
+                        g_kmem->slab.gslabs[i].free = hdr;
                     } else {
                         /* To partial list */
                         *hdrp = hdr->next;
-                        hdr->next = kmem->slab.gslabs[i].partial;
-                        kmem->slab.gslabs[i].partial = hdr;
+                        hdr->next = g_kmem->slab.gslabs[i].partial;
+                        g_kmem->slab.gslabs[i].partial = hdr;
                     }
-                    spin_unlock(&kmem->slab_lock);
+                    spin_unlock(&g_kmem->slab_lock);
                     return;
                 }
                 hdrp = &hdr->next;
@@ -414,7 +461,7 @@ kfree(void *ptr)
     }
 
     /* Unlock */
-    spin_unlock(&kmem->slab_lock);
+    spin_unlock(&g_kmem->slab_lock);
 }
 
 
@@ -931,7 +978,7 @@ _vmem_buddy_order(struct vmem_region *reg, size_t pg)
     }
 
     /* Reaches the maximum order */
-    return o;
+    return VMEM_MAX_BUDDY_ORDER;
 }
 
 /*
@@ -1088,6 +1135,170 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
     //reg->len = n * PAGESIZE;
 
     return NULL;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ * Split the buddies so that we get at least one buddy at the order of o
+ */
+static int
+_pmem_buddy_split(struct pmem *pmem, struct pmem_buddy *buddy, int o)
+{
+    int ret;
+    struct pmem_page *p0;
+    struct pmem_page *p1;
+    u32 next;
+    size_t i;
+
+    /* Check the head ofthe current order */
+    if ( PMEM_INVAL_INDEX != buddy->heads[o] ) {
+        /* At least one memory block is avaiable in this order, then nothing to
+           do here. */
+        return 0;
+    }
+
+    /* Check the order */
+    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
+        /* No space available */
+        return -1;
+    }
+
+    /* Check the upper order */
+    if ( PMEM_INVAL_INDEX == buddy->heads[o + 1] ) {
+        /* The upper order is also empty, then try to split buddy at the one
+           more upper buddy. */
+        ret = _pmem_buddy_split(pmem, buddy, o + 1);
+        if ( ret < 0 ) {
+            /* Cannot get any */
+            return ret;
+        }
+    }
+
+    /* Save next at the upper order */
+    next = pmem->pages[buddy->heads[o + 1]].next;
+    /* Split it into two */
+    p0 = &pmem->pages[buddy->heads[o + 1]];
+    p1 = p0 + (1ULL << o);
+
+    /* Set the order for all the pages in the pair */
+    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
+        p0[i].order = o;
+    }
+
+    /* Insert it to the list */
+    p0->next = p1 - pmem->pages;
+    p1->next = buddy->heads[o];
+    buddy->heads[o] = p0 - pmem->pages;
+    /* Remove the split one from the upper order */
+    buddy->heads[o + 1] = next;
+
+    return 0;
+}
+
+/*
+ * Merge buddies onto the upper order if possible
+ */
+static void
+_pmem_buddy_merge(struct pmem *pmem, struct pmem_buddy *buddy,
+                  struct pmem_page *off, int o)
+{
+    struct pmem_page *p0;
+    struct pmem_page *p1;
+    struct pmem_page *prev;
+    struct pmem_page *list;
+    size_t pi;
+    size_t i;
+
+    /* Check the order first */
+    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
+        /* Reached the maximum order, then do not merge anymore */
+        return;
+    }
+
+    /* Check the page whether it's within the physical memory space */
+    pi = off - pmem->pages;
+    if ( pi >= pmem->nr ) {
+        /* Out of the physical memory region */
+        return;
+    }
+
+    /* Get the first page of the buddy at the upper order */
+    p0 = &pmem->pages[FLOOR(pi, PAGESIZE)];
+
+    /* Get the neighboring buddy */
+    p1 = p0 + (1ULL << o);
+
+    /* Ensure that p0 and p1 are free */
+    if ( !PMEM_IS_FREE(p0) || !PMEM_IS_FREE(p1) ) {
+        return;
+    }
+
+    /* Check the order of p1 */
+    if ( p0->order != o || p1->order != o ) {
+        /* Cannot merge because of the order mismatch */
+        return;
+    }
+
+    /* Remove both of the pair from the list of current order */
+    /* Try to remove p0 */
+    list = &pmem->pages[buddy->heads[o]];
+    prev = NULL;
+    while ( NULL != list ) {
+        if ( p0 == list ) {
+            if ( NULL == prev ) {
+                buddy->heads[o] = p0->next;
+            } else {
+                prev->next = p0->next;
+            }
+            break;
+        }
+        /* Go to the next one */
+        prev = list;
+        if ( PMEM_INVAL_INDEX != list->next ) {
+            list = &pmem->pages[list->next];
+        } else {
+            list = NULL;
+        }
+    }
+    /* Try to remove p1 */
+    list = &pmem->pages[buddy->heads[o]];
+    prev = NULL;
+    while ( NULL != list ) {
+        if ( p1 == list ) {
+            if ( NULL == prev ) {
+                buddy->heads[o] = p1->next;
+            } else {
+                prev->next = p1->next;
+            }
+            break;
+        }
+        /* Go to the next one */
+        prev = list;
+        if ( PMEM_INVAL_INDEX != list->next ) {
+            list = &pmem->pages[list->next];
+        } else {
+            list = NULL;
+        }
+    }
+
+    /* Set the order for all the pages in the pair */
+    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
+        p0[i].order = o + 1;
+    }
+
+    /* Try to merge the upper order of buddies */
+    _pmem_buddy_merge(pmem, buddy, p0, o + 1);
 }
 
 /*

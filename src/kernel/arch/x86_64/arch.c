@@ -169,6 +169,16 @@ bsp_init(void)
         return;
     }
 
+    if ( NULL == pmem_alloc_pages(PMEM_ZONE_LOWMEM, 0) ) {
+        panic("Error 1");
+    }
+    if ( NULL == pmem_alloc_pages(PMEM_ZONE_LOWMEM, 0) ) {
+        panic("Error 2");
+    }
+
+    /* Map */
+    //arch_acpi.acpi_ioapic_base;
+
     /* Initialize I/O APIC */
     ioapic_init();
 
@@ -183,6 +193,8 @@ bsp_init(void)
     /* Initialize TSS */
     tss_init();
     tr_load(lapic_id());
+
+    panic("stop here for refactoring");
 
     /* Initialize the local APIC */
     lapic_init();
@@ -373,6 +385,9 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     void *kstack;
     void *ustack;
 
+    return -1;
+
+#if 0
     /* Setup a page table */
     pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
     if ( NULL == pgt ) {
@@ -481,6 +496,7 @@ _create_process(struct arch_task *t, void (*entry)(void), size_t size,
     //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
 
     return 0;
+#endif
 }
 
 /*

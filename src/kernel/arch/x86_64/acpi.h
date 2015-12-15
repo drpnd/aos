@@ -265,7 +265,6 @@ int acpi_is_numa(struct acpi *);
 int acpi_lapic_prox_domain(struct acpi *, int);
 int acpi_memory_prox_domain(struct acpi *, u64, u64 *, u64 *);
 int acpi_memory_count_entries(struct acpi *);
-int acpi_memory_zone_map(struct acpi *, struct pmem_zone_map *);
 
 extern struct acpi arch_acpi;
 
