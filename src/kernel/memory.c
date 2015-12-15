@@ -85,8 +85,6 @@ pmem_alloc_pages(int zone, int order)
         pmem->pages[idx + i].flags |= PMEM_USED;
     }
 
-    __asm__ ("movq %%rax,%%dr0" :: "a"(idx));
-
     return (void *)PAGE_ADDR(idx);
 }
 void *
@@ -97,12 +95,45 @@ pmem_alloc_page(int zone)
 void
 pmem_free_pages(void *a)
 {
+    struct pmem *pmem;
+    int order;
+    int zone;
+    size_t i;
     off_t idx;
+
+    /* Get the pmem data structure from the global kmem variable */
+    pmem = g_kmem->pmem;
 
     /* Get the index of the first page of the memory space to be released */
     idx = PAGE_INDEX(a);
 
-    
+    /* Check if the page index is within the physical memory space */
+    if ( (size_t)idx >= pmem->nr ) {
+        /* Invalid argument */
+        return;
+    }
+
+    /* Check the order and zone */
+    order = pmem->pages[idx].order;
+    zone = pmem->pages[idx].zone;
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        if ( order != pmem->pages[idx + i].order
+            || zone != pmem->pages[idx + i].zone ) {
+            return;
+        }
+    }
+
+    /* Unmark the used flag */
+    for ( i = 0; i < (1ULL << order); i++ ) {
+        pmem->pages[idx + i].flags &= ~PMEM_USED;
+    }
+
+    /* Return the released pages to the buddy */
+    pmem->pages[idx].next = pmem->zones[zone].buddy.heads[order];
+    pmem->zones[zone].buddy.heads[order] = idx;
+
+    /* Merge buddies if possible */
+    _pmem_buddy_merge(pmem, &pmem->zones[zone].buddy, &pmem->pages[idx], order);
 }
 
 /*

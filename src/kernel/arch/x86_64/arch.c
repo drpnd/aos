@@ -169,13 +169,6 @@ bsp_init(void)
         return;
     }
 
-    if ( NULL == pmem_alloc_pages(PMEM_ZONE_LOWMEM, 0) ) {
-        panic("Error 1");
-    }
-    if ( NULL == pmem_alloc_pages(PMEM_ZONE_LOWMEM, 0) ) {
-        panic("Error 2");
-    }
-
     /* Map */
     //arch_acpi.acpi_ioapic_base;
 
