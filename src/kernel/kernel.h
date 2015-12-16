@@ -68,9 +68,6 @@
 #define KMEM_MAX_BUDDY_ORDER    21
 #define KMEM_REGION_SIZE        512
 
-#define KMEM_KERNEL_BASE        0xc0000000ULL
-#define KMEM_KERNEL_SIZE        0x40000000ULL
-
 #define VMEM_MAX_BUDDY_ORDER    18
 #define VMEM_INVAL_BUDDY_ORDER  0x3f
 
@@ -474,6 +471,7 @@ struct vmem_page * vmem_alloc_pages(struct vmem_space *, int);
 int vmem_buddy_init(struct vmem_region *);
 
 void * pmem_alloc_pages(int, int);
+void pmem_free_pages(void *);
 
 /* in ramfs.c */
 int ramfs_init(u64 *);

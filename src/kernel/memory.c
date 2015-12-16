@@ -955,7 +955,7 @@ vmem_buddy_init(struct vmem_region *reg)
     int o;
 
     /* Look through all the pages */
-    for ( i = 0; reg->len / PAGESIZE; i += (1ULL << o) ) {
+    for ( i = 0; i < reg->len / PAGESIZE; i += (1ULL << o) ) {
         o = _vmem_buddy_order(reg, i);
         if ( o < 0 ) {
             /* This page is not usable. */
@@ -1148,7 +1148,7 @@ _vmem_buddy_alloc_region(struct vmem_region *reg, int n)
 }
 
 /*
- * Search available virtual pages
+ * Create a region for virtual pages
  */
 static void *
 _vmem_new_region(struct vmem_space *vmem, size_t n)
@@ -1156,14 +1156,23 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
     struct vmem_region *reg;
     size_t sz;
     size_t npg;
+    void *p;
+    void *v;
 
     /* Calculate the size of the region */
     sz = sizeof(struct vmem_region) + sizeof(struct vmem_page) * n;
 
-    /* FIXME: Find the physical pages */
-    //kmalloc(sz);
-    //npg = DIV_CEIL(sz, PAGESIZE);
-    //reg->len = n * PAGESIZE;
+    /* Find the physical pages */
+    npg = DIV_CEIL(sz, PAGESIZE);
+    p = pmem_alloc_pages(PMEM_ZONE_LOWMEM, binorder(npg));
+    if ( NULL == p ) {
+        return NULL;
+    }
+    reg = (struct vmem_region *)(p + sizeof(struct vmem_page) * n);
+    reg->pages = (struct vmem_page *)p;
+    reg->start = 0;
+    reg->len = npg * PAGESIZE;
+
 
     return NULL;
 }

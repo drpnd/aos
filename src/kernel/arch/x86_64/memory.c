@@ -275,11 +275,11 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
 
     /* FIXME */
     //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0x7e254000), 0x7e254000, 0);
-    ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfec00000ULL), 0xfec00000ULL, 0);
+    //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfec00000ULL), 0xfec00000ULL, 0);
     if ( ret < 0 ) {
         return -1;
     }
-    ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfee00000ULL), 0xfee00000ULL, 0);
+    //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfee00000ULL), 0xfee00000ULL, 0);
     if ( ret < 0 ) {
         return -1;
     }
@@ -504,6 +504,7 @@ _kmem_init(struct kstring *region)
     struct arch_kmem *akmem;
     struct kmem *kmem;
     struct vmem_space *space;
+    struct vmem_region *reg;
     struct kmem_free_page *fpg;
     int ret;
 
@@ -554,12 +555,17 @@ _kmem_init(struct kstring *region)
         kmem->slab.gslabs[i].free = NULL;
     }
 
-    /* Create buddy system for kernel memory */
-
     /* Reflect the regions to the page table */
     ret = _kmem_vmem_space_pgt_reflect(kmem);
     if ( ret < 0 ) {
         return NULL;
+    }
+
+    /* Create buddy system for kernel memory */
+    reg = space->first_region;
+    while ( NULL != reg ) {
+        vmem_buddy_init(reg);
+        reg = reg->next;
     }
 
     return kmem;
@@ -642,7 +648,6 @@ _kmem_pgt_init(struct arch_kmem **akmem, u64 *off)
         stkmem.pd[0][i] = 0;
     }
 
-
     /* Disable the global page feature */
     _disable_page_global();
 
@@ -677,9 +682,11 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     struct vmem_region *reg_low;
     struct vmem_region *reg_pmem;
     struct vmem_region *reg_kernel;
+    struct vmem_region *reg_spec;
     struct vmem_page *pgs_low;
     struct vmem_page *pgs_pmem;
     struct vmem_page *pgs_kernel;
+    struct vmem_page *pgs_spec;
 
     /* Virtual memory space */
     space = (struct vmem_space *)KMEM_LOW_P2V(KMEM_BASE + *off);
@@ -702,8 +709,8 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_low, 0, sizeof(struct vmem_region));
     reg_low->start = (void *)0;
     reg_low->len = CEIL(PMEM_LBOUND, SUPERPAGESIZE);
-    reg_low->total_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
-    reg_low->used_pgs = DIV_CEIL(PMEM_LBOUND, PAGESIZE);
+    reg_low->total_pgs = DIV_CEIL(reg_low->len, PAGESIZE);
+    reg_low->used_pgs = DIV_CEIL(reg_low->len, PAGESIZE);
 
     /* Physical pages: This region is not placed at the kernel region because
        this is not directly referred from user-land processes (e.g., through
@@ -719,7 +726,7 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     reg_pmem->total_pgs = DIV_CEIL(pmsz, PAGESIZE);
     reg_pmem->used_pgs = DIV_CEIL(pmsz, PAGESIZE);
 
-    /* Kernel address space (3-4 GiB) */
+    /* Kernel address space (3-3.64 GiB) */
     reg_kernel = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
     *off += sizeof(struct vmem_region);
     if ( *off > KMEM_MAX_SIZE ) {
@@ -730,6 +737,18 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     reg_kernel->len = KMEM_REGION_KERNEL_SIZE;
     reg_kernel->total_pgs = KMEM_REGION_KERNEL_SIZE / PAGESIZE;
     reg_kernel->used_pgs = 0;
+
+    /* Kernel address space for special use (3.64-4 GiB) */
+    reg_spec = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
+    *off += sizeof(struct vmem_region);
+    if ( *off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(reg_spec, 0, sizeof(struct vmem_region));
+    reg_spec->start = (void *)KMEM_REGION_SPEC_BASE;
+    reg_spec->len = KMEM_REGION_SPEC_SIZE;
+    reg_spec->total_pgs = KMEM_REGION_SPEC_SIZE / PAGESIZE;
+    reg_spec->used_pgs = KMEM_REGION_SPEC_SIZE / PAGESIZE;
 
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
@@ -778,9 +797,26 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     for ( i = 0; i < DIV_CEIL(reg_kernel->len, PAGESIZE); i++ ) {
         pgs_kernel[i].addr = (reg_t)reg_kernel->start + PAGE_ADDR(i);
         pgs_kernel[i].order = VMEM_INVAL_BUDDY_ORDER;
-        pgs_kernel[i].flags = VMEM_USABLE;
+        pgs_kernel[i].flags = VMEM_USABLE | VMEM_GLOBAL;
         pgs_kernel[i].region = reg_kernel;
         pgs_kernel[i].next = NULL;
+    }
+
+    /* Prepare page data structures for kernel memory region for special use */
+    pgs_spec = (struct vmem_page *)KMEM_LOW_P2V(KMEM_BASE + *off);
+    *off += sizeof(struct vmem_page) * DIV_CEIL(reg_spec->len, PAGESIZE);
+    if ( *off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(pgs_spec, 0, sizeof(struct vmem_page)
+            * DIV_CEIL(reg_spec->len, PAGESIZE));
+    for ( i = 0; i < DIV_CEIL(reg_spec->len, PAGESIZE); i++ ) {
+        /* Linear addressing */
+        pgs_spec[i].addr = (reg_t)reg_spec->start + PAGE_ADDR(i);
+        pgs_spec[i].order = VMEM_INVAL_BUDDY_ORDER;
+        pgs_spec[i].flags = VMEM_USABLE | VMEM_USED | VMEM_GLOBAL;
+        pgs_spec[i].region = reg_spec;
+        pgs_spec[i].next = NULL;
     }
 
     /* Page-alignment */
@@ -790,12 +826,14 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     reg_low->pages = pgs_low;
     reg_pmem->pages = pgs_pmem;
     reg_kernel->pages = pgs_kernel;
+    reg_spec->pages = pgs_spec;
 
     /* Create the chain of regions */
     space->first_region = reg_low;
     reg_low->next = reg_pmem;
     reg_pmem->next = reg_kernel;
-    reg_kernel->next = NULL;
+    reg_kernel->next = reg_spec;
+    reg_spec->next = NULL;
 
     return space;
 }

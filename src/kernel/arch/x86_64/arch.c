@@ -169,7 +169,7 @@ bsp_init(void)
         return;
     }
 
-    /* Map */
+    /* Map the virtual pages */
     //arch_acpi.acpi_ioapic_base;
 
     /* Initialize I/O APIC */
