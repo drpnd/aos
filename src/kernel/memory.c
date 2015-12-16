@@ -35,7 +35,8 @@ u64 vmem_paddr(struct vmem_space *, u64);
 /* Prototype declarations of static functions */
 static int _vmem_buddy_order(struct vmem_region *, size_t);
 static int _vmem_buddy_split(struct vmem_region *, int);
-static void _vmem_buddy_merge(struct vmem_region *, struct vmem_page *, int);
+static void
+_vmem_buddy_merge(struct vmem_region *, struct vmem_superpage *, int);
 
 
 /*
@@ -364,6 +365,7 @@ kfree(void *ptr)
 struct vmem_region *
 vmem_region_create(void)
 {
+#if 0
     struct vmem_region *region;
     struct vmem_page *pages;
     struct vmem_page *tmp;
@@ -416,6 +418,8 @@ vmem_region_create(void)
     }
 
     return region;
+#endif
+    return NULL;
 }
 
 /*
@@ -516,6 +520,7 @@ _vmem_search_region(struct vmem_space *vmem, void *vaddr)
     return NULL;
 }
 
+#if 0
 /*
  * Search the corresponding page from the virtual address
  */
@@ -575,7 +580,7 @@ _kmem_get_free_pages(struct kmem *kmem, size_t len)
 
     return NULL;
 }
-
+#endif
 
 
 
@@ -605,7 +610,7 @@ vmem_buddy_init(struct vmem_region *reg)
     int o;
 
     /* Look through all the pages */
-    for ( i = 0; i < reg->len / PAGESIZE; i += (1ULL << o) ) {
+    for ( i = 0; i < reg->len / SUPERPAGESIZE; i += (1ULL << o) ) {
         o = _vmem_buddy_order(reg, i);
         if ( o < 0 ) {
             /* This page is not usable. */
@@ -613,15 +618,15 @@ vmem_buddy_init(struct vmem_region *reg)
         } else {
             /* This page is usable. */
             for ( j = 0; j < (1ULL << o); j++ ) {
-                reg->pages[i + j].order = o;
+                reg->superpages[i + j].order = o;
             }
             /* Add this to the buddy system at the order of o */
-            reg->pages[i].prev = NULL;
-            reg->pages[i].next = reg->heads[o];
+            reg->superpages[i].prev = NULL;
+            reg->superpages[i].next = reg->heads[o];
             if ( NULL != reg->heads[o] ) {
-                reg->heads[o]->prev = &reg->pages[i];
+                reg->heads[o]->prev = &reg->superpages[i];
             }
-            reg->heads[o] = &reg->pages[i];
+            reg->heads[o] = &reg->superpages[i];
         }
     }
 
@@ -639,12 +644,12 @@ _vmem_buddy_order(struct vmem_region *reg, size_t pg)
     size_t npg;
 
     /* Calculate the number of pages */
-    npg = reg->len / PAGESIZE;
+    npg = reg->len / SUPERPAGESIZE;
 
     /* Check the order for contiguous usable pages */
     for ( o = 0; o <= VMEM_MAX_BUDDY_ORDER; o++ ) {
         for ( i = pg; i < pg + (1ULL << o); i++ ) {
-            if ( !VMEM_IS_FREE(&reg->pages[pg]) ) {
+            if ( !VMEM_IS_FREE(&reg->superpages[pg]) ) {
                 /* It contains an unusable page, then return the current order
                    minus 1, immediately. */
                 return o - 1;
@@ -669,9 +674,9 @@ static int
 _vmem_buddy_split(struct vmem_region *reg, int o)
 {
     int ret;
-    struct vmem_page *p0;
-    struct vmem_page *p1;
-    struct vmem_page *next;
+    struct vmem_superpage *p0;
+    struct vmem_superpage *p1;
+    struct vmem_superpage *next;
     size_t i;
 
     /* Check the head of the current order */
@@ -725,10 +730,10 @@ _vmem_buddy_split(struct vmem_region *reg, int o)
  * Merge buddies onto the upper order on if possible
  */
 static void
-_vmem_buddy_merge(struct vmem_region *reg, struct vmem_page *off, int o)
+_vmem_buddy_merge(struct vmem_region *reg, struct vmem_superpage *off, int o)
 {
-    struct vmem_page *p0;
-    struct vmem_page *p1;
+    struct vmem_superpage *p0;
+    struct vmem_superpage *p1;
     size_t pi;
     size_t i;
 
@@ -738,14 +743,14 @@ _vmem_buddy_merge(struct vmem_region *reg, struct vmem_page *off, int o)
     }
 
     /* Check the region */
-    pi = off - reg->pages;
-    if ( pi >= reg->len / PAGESIZE ) {
+    pi = off - reg->superpages;
+    if ( pi >= reg->len / SUPERPAGESIZE ) {
         /* Out of this region */
         return;
     }
 
     /* Get the first page of the upper order */
-    p0 = &reg->pages[FLOOR(pi, 1ULL << (o + 1))];
+    p0 = &reg->superpages[FLOOR(pi, 1ULL << (o + 1))];
 
     /* Get the neighboring buddy */
     p1 = p0 + (1ULL << o);
@@ -835,7 +840,7 @@ void *
 vmem_buddy_alloc(struct vmem_space *space, int order)
 {
     struct vmem_region *reg;
-    struct vmem_page *vpage;
+    struct vmem_superpage *vpage;
     ssize_t i;
     int ret;
 
@@ -871,7 +876,7 @@ vmem_buddy_alloc(struct vmem_space *space, int order)
             }
 
             /* Return the first page of the allocated pages */
-            return reg->start + PAGE_ADDR(vpage - reg->pages);
+            return reg->start + SUPERPAGE_ADDR(vpage - reg->superpages);
         }
 
         /* Next region */
@@ -902,9 +907,9 @@ vmem_buddy_free(struct vmem_space *space, void *a)
             idx = PAGE_INDEX(a - reg->start);
 
             /* Check the order */
-            order = reg->pages[idx].order;
+            order = reg->superpages[idx].order;
             for ( i = 0; i < (1ULL << order); i++ ) {
-                if ( order != reg->pages[idx + i].order ) {
+                if ( order != reg->superpages[idx + i].order ) {
                     /* Invalid order */
                     return;
                 }
@@ -912,18 +917,18 @@ vmem_buddy_free(struct vmem_space *space, void *a)
 
             /* Unmark the used flag */
             for ( i = 0; i < (1ULL << order); i++ ) {
-                reg->pages[idx + i].flags &= ~VMEM_USED;
+                reg->superpages[idx + i].flags &= ~VMEM_USED;
             }
 
             /* Return the released pages to the buddy */
-            reg->pages[idx].prev = NULL;
-            reg->pages[idx].next = reg->heads[order];
+            reg->superpages[idx].prev = NULL;
+            reg->superpages[idx].next = reg->heads[order];
             if ( NULL != reg->heads[order] ) {
-                reg->heads[order]->prev = &reg->pages[idx];
+                reg->heads[order]->prev = &reg->superpages[idx];
             }
 
             /* Merge buddies if possible */
-            _vmem_buddy_merge(reg, &reg->pages[idx], order);
+            _vmem_buddy_merge(reg, &reg->superpages[idx], order);
 
             return;
         }
@@ -945,6 +950,7 @@ vmem_buddy_free(struct vmem_space *space, void *a)
 
 
 
+#if 0
 /*
  * Search available virtual pages
  */
@@ -1016,7 +1022,7 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
 
     return NULL;
 }
-
+#endif
 
 
 /*

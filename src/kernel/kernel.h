@@ -66,7 +66,7 @@
 #define KMEM_SLAB_NR_OBJ_ORDER  4
 
 #define KMEM_MAX_BUDDY_ORDER    21
-#define KMEM_REGION_SIZE        512
+//#define KMEM_REGION_SIZE        512
 
 #define VMEM_MAX_BUDDY_ORDER    18
 #define VMEM_INVAL_BUDDY_ORDER  0x3f
@@ -76,6 +76,7 @@
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
 #define VMEM_IS_FREE(x)         (VMEM_USABLE == ((x)->flags & 0x3))
+#define VMEM_IS_SUPERPAGE(x)    (VMEM_SUPERPAGE & (x)->flags)
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -145,19 +146,29 @@ struct vmem_page {
     int order;
     /* Flags */
     int flags;
-    /* Back-link to the corresponding region */
-    struct vmem_region *region;
+    /* Back-link to the corresponding superpage */
+    struct vmem_superpage *superpage;
     /* Buddy system */
-    struct vmem_page *next;
-    struct vmem_page *prev;
+    //struct vmem_page *next;
+    //struct vmem_page *prev;
 } __attribute__ ((packed));
 
 /*
  * Virtual superpage
  */
 struct vmem_superpage {
-    /* Physical address */
-    reg_t addr;
+    union {
+        /* Superpage */
+        struct {
+            /* Physical address */
+            reg_t addr;
+        } superpage;
+        /* Page */
+        struct {
+            /* Pages */
+            struct vmem_page *pages;
+        } page;
+    } u;
     /* Order */
     int order;
     /* Flags */
@@ -175,18 +186,18 @@ struct vmem_superpage {
 struct vmem_region {
     /* Region information */
     ptr_t start;
-    size_t len;                 /* Constant multiplication of PAGESIZE */
+    size_t len;                 /* Constant multiplication of SUPERPAGESIZE */
 
     /* Capacity and the number of used pages */
-    size_t total_pgs;
-    size_t used_pgs;
+    //size_t total_pgs;
+    //size_t used_pgs;
 
-    /* Pages belonging to this region */
-    struct vmem_page *pages;
+    /* Superpages belonging to this region */
+    //struct vmem_page *pages;
     struct vmem_superpage *superpages;
 
     /* Buddy system */
-    struct vmem_page *heads[VMEM_MAX_BUDDY_ORDER + 1];
+    struct vmem_superpage *heads[VMEM_MAX_BUDDY_ORDER + 1];
 
     /* Pointer to the next region */
     struct vmem_region *next;
