@@ -32,109 +32,11 @@ int vmem_arch_init(struct vmem_space *);
 int vmem_remap(struct vmem_space *, u64, u64, int);
 u64 vmem_paddr(struct vmem_space *, u64);
 
+/* Prototype declarations of static functions */
+static int _vmem_buddy_order(struct vmem_region *, size_t);
 static int _vmem_buddy_split(struct vmem_region *, int);
 static void _vmem_buddy_merge(struct vmem_region *, struct vmem_page *, int);
-static int _vmem_buddy_order(struct vmem_region *, size_t);
-static void * _vmem_buddy_alloc(struct vmem_space *, int);
 
-static int _pmem_buddy_split(struct pmem *, struct pmem_buddy *, int);
-static void
-_pmem_buddy_merge(struct pmem *, struct pmem_buddy *, struct pmem_page *, int);
-
-
-/* Temporary for refactoring */
-void *
-pmem_alloc_pages(int zone, int order)
-{
-    int ret;
-    u32 idx;
-    struct pmem_page *pg;
-    struct pmem *pmem;
-    size_t i;
-
-    /* Get the pmem data structure from the global variable */
-    pmem = g_kmem->pmem;
-
-    /* Check the order */
-    if ( order > PMEM_MAX_BUDDY_ORDER ) {
-        return NULL;
-    }
-
-    /* Split the upper-order's buddy first if needed */
-    ret = _pmem_buddy_split(pmem, &pmem->zones[zone].buddy, order);
-    if ( ret < 0 ) {
-        return NULL;
-    }
-
-    /* Obtain the contiguous pages from the head */
-    idx = pmem->zones[zone].buddy.heads[order];
-    if ( PMEM_INVAL_INDEX == idx ) {
-        return NULL;
-    }
-    pmem->zones[zone].buddy.heads[order] = pmem->pages[idx].next;
-
-    /* Ensure the allocated pages are free */
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        if ( !PMEM_IS_FREE(&pmem->pages[idx + i])
-             || pmem->pages[idx + i].order != order ) {
-            return NULL;
-        }
-    }
-    /* Mark as used */
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        pmem->pages[idx + i].flags |= PMEM_USED;
-    }
-
-    return (void *)PAGE_ADDR(idx);
-}
-void *
-pmem_alloc_page(int zone)
-{
-    return pmem_alloc_pages(zone, 0);
-}
-void
-pmem_free_pages(void *a)
-{
-    struct pmem *pmem;
-    int order;
-    int zone;
-    size_t i;
-    off_t idx;
-
-    /* Get the pmem data structure from the global kmem variable */
-    pmem = g_kmem->pmem;
-
-    /* Get the index of the first page of the memory space to be released */
-    idx = PAGE_INDEX(a);
-
-    /* Check if the page index is within the physical memory space */
-    if ( (size_t)idx >= pmem->nr ) {
-        /* Invalid argument */
-        return;
-    }
-
-    /* Check the order and zone */
-    order = pmem->pages[idx].order;
-    zone = pmem->pages[idx].zone;
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        if ( order != pmem->pages[idx + i].order
-            || zone != pmem->pages[idx + i].zone ) {
-            return;
-        }
-    }
-
-    /* Unmark the used flag */
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        pmem->pages[idx + i].flags &= ~PMEM_USED;
-    }
-
-    /* Return the released pages to the buddy */
-    pmem->pages[idx].next = pmem->zones[zone].buddy.heads[order];
-    pmem->zones[zone].buddy.heads[order] = idx;
-
-    /* Merge buddies if possible */
-    _pmem_buddy_merge(pmem, &pmem->zones[zone].buddy, &pmem->pages[idx], order);
-}
 
 /*
  * Allocate kernel pages
@@ -165,8 +67,6 @@ kmem_alloc_pages(int order)
         pmem_free_pages(ppage);
         return NULL;
     }
-#endif
-#if 0
     if ( kpage - kmem->region1 >= 0
          && kpage - kmem->region1 < KMEM_REGION_SIZE ) {
         /* Region 1 */
@@ -233,7 +133,7 @@ kmem_free_pages(void *vaddr)
 
 
 /*
- * Allocate memory space
+ * Allocate memory space.
  * Note that the current implementation does not protect the slab header, so
  * the allocated memory must be carefully used.
  *
@@ -495,71 +395,6 @@ kfree(void *ptr)
     spin_unlock(&g_kmem->slab_lock);
 }
 
-
-
-/*
- * Release a virtual page
- */
-static void
-_vmem_page_free(struct vmem_space *vm, void *addr)
-{
-    struct vmem_region *region;
-    struct vmem_page *page;
-    struct vmem_page *list;
-    int order;
-    ssize_t n;
-    int i;
-
-    /* Find the region and page */
-    region = vm->first_region;
-    while ( NULL != region ) {
-        if ( (reg_t)addr >= (reg_t)region->start
-             && (reg_t)addr < (reg_t)region->start + region->len ) {
-            /* Found */
-            page = &region->pages[((reg_t)addr - (reg_t)region->start)
-                                  / SUPERPAGESIZE];
-            break;
-        }
-        region = region->next;
-    }
-    if ( NULL == region ) {
-        /* Region not found */
-        return;
-    }
-
-    /* Count the number of pages */
-    list = page;
-    n = 0;
-    while ( NULL != list ) {
-        n++;
-        list = list->next;
-    }
-
-    /* Resolve the order from the number of the pages */
-    order = -1;
-    for ( i = 0; i <= VMEM_MAX_BUDDY_ORDER; i++ ) {
-        if ( n == (1LL << i) ) {
-            order = i;
-            break;
-        }
-    }
-
-    /* If the order exceeds its maximum, that's something wrong. */
-    if ( order > VMEM_MAX_BUDDY_ORDER || order < 0 ) {
-        /* Something is wrong... */
-        return;
-    }
-
-    /* Return it to the buddy system */
-    list = region->heads[order];
-    /* Prepend the returned pages */
-    region->heads[order] = page;
-    region->heads[order]->next = list;
-
-    /* Merge buddies if possible */
-    _vmem_buddy_merge(region, page, order);
-}
-
 /*
  * Virtual memory region
  */
@@ -605,7 +440,7 @@ vmem_region_create(void)
         region->heads[VMEM_MAX_BUDDY_ORDER] = &pages[0];
         tmp = &pages[0];
         idx = 1ULL << (VMEM_MAX_BUDDY_ORDER);
-        for ( i = 0; i < 1 << (9 - VMEM_MAX_BUDDY_ORDER); i++ ) {
+        for ( i = 0; i < (1 << (9 - VMEM_MAX_BUDDY_ORDER)); i++ ) {
             tmp->next = &pages[idx];
             tmp = &pages[idx];
             /* For the next index */
@@ -665,16 +500,6 @@ vmem_space_delete(struct vmem_space *vmem)
 {
     /* FIXME: Implement this function */
     return;
-}
-
-
-/*
- * Release virtual pages
- */
-void
-vmem_free_pages(void *addr)
-{
-    /* FIXME: Implement this */
 }
 
 /*
@@ -751,16 +576,6 @@ _vmem_search_page(struct vmem_space *vmem, void *vaddr)
     return page;
 }
 
-/*
- * Map the page
- */
-void *
-kmem_map(void *a, size_t len)
-{
-    struct kmem *kmem;
-
-    return NULL;
-}
 static void *
 _kmem_get_free_pages(struct kmem *kmem, size_t len)
 {
@@ -804,6 +619,85 @@ _kmem_get_free_pages(struct kmem *kmem, size_t len)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ * Create buddy system for the specified virtual memory region
+ */
+int
+vmem_buddy_init(struct vmem_region *reg)
+{
+    size_t i;
+    size_t j;
+    int o;
+
+    /* Look through all the pages */
+    for ( i = 0; i < reg->len / PAGESIZE; i += (1ULL << o) ) {
+        o = _vmem_buddy_order(reg, i);
+        if ( o < 0 ) {
+            /* This page is not usable. */
+            o = 0;
+        } else {
+            /* This page is usable. */
+            for ( j = 0; j < (1ULL << o); j++ ) {
+                reg->pages[i + j].order = o;
+            }
+            /* Add this to the buddy system at the order of o */
+            reg->pages[i].prev = NULL;
+            reg->pages[i].next = reg->heads[o];
+            if ( NULL != reg->heads[o] ) {
+                reg->heads[o]->prev = &reg->pages[i];
+            }
+            reg->heads[o] = &reg->pages[i];
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * Count the virtual memory order for buddy system
+ */
+static int
+_vmem_buddy_order(struct vmem_region *reg, size_t pg)
+{
+    int o;
+    size_t i;
+    size_t npg;
+
+    /* Calculate the number of pages */
+    npg = reg->len / PAGESIZE;
+
+    /* Check the order for contiguous usable pages */
+    for ( o = 0; o <= VMEM_MAX_BUDDY_ORDER; o++ ) {
+        for ( i = pg; i < pg + (1ULL << o); i++ ) {
+            if ( !VMEM_IS_FREE(&reg->pages[pg]) ) {
+                /* It contains an unusable page, then return the current order
+                   minus 1, immediately. */
+                return o - 1;
+            }
+        }
+        /* Test whether the next order is feasible; feasible if it is properly
+           aligned and the pages are within the range of this region. */
+        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > npg ) {
+            /* Infeasible, then return the current order immediately */
+            return o;
+        }
+    }
+
+    /* Reaches the maximum order */
+    return VMEM_MAX_BUDDY_ORDER;
+}
 
 /*
  * Split the buddies so that we get at least one buddy at the order of o
@@ -944,169 +838,132 @@ _vmem_buddy_merge(struct vmem_region *reg, struct vmem_page *off, int o)
 
 
 
-/*
- * Create buddy system for the specified virtual memory region
- */
-int
-vmem_buddy_init(struct vmem_region *reg)
-{
-    size_t i;
-    size_t j;
-    int o;
 
-    /* Look through all the pages */
-    for ( i = 0; i < reg->len / PAGESIZE; i += (1ULL << o) ) {
-        o = _vmem_buddy_order(reg, i);
-        if ( o < 0 ) {
-            /* This page is not usable. */
-            o = 0;
-        } else {
-            /* This page is usable. */
-            for ( j = 0; j < (1ULL << o); j++ ) {
-                reg->pages[i + j].order = o;
-            }
-            /* Add this to the buddy system at the order of o */
-            reg->pages[i].prev = NULL;
-            reg->pages[i].next = reg->heads[o];
-            if ( NULL != reg->heads[o] ) {
-                reg->heads[o]->prev = &reg->pages[i];
-            }
-            reg->heads[o] = &reg->pages[i];
-        }
-    }
 
-    return 0;
-}
 
-/*
- * Count the virtual memory order for buddy system
- */
-static int
-_vmem_buddy_order(struct vmem_region *reg, size_t pg)
-{
-    int o;
-    size_t i;
-    size_t npg;
 
-    /* Calculate the number of pages */
-    npg = reg->len / PAGESIZE;
 
-    /* Check the order for contiguous usable pages */
-    for ( o = 0; o <= VMEM_MAX_BUDDY_ORDER; o++ ) {
-        for ( i = pg; i < pg + (1ULL << o); i++ ) {
-            if ( !VMEM_IS_FREE(&reg->pages[pg]) ) {
-                /* It contains an unusable page, then return the current order
-                   minus 1, immediately. */
-                return o - 1;
-            }
-        }
-        /* Test whether the next order is feasible; feasible if it is properly
-           aligned and the pages are within the range of this region. */
-        if ( 0 != (pg & (1ULL << o)) || pg + (1ULL << (o + 1)) > npg ) {
-            /* Infeasible, then return the current order immediately */
-            return o;
-        }
-    }
 
-    /* Reaches the maximum order */
-    return VMEM_MAX_BUDDY_ORDER;
-}
+
+
+
 
 /*
  * Allocate virtual pages
  */
 struct vmem_page *
-vmem_alloc_pages(struct vmem_space *vmem, int order)
+vmem_buddy_alloc(struct vmem_space *space, int order)
 {
-    struct vmem_page *vpage;
-    struct vmem_page *tmp;
-    void *paddr;
-    void *vaddr;
-    ssize_t i;
-    int ret;
-
-#if 0
-    /* Allocate 2^order contiguous virtual pages */
-    vpage = _vmem_page_alloc(vmem, order);
-    if ( NULL == vpage ) {
-        return NULL;
-    }
-
-    /* Allocate physical page */
-    paddr = pmem_alloc_pages(0, order);
-    if ( NULL == paddr ) {
-        _vmem_page_free(vmem, vpage);
-        return NULL;
-    }
-
-    /* Resolve the virtual address */
-    vaddr = vpage->region->start
-        + (vpage - vpage->region->pages) * SUPERPAGESIZE;
-
-    /* Update the page table */
-    tmp = vpage;
-    for ( i = 0; i < (1LL << order); i++ ) {
-        tmp->addr = (size_t)paddr + (size_t)i * SUPERPAGESIZE;
-        //tmp->type = VMEM_USED;
-        ret = vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE,
-                         (u64)paddr + (u64)i * SUPERPAGESIZE, 1);
-        if ( ret < 0 ) {
-            /* Rollback */
-            for ( ; i >= 0; i-- ) {
-                vmem_remap(vmem, (u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
-            }
-            pmem_free_pages(paddr);
-            _vmem_page_free(vmem, vpage);
-            return NULL;
-        }
-        tmp = vpage->next;
-    }
-#endif
-
-    return vpage;
-}
-
-/*
- * Search available virtual pages
- */
-static void *
-_vmem_buddy_alloc(struct vmem_space *vmem, int n)
-{
-    struct vmem_page *page;
     struct vmem_region *reg;
+    struct vmem_page *vpage;
     ssize_t i;
     int ret;
 
-    if ( n < 0 || n > VMEM_MAX_BUDDY_ORDER ) {
+    /* Check the order first */
+    if ( order < 0 || order > VMEM_MAX_BUDDY_ORDER ) {
         /* Invalid order */
         return NULL;
     }
 
-    /* Check the first region */
-    reg = vmem->first_region;
+    /* Walking through the region */
+    reg = space->first_region;
+    while ( NULL != reg ) {
+        /* Split first if needed */
+        ret = _vmem_buddy_split(reg, order);
+        if ( ret >= 0 ) {
+            /* Get one from the buddy system, and remove that from the list */
+            vpage = reg->heads[order];
+            reg->heads[order] = vpage->next;
+            if ( NULL != reg->heads[order] ) {
+                reg->heads[order]->prev = NULL;
+            }
 
-    /* Split first if needed */
-    ret = _vmem_buddy_split(reg, n);
-    if ( ret < 0 ) {
-        /* No memory available */
-        return NULL;
+            /* Validate all the pages are not used */
+            for ( i = 0; i < (1LL << order) - 1; i++ ) {
+                if ( !VMEM_IS_FREE(&vpage[i]) ) {
+                    return NULL;
+                }
+            }
+
+            /* Mark the contiguous pages as "used" */
+            for ( i = 0; i < (1LL << order) - 1; i++ ) {
+                vpage[i].flags |= VMEM_USED;
+            }
+
+            /* Return the first page of the allocated pages */
+            return vpage;
+        }
+
+        /* Next region */
+        reg = reg->next;
     }
 
-    /* Return this block */
-    page = reg->heads[n];
-
-    /* Remove the found pages from the list */
-    reg->heads[n] = page->next;
-
-    /* Manage the contiguous pages in a list */
-    for ( i = 0; i < (1LL << n) - 1; i++ ) {
-        reg->pages[page - reg->pages + i].next
-            = &reg->pages[page - reg->pages + i + 1];
-    }
-    reg->pages[page - reg->pages + i].next = NULL;
-
-    return page;
+    return NULL;
 }
+
+/*
+ * Deallocate virtual memory space pointed by a
+ */
+void
+vmem_buddy_free(struct vmem_space *space, void *a)
+{
+    struct vmem_region *reg;
+    off_t idx;
+    int order;
+    size_t i;
+
+    /* Walking through the region */
+    reg = space->first_region;
+    while ( NULL != reg ) {
+        if ( (reg_t)a >= (reg_t)reg->start
+             && (reg_t)a < (reg_t)reg->start + reg->len) {
+            /* Get the index of the first page of the memory space to be
+               released */
+            idx = PAGE_INDEX(a - reg->start);
+
+            /* Check the order */
+            order = reg->pages[idx].order;
+            for ( i = 0; i < (1ULL << order); i++ ) {
+                if ( order != reg->pages[idx + i].order ) {
+                    /* Invalid order */
+                    return;
+                }
+            }
+
+            /* Unmark the used flag */
+            for ( i = 0; i < (1ULL << order); i++ ) {
+                reg->pages[idx + i].flags &= ~VMEM_USED;
+            }
+
+            /* Return the released pages to the buddy */
+            reg->pages[idx].prev = NULL;
+            reg->pages[idx].next = reg->heads[order];
+            if ( NULL != reg->heads[order] ) {
+                reg->heads[order]->prev = &reg->pages[idx];
+            }
+
+            /* Merge buddies if possible */
+            _vmem_buddy_merge(reg, &reg->pages[idx], order);
+
+            return;
+        }
+
+        /* Next region */
+        reg = reg->next;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
  * Search available virtual pages
@@ -1168,8 +1025,12 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
     if ( NULL == p ) {
         return NULL;
     }
-    reg = (struct vmem_region *)(p + sizeof(struct vmem_page) * n);
-    reg->pages = (struct vmem_page *)p;
+
+    /* Allocate a virtual memory region */
+    v = p;
+
+    reg = (struct vmem_region *)(v + sizeof(struct vmem_page) * n);
+    reg->pages = (struct vmem_page *)v;
     reg->start = 0;
     reg->len = npg * PAGESIZE;
 
@@ -1178,168 +1039,6 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-/*
- * Split the buddies so that we get at least one buddy at the order of o
- */
-static int
-_pmem_buddy_split(struct pmem *pmem, struct pmem_buddy *buddy, int o)
-{
-    int ret;
-    struct pmem_page *p0;
-    struct pmem_page *p1;
-    u32 next;
-    size_t i;
-
-    /* Check the head ofthe current order */
-    if ( PMEM_INVAL_INDEX != buddy->heads[o] ) {
-        /* At least one memory block is avaiable in this order, then nothing to
-           do here. */
-        return 0;
-    }
-
-    /* Check the order */
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* No space available */
-        return -1;
-    }
-
-    /* Check the upper order */
-    if ( PMEM_INVAL_INDEX == buddy->heads[o + 1] ) {
-        /* The upper order is also empty, then try to split buddy at the one
-           more upper buddy. */
-        ret = _pmem_buddy_split(pmem, buddy, o + 1);
-        if ( ret < 0 ) {
-            /* Cannot get any */
-            return ret;
-        }
-    }
-
-    /* Save next at the upper order */
-    next = pmem->pages[buddy->heads[o + 1]].next;
-    /* Split it into two */
-    p0 = &pmem->pages[buddy->heads[o + 1]];
-    p1 = p0 + (1ULL << o);
-
-    /* Set the order for all the pages in the pair */
-    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
-        p0[i].order = o;
-    }
-
-    /* Insert it to the list */
-    p0->next = p1 - pmem->pages;
-    p1->next = buddy->heads[o];
-    buddy->heads[o] = p0 - pmem->pages;
-    /* Remove the split one from the upper order */
-    buddy->heads[o + 1] = next;
-
-    return 0;
-}
-
-/*
- * Merge buddies onto the upper order if possible
- */
-static void
-_pmem_buddy_merge(struct pmem *pmem, struct pmem_buddy *buddy,
-                  struct pmem_page *off, int o)
-{
-    struct pmem_page *p0;
-    struct pmem_page *p1;
-    struct pmem_page *prev;
-    struct pmem_page *list;
-    size_t pi;
-    size_t i;
-
-    /* Check the order first */
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
-        /* Reached the maximum order, then do not merge anymore */
-        return;
-    }
-
-    /* Check the page whether it's within the physical memory space */
-    pi = off - pmem->pages;
-    if ( pi >= pmem->nr ) {
-        /* Out of the physical memory region */
-        return;
-    }
-
-    /* Get the first page of the buddy at the upper order */
-    p0 = &pmem->pages[FLOOR(pi, PAGESIZE)];
-
-    /* Get the neighboring buddy */
-    p1 = p0 + (1ULL << o);
-
-    /* Ensure that p0 and p1 are free */
-    if ( !PMEM_IS_FREE(p0) || !PMEM_IS_FREE(p1) ) {
-        return;
-    }
-
-    /* Check the order of p1 */
-    if ( p0->order != o || p1->order != o ) {
-        /* Cannot merge because of the order mismatch */
-        return;
-    }
-
-    /* Remove both of the pair from the list of current order */
-    /* Try to remove p0 */
-    list = &pmem->pages[buddy->heads[o]];
-    prev = NULL;
-    while ( NULL != list ) {
-        if ( p0 == list ) {
-            if ( NULL == prev ) {
-                buddy->heads[o] = p0->next;
-            } else {
-                prev->next = p0->next;
-            }
-            break;
-        }
-        /* Go to the next one */
-        prev = list;
-        if ( PMEM_INVAL_INDEX != list->next ) {
-            list = &pmem->pages[list->next];
-        } else {
-            list = NULL;
-        }
-    }
-    /* Try to remove p1 */
-    list = &pmem->pages[buddy->heads[o]];
-    prev = NULL;
-    while ( NULL != list ) {
-        if ( p1 == list ) {
-            if ( NULL == prev ) {
-                buddy->heads[o] = p1->next;
-            } else {
-                prev->next = p1->next;
-            }
-            break;
-        }
-        /* Go to the next one */
-        prev = list;
-        if ( PMEM_INVAL_INDEX != list->next ) {
-            list = &pmem->pages[list->next];
-        } else {
-            list = NULL;
-        }
-    }
-
-    /* Set the order for all the pages in the pair */
-    for ( i = 0; i < (1ULL << (o + 1)); i++ ) {
-        p0[i].order = o + 1;
-    }
-
-    /* Try to merge the upper order of buddies */
-    _pmem_buddy_merge(pmem, buddy, p0, o + 1);
-}
 
 /*
  * Local variables:

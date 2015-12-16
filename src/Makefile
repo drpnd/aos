@@ -70,6 +70,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/arch/$(ARCH)/task.o \
 	kernel/kernel.o \
 	kernel/memory.o \
+	kernel/pmem.o \
 	kernel/sched.o \
 	kernel/rbtree.o \
 	kernel/mpq.o \

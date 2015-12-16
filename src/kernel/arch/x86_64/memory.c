@@ -273,17 +273,6 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
         return -1;
     }
 
-    /* FIXME */
-    //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0x7e254000), 0x7e254000, 0);
-    //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfec00000ULL), 0xfec00000ULL, 0);
-    if ( ret < 0 ) {
-        return -1;
-    }
-    //ret = _kmem_vmem_map(kmem, PAGE_INDEX(0xfee00000ULL), 0xfee00000ULL, 0);
-    if ( ret < 0 ) {
-        return -1;
-    }
-
     return 0;
 }
 
@@ -298,7 +287,8 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
  *      The _pmem_init_stage1() function allocates a space for the physical
  *      memory manager from the memory map information bi inherited from the
  *      boot monitor.  The base address and the size of the allocated memory
- *      space is returned through the second and third arguments, base and pmsz.
+ *      space are returned through the second and third arguments, base and
+ *      pmsz.
  *
  * RETURN VALUES
  *      If successful, the _pmem_init_stage1() function returns the value of 0.
@@ -1077,216 +1067,6 @@ _pmem_buddy_order(struct pmem *pmem, size_t pg)
     return PMEM_MAX_BUDDY_ORDER;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if 0
-/*
- * Allocate 2^order physical pages from the zone
- *
- * SYNOPSIS
- *      void *
- *      pmem_alloc_pages(int zone, int order);
- *
- * DESCRIPTION
- *      The pmem_alloc_pages() function allocates 2^order pages from the zone.
- *
- * RETURN VALUES
- *      The pmem_alloc_pages() function returns a pointer to allocated page(s).
- *      IF there is an error, it returns a NULL pointer.
- */
-void *
-arch_pmem_alloc_pages(int zone, int order)
-{
-    void *a;
-    void *cr3;
-    int ret;
-    u64 i;
-
-    /* Check the argument of the allocation order */
-    if ( order < 0 ) {
-        /* Invalid argument */
-        return NULL;
-    }
-
-    /* Check the size */
-    if ( order > PMEM_MAX_BUDDY_ORDER ) {
-        /* Oversized request */
-        return NULL;
-    }
-
-    /* Check the zone */
-    if ( zone < 0 || zone >= PMEM_NUM_ZONES ) {
-        /* Invalid zone */
-        return NULL;
-    }
-
-    /* Take the lock */
-    spin_lock(&pmem->lock);
-
-#if 0
-    /* Save the cr3 */
-    cr3 = get_cr3();
-
-    /* Linear addressing */
-    _disable_page_global();
-    set_cr3(pmem->arch);
-
-    /* Split the upper-order's buddy first if needed */
-    ret = _pmem_split(&pmem->zones[zone].buddy, order);
-    if ( ret < 0 ) {
-        /* Restore cr3 then unlock */
-        set_cr3(cr3);
-        spin_unlock(&pmem->lock);
-        return NULL;
-    }
-
-    /* Obtain the contiguous pages from the head */
-    a = pmem->zones[zone].buddy.heads[order];
-    pmem->zones[zone].buddy.heads[order] = a->next;
-    if ( NULL != pmem->zones[zone].buddy.heads[order] ) {
-        pmem->zones[zone].buddy.heads[order]->prev = NULL;
-    }
-
-    /* Restore cr3 */
-    set_cr3(cr3);
-    _enable_page_global();
-
-    /* Mark the allocated memory as used, and set the order */
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        /* Assert that the page is not used */
-        if ( pmem->pages[PAGE_INDEX(a) + i].used ) {
-            /* Raise kernel panic */
-            panic("Fatal: arch_pmem_alloc_pages()");
-        }
-        pmem->pages[PAGE_INDEX(a) + i].used = 1;
-    }
-    pmem->pages[PAGE_INDEX(a)].order = order;
-#endif
-
-    /* Release the lock */
-    spin_unlock(&pmem->lock);
-
-    return a;
-}
-
-/*
- * Allocate a page from the zone
- */
-void *
-arch_pmem_alloc_page(int zone)
-{
-    return arch_pmem_alloc_pages(zone, 0);
-}
-
-
-/*
- * Free allocated 2^order superpages
- *
- * SYNOPSIS
- *      void
- *      arch_pmem_free_pages(void *page);
- *
- * DESCRIPTION
- *      The arch_pmem_free_pages() function deallocates superpages pointed by
- *      page.
- *
- * RETURN VALUES
- *      The arch_pmem_free_pages() function does not return a value.
- */
-void
-arch_pmem_free_pages(void *page)
-{
-    int zone;
-    int order;
-    void *cr3;
-    u64 i;
-
-    /* Obtain the order of the page */
-    order = pmem->pages[PAGE_INDEX(page)].order;
-
-    /* Resolve the zone of the pages to be released */
-    //zone = _pmem_page_zone(page);
-
-    /* If the order exceeds its maximum, that's something wrong. */
-    if ( order > PMEM_MAX_BUDDY_ORDER || order < 0 ) {
-        /* Something is wrong... */
-        return;
-    }
-
-    /* Lock */
-    spin_lock(&pmem->lock);
-#if 0
-    /* Save the cr3 */
-    cr3 = get_cr3();
-
-    /* Linear addressing */
-    _disable_page_global();
-    set_cr3(pmem->arch);
-
-    /* Return it to the buddy system */
-    _pmem_return_to_buddy(pmem, page, zone, order);
-
-    /* Merge buddies if possible */
-    _pmem_merge(&pmem->zones[zone].buddy, page, order);
-
-    /* Clear the used flag */
-    for ( i = 0; i < (1ULL << order); i++ ) {
-        pmem->pages[PAGE_INDEX(page) + i].used = 0;
-    }
-
-    /* Restore cr3 */
-    set_cr3(cr3);
-    _enable_page_global();
-#endif
-    /* Unlock */
-    spin_unlock(&pmem->lock);
-}
-#endif
-
-
-
-
-
-
-
-
-
-
-#if 0
-/*
- * Return 2^order pages to the buddy system of the specified zone
- */
-static void
-_pmem_return_to_buddy(struct pmem *pm, void *addr, int zone, int order)
-{
-    struct pmem_page_althdr *list;
-
-    /* Return it to the buddy system */
-    list = pm->zones[zone].buddy.heads[order];
-    /* Prepend the returned pages */
-    pm->zones[zone].buddy.heads[order] = addr;
-    pm->zones[zone].buddy.heads[order]->prev = NULL;
-    pm->zones[zone].buddy.heads[order]->next = list;
-    if ( NULL != list ) {
-        list->prev = addr;
-    }
-}
-#endif
-
 /*
  * Resolve the zone of the page
  */
@@ -1329,55 +1109,6 @@ _disable_page_global(void)
     set_cr4(get_cr4() & ~CR4_PGE);
 }
 
-
-
-/*
- * Remap kernel memory space in the page table
- */
-int
-kmem_remap(u64 vaddr, u64 paddr, int flag)
-{
-    int pml4;
-    int pdpt;
-    int pd;
-    u64 *ent;
-
-    pml4 = (vaddr >> 39);
-    pdpt = (vaddr >> 30) & 0x1ff;
-    pd = (vaddr >> 21) & 0x1ff;
-
-    /* PML4 */
-    ent = (u64 *)KERNEL_PGT;
-    if ( !(ent[pml4] & 0x1) ) {
-        /* Not present */
-        return -1;
-    }
-    /* PDPT */
-    ent = (u64 *)(ent[pml4] & 0xfffffffffffff000ULL);
-    if ( 0x1 != (ent[pdpt] & 0x81) ) {
-        /* Not present, or 1-Gbyte page */
-        return -1;
-    }
-    /* PD */
-    ent = (u64 *)(ent[pdpt] & 0xfffffffffffff000ULL);
-    if ( 0x01 == (ent[pd] & 0x81) ) {
-        /* Present, and 4-Kbyte page */
-        return -1;
-    }
-
-    /* Update the entry */
-    if ( flag ) {
-        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x183;
-    } else {
-        ent[pd] = (paddr & 0xffffffffffe00000ULL) | 0x000;
-    }
-
-    /* Invalidate the TLB cache for this entry */
-    invlpg((void *)(vaddr & 0xffffffffffe00000ULL));
-
-    return 0;
-}
-
 /*
  * Initialize the architecture-specific virtual memory data structure
  */
@@ -1401,6 +1132,7 @@ vmem_arch_init(struct vmem_space *vmem)
     return -1;
 }
 
+#if 1
 /*
  * Remap virtual memory space in the page table
  */
@@ -1448,7 +1180,7 @@ vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
 
     return 0;
 }
-
+#endif
 /*
  * Local variables:
  * tab-width: 4

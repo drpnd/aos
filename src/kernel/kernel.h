@@ -58,7 +58,7 @@
 #define PMEM_INVAL_INDEX        0xffffffffUL
 
 
-/* 32 (2^5) byte is the minimum object size of a slab object */
+/* 32 (2^5) -byte is the minimum object size of a slab object */
 #define KMEM_SLAB_BASE_ORDER    5
 /* 1024 (2^(5 + 6 - 1)) byte is the maximum object size of a slab object */
 #define KMEM_SLAB_ORDER         6
@@ -75,7 +75,7 @@
 #define VMEM_USED               (1<<1)
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
-#define VMEM_IS_FREE(x)         (VMEM_USABLE == (x)->flags)
+#define VMEM_IS_FREE(x)         (VMEM_USABLE == ((x)->flags & 0x3))
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -467,8 +467,12 @@ void kfree(void *);
 struct vmem_region * vmem_region_create(void);
 struct vmem_space * vmem_space_create(void);
 void vmem_space_delete(struct vmem_space *);
-struct vmem_page * vmem_alloc_pages(struct vmem_space *, int);
+
 int vmem_buddy_init(struct vmem_region *);
+void * vmem_alloc_pages(struct vmem_space *, int);
+void vmem_free_pages(struct vmem_space *, int);
+struct vmem_page * vmem_buddy_alloc(struct vmem_space *, int);
+void vmem_buddy_free(struct vmem_space *, void *);
 
 void * pmem_alloc_pages(int, int);
 void pmem_free_pages(void *);
