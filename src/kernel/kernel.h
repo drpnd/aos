@@ -139,7 +139,7 @@ struct fildes {
  * Virtual page
  */
 struct vmem_page {
-    /* Physical address: least significant bits are used for flags */
+    /* Physical address: least significant bits are plan to be used for flags */
     reg_t addr;
     /* Order */
     int order;
@@ -150,6 +150,23 @@ struct vmem_page {
     /* Buddy system */
     struct vmem_page *next;
     struct vmem_page *prev;
+} __attribute__ ((packed));
+
+/*
+ * Virtual superpage
+ */
+struct vmem_superpage {
+    /* Physical address */
+    reg_t addr;
+    /* Order */
+    int order;
+    /* Flags */
+    int flags;
+    /* Back-link to the corresponding region */
+    struct vmem_region *region;
+    /* Buddy system */
+    struct vmem_superpage *next;
+    struct vmem_superpage *prev;
 };
 
 /*
@@ -166,6 +183,7 @@ struct vmem_region {
 
     /* Pages belonging to this region */
     struct vmem_page *pages;
+    struct vmem_superpage *superpages;
 
     /* Buddy system */
     struct vmem_page *heads[VMEM_MAX_BUDDY_ORDER + 1];
@@ -470,8 +488,8 @@ void vmem_space_delete(struct vmem_space *);
 
 int vmem_buddy_init(struct vmem_region *);
 void * vmem_alloc_pages(struct vmem_space *, int);
-void vmem_free_pages(struct vmem_space *, int);
-struct vmem_page * vmem_buddy_alloc(struct vmem_space *, int);
+void vmem_free_pages(struct vmem_space *, void *);
+void * vmem_buddy_alloc(struct vmem_space *, int);
 void vmem_buddy_free(struct vmem_space *, void *);
 
 void * pmem_alloc_pages(int, int);

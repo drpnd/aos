@@ -44,63 +44,26 @@ static void _vmem_buddy_merge(struct vmem_region *, struct vmem_page *, int);
 void *
 kmem_alloc_pages(int order)
 {
-    return NULL;
-
-    struct kmem_page *kpage;
-    void *ppage;
+    struct kmem *kmem;
+    void *paddr;
     void *vaddr;
-    ssize_t i;
-    struct kmem_page *region;
-    off_t off;
-    int ret;
 
-#if 0
-    /* Allocate a physical page */
-    ppage = pmem_alloc_pages(0, order);
-    if ( NULL == ppage ) {
+    /* Get the global variable */
+    kmem = g_kmem;
+
+    /* Allocate physical pages */
+    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
+    if ( NULL == paddr ) {
         return NULL;
     }
 
-    /* Kernel page */
-    kpage = _kpage_alloc(order);
-    if ( NULL == kpage ) {
-        pmem_free_pages(ppage);
+    /* Allocate virtual space */
+    vaddr = vmem_buddy_alloc(kmem->space, order);
+    if ( NULL == vaddr ) {
+        pmem_free_pages(paddr);
         return NULL;
     }
-    if ( kpage - kmem->region1 >= 0
-         && kpage - kmem->region1 < KMEM_REGION_SIZE ) {
-        /* Region 1 */
-        region = kmem->region1;
-        off = kpage - kmem->region1;
-        vaddr = (void *)(off * SUPERPAGESIZE);
-    } else if ( kpage - kmem->region2 >= 0
-                && kpage - kmem->region2 < KMEM_REGION_SIZE ) {
-        /* Region 2 */
-        region = kmem->region2;
-        off = kpage - kmem->region2;
-        vaddr = (void *)((off + 1536) * SUPERPAGESIZE);
-    } else {
-        /* Error */
-        pmem_free_pages(ppage);
-        _kpage_free(kpage);
-        return NULL;
-    }
-    for ( i = 0; i < (1LL << order); i++ ) {
-        region[off + i].address = (size_t)ppage + SUPERPAGE_ADDR(i);
-        region[off + i].type = 1;
-        ret = kmem_remap((u64)vaddr + SUPERPAGE_ADDR(i),
-                         (u64)ppage + SUPERPAGE_ADDR(i), 1);
-        if ( ret < 0 ) {
-            /* Rollback */
-            for ( ; i >= 0; i-- ) {
-                kmem_remap((u64)vaddr + (u64)i * SUPERPAGESIZE, 0, 0);
-            }
-            pmem_free_pages(ppage);
-            _kpage_free(kpage);
-            return NULL;
-        }
-    }
-#endif
+
     return vaddr;
 }
 
@@ -847,11 +810,28 @@ _vmem_buddy_merge(struct vmem_region *reg, struct vmem_page *off, int o)
 
 
 
+/*
+ * Allocate virtual pages
+ */
+void *
+vmem_alloc_pages(struct vmem_space *space, int order)
+{
+    return NULL;
+}
+
+/*
+ * Deallocate virtual memory space pointed by a
+ */
+void
+vmem_free_pages(struct vmem_space *space, void *a)
+{
+}
+
 
 /*
  * Allocate virtual pages
  */
-struct vmem_page *
+void *
 vmem_buddy_alloc(struct vmem_space *space, int order)
 {
     struct vmem_region *reg;
@@ -891,7 +871,7 @@ vmem_buddy_alloc(struct vmem_space *space, int order)
             }
 
             /* Return the first page of the allocated pages */
-            return vpage;
+            return reg->start + PAGE_ADDR(vpage - reg->pages);
         }
 
         /* Next region */
@@ -1033,7 +1013,6 @@ _vmem_new_region(struct vmem_space *vmem, size_t n)
     reg->pages = (struct vmem_page *)v;
     reg->start = 0;
     reg->len = npg * PAGESIZE;
-
 
     return NULL;
 }

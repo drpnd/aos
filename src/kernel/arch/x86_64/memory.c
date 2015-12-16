@@ -45,7 +45,7 @@ extern struct kmem *g_kmem;
 #define BSE_BAD                 5
 
 /*
- * Prototype declarations
+ * Prototype declarations of static functions
  */
 static struct kmem * _kmem_init(struct kstring *);
 static int _kmem_pgt_init(struct arch_kmem **, u64 *);
