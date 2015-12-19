@@ -206,7 +206,21 @@ struct arch_kmem {
     /* Virtual address */
     u64 *vpd[4];                /* Superpage */
 };
-
+/*
+ * Level-3 Complete multiway (512-ary) tree for virtual memory
+ */
+#define VMEM_NENT(x)    (DIV_CEIL((x), 512 * 512) + DIV_CEIL((x), 512) + (x))
+#define VMEM_PML4(x, pg)    (x[0])
+#define VMEM_PDPT(x, pg)    (x[0 + DIV_CEIL((pg) + 1, 512) + FLOOR((pg), 512)])
+#define VMEM_PD(x, pg)      (x[1 + DIV_CEIL((pg) + 1, 512) + pg])
+struct arch_vmem_space {
+    /* Level-3 Complete multiway (512-ary) tree */
+    int nr;
+    u64 **array;
+    /* Leaves for virtual memory */
+    u64 **vls;
+};
+#if 0
 /*
  * Virtual memory
  */
@@ -216,6 +230,7 @@ struct arch_vmem_space {
     /* The root of the hierarchical page table */
     struct arch_page_dir *pgtroot;
 } __attribute__ ((packed));
+#endif
 
 /*
  * Task (architecture specific structure)

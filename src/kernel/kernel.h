@@ -36,6 +36,7 @@
 /* Page size: Must be consistent with the architecture's page size */
 #define PAGESIZE                4096ULL         /* 4 KiB */
 #define SUPERPAGESIZE           (1ULL << 21)    /* 2 MiB */
+#define SP_SHIFT                9               /* log2(2M/4K)*/
 
 #define PAGE_ADDR(i)            (PAGESIZE * (i))
 #define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (i))
@@ -75,8 +76,12 @@
 #define VMEM_USED               (1<<1)
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
+#define VMEM_MMAN               (1<<4)
 #define VMEM_IS_FREE(x)         (VMEM_USABLE == ((x)->flags & 0x3))
 #define VMEM_IS_SUPERPAGE(x)    (VMEM_SUPERPAGE & (x)->flags)
+
+#define VMEM_NORM_REGION        0
+#define VMEM_MMAN_REGION        1
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -149,8 +154,8 @@ struct vmem_page {
     /* Back-link to the corresponding superpage */
     struct vmem_superpage *superpage;
     /* Buddy system */
-    //struct vmem_page *next;
-    //struct vmem_page *prev;
+    struct vmem_page *next;
+    struct vmem_page *prev;
 } __attribute__ ((packed));
 
 /*
@@ -188,6 +193,8 @@ struct vmem_region {
     ptr_t start;
     size_t len;                 /* Constant multiplication of SUPERPAGESIZE */
 
+    int type;
+
     /* Capacity and the number of used pages */
     //size_t total_pgs;
     //size_t used_pgs;
@@ -196,8 +203,9 @@ struct vmem_region {
     //struct vmem_page *pages;
     struct vmem_superpage *superpages;
 
-    /* Buddy system */
-    struct vmem_superpage *heads[VMEM_MAX_BUDDY_ORDER + 1];
+    /* Buddy system for superpages and pages */
+    struct vmem_superpage *spgheads[VMEM_MAX_BUDDY_ORDER + 1];
+    struct vmem_page *pgheads[SP_SHIFT + 1];
 
     /* Pointer to the next region */
     struct vmem_region *next;
@@ -339,7 +347,7 @@ struct kmem {
     struct kmem_slab_root slab;
 
     /* Architecture-specific data structure of kernel memory */
-    void *arch;
+    //void *arch;
 
     /* Virtual memory */
     struct vmem_space *space;
@@ -500,8 +508,10 @@ void vmem_space_delete(struct vmem_space *);
 int vmem_buddy_init(struct vmem_region *);
 void * vmem_alloc_pages(struct vmem_space *, int);
 void vmem_free_pages(struct vmem_space *, void *);
-void * vmem_buddy_alloc(struct vmem_space *, int);
-void vmem_buddy_free(struct vmem_space *, void *);
+void * vmem_buddy_alloc_superpages(struct vmem_space *, int);
+void * vmem_buddy_alloc_pages(struct vmem_space *, int);
+void vmem_buddy_free_superpages(struct vmem_space *, void *);
+void vmem_buddy_free_pages(struct vmem_space *, void *);
 
 void * pmem_alloc_pages(int, int);
 void pmem_free_pages(void *);
