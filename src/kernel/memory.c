@@ -28,8 +28,6 @@ struct kmem *g_kmem;
 
 u64 binorder(u64);
 int kmem_remap(u64, u64, int);
-int vmem_arch_init(struct vmem_space *);
-int vmem_remap(struct vmem_space *, u64, u64, int);
 u64 vmem_paddr(struct vmem_space *, u64);
 
 /* Prototype declarations of static functions */
@@ -458,11 +456,13 @@ vmem_space_create(void)
     space->first_region = region;
 
     /* Initialize the architecture-specific data structure */
+#if 0
     if ( vmem_arch_init(space) < 0 ) {
         /* FIXME: Release pages in the region */
         kfree(space);
         return NULL;
     }
+#endif
 
     return space;
 }

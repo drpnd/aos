@@ -26,11 +26,6 @@
 #include "arch.h"
 #include "memory.h"
 
-#define FLOOR(val, base)        ((val) / (base)) * (base)
-#define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
-
-int vmem_remap(struct vmem_space *, u64, u64, int);
-
 /*
  * Create a new task
  */
@@ -474,21 +469,23 @@ proc_create(const char *path, const char *name, pid_t pid)
     }
 
     /* Prepare the user stack */
-    ppage1 = pmem_alloc_page(0);
+    ppage1 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
     if ( NULL == ppage1 ) {
         goto error_ustack;
     }
     t->ustack = (void *)USTACK_INIT;
-    vmem_remap(proc->vmem, (u64)t->ustack, (u64)ppage1, 1);
+    /* FIXME */
+    //vmem_remap(proc->vmem, (u64)t->ustack, (u64)ppage1, 1);
 
     /* Prepare exec */
-    ppage2 = pmem_alloc_page(0);
+    ppage2 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
     if ( NULL == ppage2 ) {
         goto error_exec;
         return -1;
     }
     exec = (void *)CODE_INIT;
-    vmem_remap(proc->vmem, (u64)exec, (u64)ppage2, 1);
+    /* FIXME */
+    //vmem_remap(proc->vmem, (u64)exec, (u64)ppage2, 1);
     (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
 
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
