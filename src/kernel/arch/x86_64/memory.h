@@ -43,6 +43,7 @@ void * arch_pmem_alloc_pages(int, int);
 void * arch_pmem_alloc_page(int);
 void arch_pmem_free_pages(void *);
 u64 kmem_paddr(u64);
+int arch_vmem_map(struct vmem_space *, u64, u64, int);
 
 #endif /* _KERNEL_MEMORY_H */
 

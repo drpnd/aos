@@ -200,7 +200,6 @@ struct vmem_region {
     //size_t used_pgs;
 
     /* Superpages belonging to this region */
-    //struct vmem_page *pages;
     struct vmem_superpage *superpages;
 
     /* Buddy system for superpages and pages */
@@ -329,8 +328,8 @@ struct kmem_slab_root {
 /*
  * Free pages in kmem region
  */
-struct kmem_free_page {
-    struct kmem_free_page *next;
+struct kmem_mm_page {
+    struct kmem_mm_page *next;
 };
 
 /*
@@ -344,14 +343,11 @@ struct kmem {
     /* Slab allocator */
     struct kmem_slab_root slab;
 
-    /* Architecture-specific data structure of kernel memory */
-    //void *arch;
-
     /* Virtual memory */
     struct vmem_space *space;
 
     /* Free pages */
-    struct kmem_free_page *free_pgs;
+    struct kmem_mm_page *mm_pgs;
 
 
     /* Physical memory */

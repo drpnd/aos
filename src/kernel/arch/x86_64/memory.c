@@ -355,7 +355,7 @@ _kmem_init(struct kstring *region)
     struct kmem *kmem;
     struct vmem_space *space;
     struct vmem_region *reg;
-    struct kmem_free_page *fpg;
+    struct kmem_mm_page *fpg;
     int ret;
 
     /* Reset the offset to KMEM_BASE for the memory arrangement */
@@ -388,13 +388,13 @@ _kmem_init(struct kstring *region)
     kmem->space = space;
 
     /* Add the remaining pages to the free page list */
-    kmem->free_pgs = NULL;
+    kmem->mm_pgs = NULL;
     for ( i = DIV_CEIL(off, PAGESIZE);
           i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE); i++ ) {
         /* Prepend a page */
-        fpg = (struct kmem_free_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
-        fpg->next = kmem->free_pgs;
-        kmem->free_pgs = fpg;
+        fpg = (struct kmem_mm_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
+        fpg->next = kmem->mm_pgs;
+        kmem->mm_pgs = fpg;
     }
 
     /* Initialize slab */
@@ -767,25 +767,25 @@ _kmem_vmem_space_pgt_reflect(struct kmem *kmem)
 static void *
 _kmem_page_alloc(struct kmem *kmem)
 {
-    struct kmem_free_page *fpg;
+    struct kmem_mm_page *fpg;
     int ret;
 
     /* Get the head of the free page list */
-    fpg = kmem->free_pgs;
+    fpg = kmem->mm_pgs;
     if ( NULL == fpg ) {
         /* No free page found */
         return NULL;
     }
-    kmem->free_pgs = fpg->next;
+    kmem->mm_pgs = fpg->next;
 
-    if ( NULL == kmem->free_pgs ) {
+    if ( NULL == kmem->mm_pgs ) {
         /* Pages for memory management are empty, then allocate new pages using
            the fpg page. */
         ret = _kmem_create_mm_region(kmem, fpg);
         if ( ret < 0 ) {
             /* Failed, then return an error */
-            fpg->next = kmem->free_pgs;
-            kmem->free_pgs = fpg;
+            fpg->next = kmem->mm_pgs;
+            kmem->mm_pgs = fpg;
             return NULL;
         }
     }
@@ -800,7 +800,7 @@ static int
 _kmem_create_mm_region(struct kmem *kmem, void *availpg)
 {
     void *paddr;
-    struct kmem_free_page *fpg;
+    struct kmem_mm_page *fpg;
     struct vmem_region *reg;
     struct vmem_superpage *spg;
     void *vstart;
@@ -859,8 +859,8 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
     for ( i = 0; i < SUPERPAGESIZE / PAGESIZE; i++ ) {
         fpg = vstart + PAGE_ADDR(i);
         /* Prepend the page to the list */
-        fpg->next = kmem->free_pgs;
-        kmem->free_pgs = fpg;
+        fpg->next = kmem->mm_pgs;
+        kmem->mm_pgs = fpg;
     }
 
     return 0;
@@ -872,13 +872,13 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
 static void
 _kmem_page_free(struct kmem *kmem, void *vaddr)
 {
-    struct kmem_free_page *fpg;
+    struct kmem_mm_page *fpg;
 
     /* Resolve the virtual address */
-    fpg = (struct kmem_free_page *)vaddr;
+    fpg = (struct kmem_mm_page *)vaddr;
     /* Return to the list */
-    fpg->next = kmem->free_pgs;
-    kmem->free_pgs = fpg;
+    fpg->next = kmem->mm_pgs;
+    kmem->mm_pgs = fpg;
 }
 
 /*
@@ -1277,7 +1277,7 @@ vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
 /*
  * Map a virtual page to a physical page
  */
-static int
+int
 arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
 {
     struct arch_vmem_space *avmem;
