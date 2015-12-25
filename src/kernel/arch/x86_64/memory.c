@@ -51,9 +51,9 @@ int g_paddr_width;
  */
 static struct kmem * _kmem_init(struct kstring *);
 static int _kmem_pgt_init(struct arch_vmem_space **, u64 *);
-static void * _kmem_page_alloc(struct kmem *);
+static void * _kmem_mm_page_alloc(struct kmem *);
 static int _kmem_create_mm_region(struct kmem *, void *);
-static void _kmem_page_free(struct kmem *, void *);
+static void _kmem_mm_page_free(struct kmem *, void *);
 static struct vmem_space * _kmem_vmem_space_create(void *, u64, u64 *);
 static int _kmem_vmem_space_pgt_reflect(struct kmem *);
 static int _kmem_vmem_map(struct kmem *, u64, u64, int);
@@ -765,7 +765,7 @@ _kmem_vmem_space_pgt_reflect(struct kmem *kmem)
  * Get a free page
  */
 static void *
-_kmem_page_alloc(struct kmem *kmem)
+_kmem_mm_page_alloc(struct kmem *kmem)
 {
     struct kmem_mm_page *fpg;
     int ret;
@@ -870,7 +870,7 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
  * Release a page to the free list
  */
 static void
-_kmem_page_free(struct kmem *kmem, void *vaddr)
+_kmem_mm_page_free(struct kmem *kmem, void *vaddr)
 {
     struct kmem_mm_page *fpg;
 
@@ -930,7 +930,7 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
             vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
 
             /* Delete descendant table */
-            _kmem_page_free(kmem, vpt);
+            _kmem_mm_page_free(kmem, vpt);
         }
 
         /* Remapping */
@@ -956,7 +956,7 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         if ( !VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
              || VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Not present or 2 MiB page, then create a new page table */
-            vpt = _kmem_page_alloc(kmem);
+            vpt = _kmem_mm_page_alloc(kmem);
             if ( NULL == vpt ) {
                 return -1;
             }
@@ -1028,7 +1028,7 @@ _kmem_superpage_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
 
         /* Delete descendant table */
-        _kmem_page_free(kmem, vpt);
+        _kmem_mm_page_free(kmem, vpt);
     }
 
     /* Remapping */
@@ -1323,7 +1323,7 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
             vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
 
             /* Delete descendant table */
-            _kmem_page_free(g_kmem, vpt);
+            _kmem_mm_page_free(g_kmem, vpt);
         }
 
         /* Remapping */
@@ -1349,7 +1349,7 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
         if ( !VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
              || VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Not present or 2 MiB page, then create a new page table */
-            vpt = _kmem_page_alloc(g_kmem);
+            vpt = _kmem_mm_page_alloc(g_kmem);
             if ( NULL == vpt ) {
                 return -1;
             }
