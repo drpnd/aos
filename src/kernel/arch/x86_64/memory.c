@@ -27,15 +27,17 @@
 #include "../../kernel.h"
 
 extern struct kmem *g_kmem;
+int g_paddr_width;
 
 #define KMEM_LOW_P2V(a)     (a)
 
 #define KMEM_DIR_RW(a)          ((a) | 0x007ULL)
 #define KMEM_PG_RW(a)           ((a) | 0x083ULL)
 #define KMEM_PG_GRW(a)          ((a) | 0x183ULL)
-#define KMEM_IS_PAGE(a)         ((a) & 0x080ULL)
-#define KMEM_IS_PRESENT(a)      ((a) & 0x001ULL)
-#define KMEM_PT(a)              (u64 *)((a) & 0x7ffffffffffffe00ULL)
+#define VMEM_IS_PAGE(a)         ((a) & 0x080ULL)
+#define VMEM_IS_PRESENT(a)      ((a) & 0x001ULL)
+#define VMEM_PT(a)              (u64 *)((a) & 0x7ffffffffffff000ULL)
+#define VMEM_PDPG(a)            (void *)((a) & 0x7fffffffffe00000ULL)
 
 /* Type of memory area */
 #define BSE_USABLE              1
@@ -50,10 +52,12 @@ extern struct kmem *g_kmem;
 static struct kmem * _kmem_init(struct kstring *);
 static int _kmem_pgt_init(struct arch_vmem_space **, u64 *);
 static void * _kmem_page_alloc(struct kmem *);
+static int _kmem_create_mm_region(struct kmem *, void *);
 static void _kmem_page_free(struct kmem *, void *);
 static struct vmem_space * _kmem_vmem_space_create(void *, u64, u64 *);
 static int _kmem_vmem_space_pgt_reflect(struct kmem *);
 static int _kmem_vmem_map(struct kmem *, u64, u64, int);
+static int _kmem_superpage_map(struct kmem *, u64, u64, int);
 static int
 _pmem_init_stage1(struct bootinfo *, struct acpi *, struct kstring *,
                   struct kstring *, struct kstring *);
@@ -94,6 +98,13 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
     struct kstring pmem;
     struct kstring pmem_pages;
     int ret;
+    u64 rax;
+    u64 rcx;
+    u64 rdx;
+
+    /* Get the physical-address width */
+    rax = cpuid(0x80000008, &rcx, &rdx);
+    g_paddr_width = rax & 0xff;
 
     /* Stage 1: Initialize the physical memory with the page table of linear
        addressing.  This allocates the data structure for the physical memory
@@ -382,7 +393,6 @@ _kmem_init(struct kstring *region)
           i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE); i++ ) {
         /* Prepend a page */
         fpg = (struct kmem_free_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
-        fpg->paddr = (void *)(KMEM_BASE + PAGE_ADDR(i));
         fpg->next = kmem->free_pgs;
         kmem->free_pgs = fpg;
     }
@@ -758,6 +768,7 @@ static void *
 _kmem_page_alloc(struct kmem *kmem)
 {
     struct kmem_free_page *fpg;
+    int ret;
 
     /* Get the head of the free page list */
     fpg = kmem->free_pgs;
@@ -767,20 +778,104 @@ _kmem_page_alloc(struct kmem *kmem)
     }
     kmem->free_pgs = fpg->next;
 
-    return fpg->paddr;
+    if ( NULL == kmem->free_pgs ) {
+        /* Pages for memory management are empty, then allocate new pages using
+           the fpg page. */
+        ret = _kmem_create_mm_region(kmem, fpg);
+        if ( ret < 0 ) {
+            /* Failed, then return an error */
+            fpg->next = kmem->free_pgs;
+            kmem->free_pgs = fpg;
+            return NULL;
+        }
+    }
+
+    return (void *)fpg;
+}
+
+/*
+ * Create a new region for memory management
+ */
+static int
+_kmem_create_mm_region(struct kmem *kmem, void *availpg)
+{
+    void *paddr;
+    struct kmem_free_page *fpg;
+    struct vmem_region *reg;
+    struct vmem_superpage *spg;
+    void *vstart;
+    size_t sz;
+    size_t i;
+    int ret;
+
+    /* Allocate for the data structure of new region */
+    sz = sizeof(struct vmem_region) + sizeof(struct vmem_superpage);
+    if ( sz >= PAGESIZE ) {
+        return -1;
+    }
+
+    /* Allocate physical page */
+    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, binorder(SUPERPAGESIZE));
+    if ( NULL == paddr ) {
+        return -1;
+    }
+
+    /* Search available memory space for region allocation */
+    vstart = vmem_search_available_region(kmem->space, SUPERPAGESIZE);
+    if ( NULL == vstart ) {
+        pmem_free_pages(paddr);
+        return -1;
+    }
+
+    /* Update the page table */
+    ret = _kmem_superpage_map(kmem, (u64)vstart, (u64)paddr,
+                              VMEM_SUPERPAGE | VMEM_USED | VMEM_USABLE);
+    if ( ret < 0 ) {
+        pmem_free_pages(paddr);
+        return -1;
+    }
+
+    /* Prepare the region */
+    reg = (struct vmem_region *)availpg;
+    spg = (struct vmem_superpage *)(reg + 1);
+    kmemset(reg, 0, sizeof(struct vmem_region));
+    kmemset(spg, 0, sizeof(struct vmem_superpage));
+
+    /* Prepare the allocated superpage */
+    spg->flags = VMEM_SUPERPAGE | VMEM_USED | VMEM_USABLE;
+    spg->u.superpage.addr = (reg_t)paddr;
+    spg->order = 0;
+    spg->region = reg;
+    spg->next = NULL;
+    spg->prev = NULL;
+
+    /* Prepare the allocated region */
+    reg->start = vstart;
+    reg->len = SUPERPAGESIZE;
+    reg->superpages = spg;
+
+    /* Use all pages in this superpage as memory management pages, and add them
+       to the list of free pages in kmem. */
+    for ( i = 0; i < SUPERPAGESIZE / PAGESIZE; i++ ) {
+        fpg = vstart + PAGE_ADDR(i);
+        /* Prepend the page to the list */
+        fpg->next = kmem->free_pgs;
+        kmem->free_pgs = fpg;
+    }
+
+    return 0;
 }
 
 /*
  * Release a page to the free list
  */
 static void
-_kmem_page_free(struct kmem *kmem, void *paddr)
+_kmem_page_free(struct kmem *kmem, void *vaddr)
 {
     struct kmem_free_page *fpg;
 
     /* Resolve the virtual address */
-    fpg = KMEM_LOW_P2V(paddr);
-    fpg->paddr = paddr;
+    fpg = (struct kmem_free_page *)vaddr;
     /* Return to the list */
     fpg->next = kmem->free_pgs;
     kmem->free_pgs = fpg;
@@ -828,14 +923,14 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         }
 
         /* Check whether the page presented */
-        if ( KMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
-             && !KMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
+        if ( VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             && !VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Present and 4 KiB paging, then remove the descendant table */
-            pt = KMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
-            vpt = KMEM_PT(avmem->vls[idxpd][idxp]);
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
 
             /* Delete descendant table */
-            _kmem_page_free(kmem, pt);
+            _kmem_page_free(kmem, vpt);
         }
 
         /* Remapping */
@@ -858,22 +953,22 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         }
 
         /* Check whether the page presented */
-        if ( !KMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
-             || KMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
+        if ( !VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             || VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Not present or 2 MiB page, then create a new page table */
-            pt = _kmem_page_alloc(kmem);
-            /* Get the virtual address */
-            vpt = KMEM_LOW_P2V(pt);
-            if ( NULL == pt ) {
+            vpt = _kmem_page_alloc(kmem);
+            if ( NULL == vpt ) {
                 return -1;
             }
+            /* Get the virtual address */
+            pt = vmem_addr_v2p(kmem->space, vpt);
             /* Update the entry */
             VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_DIR_RW((u64)pt);
             avmem->vls[idxpd][idxp] = KMEM_DIR_RW((u64)vpt);
         } else {
             /* Directory */
-            pt = KMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
-            vpt = KMEM_PT(avmem->vls[idxpd][idxp]);
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
         }
 
         /* Remapping */
@@ -886,6 +981,67 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         /* Invalidate the page */
         invlpg((void *)vaddr);
     }
+
+    return 0;
+}
+
+/*
+ * Map a virtual page to a physical super page
+ */
+static int
+_kmem_superpage_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
+{
+    struct arch_vmem_space *avmem;
+    int idxpd;
+    int idxp;
+    u64 *pt;
+    u64 *vpt;
+
+    /* Check the flags */
+    if ( !(VMEM_USABLE & flags) || !(VMEM_USED & flags) ) {
+        /* This page is not usable nor used, then do nothing. */
+        return -1;
+    }
+
+    /* Get the architecture-specific kernel memory manager */
+    avmem = (struct arch_vmem_space *)kmem->space->arch;
+
+    /* Index to page directory */
+    idxpd = (vaddr >> 30);
+    if ( idxpd >= 4 ) {
+        return -1;
+    }
+    /* Index to page table */
+    idxp = (vaddr >> 21) & 0x1ff;
+
+    /* Check the physical address argument */
+    if ( 0 != (paddr % SUPERPAGESIZE) || 0 != (vaddr % SUPERPAGESIZE) ) {
+        /* Invalid physical address */
+        return -1;
+    }
+
+    /* Check whether the page presented */
+    if ( VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+         && !VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
+        /* Present and 4 KiB paging, then remove the descendant table */
+        pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+        vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
+
+        /* Delete descendant table */
+        _kmem_page_free(kmem, vpt);
+    }
+
+    /* Remapping */
+    if ( flags & VMEM_GLOBAL ) {
+        VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_GRW(paddr);
+        avmem->vls[idxpd][idxp] = KMEM_PG_GRW(vaddr);
+    } else {
+        VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_RW(paddr);
+        avmem->vls[idxpd][idxp] = KMEM_PG_RW(vaddr);
+    }
+
+    /* Invalidate the page */
+    invlpg((void *)vaddr);
 
     return 0;
 }
@@ -1124,8 +1280,7 @@ vmem_remap(struct vmem_space *vmem, u64 vaddr, u64 paddr, int flag)
 static int
 arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
 {
-#if 0
-    struct arch_kmem *akmem;
+    struct arch_vmem_space *avmem;
     int idxpd;
     int idxp;
     int idx;
@@ -1139,7 +1294,7 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
     }
 
     /* Get the architecture-specific kernel memory manager */
-    akmem = (struct arch_kmem *)kmem->arch;
+    avmem = (struct arch_vmem_space *)space->arch;
 
     /* Index to page directory */
     idxpd = (vaddr >> 30);
@@ -1161,23 +1316,23 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
         }
 
         /* Check whether the page presented */
-        if ( KMEM_IS_PRESENT(akmem->pd[idxpd][idxp])
-             && !KMEM_IS_PAGE(akmem->pd[idxpd][idxp]) ) {
+        if ( VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             && !VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Present and 4 KiB paging, then remove the descendant table */
-            pt = KMEM_PT(akmem->pd[idxpd][idxp]);
-            vpt = KMEM_PT(akmem->vpd[idxpd][idxp]);
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
 
             /* Delete descendant table */
-            _kmem_page_free(kmem, pt);
+            _kmem_page_free(g_kmem, vpt);
         }
 
         /* Remapping */
         if ( flags & VMEM_GLOBAL ) {
-            akmem->pd[idxpd][idxp] = KMEM_PG_GRW(paddr);
-            akmem->vpd[idxpd][idxp] = KMEM_PG_GRW(vaddr);
+            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_GRW(paddr);
+            avmem->vls[idxpd][idxp] = KMEM_PG_GRW(vaddr);
         } else {
-            akmem->pd[idxpd][idxp] = KMEM_PG_RW(paddr);
-            akmem->vpd[idxpd][idxp] = KMEM_PG_RW(vaddr);
+            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_RW(paddr);
+            avmem->vls[idxpd][idxp] = KMEM_PG_RW(vaddr);
         }
 
         /* Invalidate the page */
@@ -1191,22 +1346,23 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
         }
 
         /* Check whether the page presented */
-        if ( !KMEM_IS_PRESENT(akmem->pd[idxpd][idxp])
-             || KMEM_IS_PAGE(akmem->pd[idxpd][idxp]) ) {
+        if ( !VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             || VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
             /* Not present or 2 MiB page, then create a new page table */
-            pt = _kmem_page_alloc(kmem);
-            /* Get the virtual address */
-            vpt = KMEM_LOW_P2V(pt);
-            if ( NULL == pt ) {
+            vpt = _kmem_page_alloc(g_kmem);
+            if ( NULL == vpt ) {
                 return -1;
             }
+            /* Get the virtual address */
+            pt = vmem_addr_v2p(g_kmem->space, vpt);
+
             /* Update the entry */
-            akmem->pd[idxpd][idxp] = KMEM_DIR_RW((u64)pt);
-            akmem->vpd[idxpd][idxp] = KMEM_DIR_RW((u64)vpt);
+            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_DIR_RW((u64)pt);
+            avmem->vls[idxpd][idxp] = KMEM_DIR_RW((u64)vpt);
         } else {
             /* Directory */
-            pt = KMEM_PT(akmem->pd[idxpd][idxp]);
-            vpt = KMEM_PT(akmem->vpd[idxpd][idxp]);
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
         }
 
         /* Remapping */
@@ -1219,8 +1375,79 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
         /* Invalidate the page */
         invlpg((void *)vaddr);
     }
-#endif
+
     return 0;
+}
+
+/*
+ * Search the start address of available region
+ */
+void *
+vmem_search_available_region(struct vmem_space *space, size_t size)
+{
+    struct vmem_region *reg;
+    reg_t maxaddr;
+
+    /* Search the maximum address in the space */
+    reg = space->first_region;
+    maxaddr = 0;
+    while ( NULL != reg ) {
+        if ( (reg_t)reg->start + reg->len > maxaddr ) {
+            maxaddr = (reg_t)reg->start + reg->len;
+        }
+        reg = reg->next;
+    }
+
+    /* Check the range of the physical-memory address */
+    if ( (1ULL << g_paddr_width) < size
+         || maxaddr >= (1ULL << g_paddr_width) - size ) {
+        /* Out of the range */
+        return NULL;
+    }
+
+    return (void *)maxaddr;
+}
+
+/*
+ * Resolve the physical address of the specified virtual address in a virtual
+ * memory space
+ */
+void *
+vmem_addr_v2p(struct vmem_space *space, void *vaddr)
+{
+    struct arch_vmem_space *avmem;
+    int idxpd;
+    int idxp;
+    int idx;
+    u64 *pt;
+    u64 off;
+
+    /* Get the architecture-specific data structure */
+    avmem = (struct arch_vmem_space *)space->arch;
+
+    /* Index to page directory */
+    idxpd = ((reg_t)vaddr >> 30);
+    if ( idxpd >= avmem->nr ) {
+        /* Oversized */
+        return NULL;
+    }
+    /* Index to page table */
+    idxp = ((reg_t)vaddr >> 21) & 0x1ff;
+    /* Index to page entry */
+    idx = ((reg_t)vaddr >> 12) & 0x1ffULL;
+
+    if ( VMEM_IS_PAGE(avmem->vls[idxpd][idxp]) ) {
+        /* 2-MiB paging */
+        /* Get the offset */
+        off = ((reg_t)vaddr) & 0x1fffffULL;
+        return (void *)(VMEM_PDPG(avmem->vls[idxpd][idxp]) + off);
+    } else {
+        /* 4-KiB paging */
+        pt = VMEM_PT(avmem->vls[idxpd][idxp]);
+        /* Get the offset */
+        off = ((reg_t)vaddr) & 0xfffULL;
+        return (void *)(pt[idx] + off);
+    }
 }
 
 /*

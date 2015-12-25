@@ -241,7 +241,6 @@ struct pmem_page {
  */
 struct pmem_buddy {
     u32 heads[PMEM_MAX_BUDDY_ORDER + 1];
-    //struct pmem_page *heads[PMEM_MAX_BUDDY_ORDER + 1];
 };
 
 /*
@@ -331,7 +330,6 @@ struct kmem_slab_root {
  * Free pages in kmem region
  */
 struct kmem_free_page {
-    void *paddr;
     struct kmem_free_page *next;
 };
 
@@ -354,6 +352,7 @@ struct kmem {
 
     /* Free pages */
     struct kmem_free_page *free_pgs;
+
 
     /* Physical memory */
     struct pmem *pmem;
@@ -512,6 +511,8 @@ void * vmem_buddy_alloc_superpages(struct vmem_space *, int);
 void * vmem_buddy_alloc_pages(struct vmem_space *, int);
 void vmem_buddy_free_superpages(struct vmem_space *, void *);
 void vmem_buddy_free_pages(struct vmem_space *, void *);
+void * vmem_search_available_region(struct vmem_space *, size_t);
+void * vmem_addr_v2p(struct vmem_space *, void *);
 
 void * pmem_alloc_pages(int, int);
 void pmem_free_pages(void *);
