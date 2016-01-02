@@ -52,7 +52,7 @@
 	.globl	_kmemset
 	.globl	_kmemcmp
 	.globl	_kmemcpy
-	.globl	_binorder
+	.globl	_bitwidth
 	.globl	_spin_lock_intr
 	.globl	_spin_unlock_intr
 	.globl	_spin_lock
@@ -349,8 +349,8 @@ _kmemcpy:
 	rep	movsb		/* Copy byte at (%rsi) to (%rdi) */
 	ret
 
-/* u64 binorder(u64) */
-_binorder:
+/* u64 bitwidth(u64) */
+_bitwidth:
 	decq	%rdi
 	xorq	%rax,%rax
 	testq	%rdi,%rdi

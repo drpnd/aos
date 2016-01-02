@@ -328,7 +328,6 @@ void mfwrite32(u64, u32);
 u64 cpuid(u64, u64 *, u64 *);
 u64 rdmsr(u64);
 void wrmsr(u64, u64);
-u64 binorder(u64);
 u64 get_cr0(void);
 void set_cr0(u64);
 void * get_cr3(void);

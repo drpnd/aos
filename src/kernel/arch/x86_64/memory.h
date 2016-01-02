@@ -39,7 +39,6 @@
 
 /* in memory.c */
 int arch_memory_init(struct bootinfo *, struct acpi *);
-int arch_vmem_map(struct vmem_space *, u64, u64, int);
 
 #endif /* _KERNEL_MEMORY_H */
 

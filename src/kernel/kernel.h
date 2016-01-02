@@ -38,8 +38,8 @@
 #define SUPERPAGESIZE           (1ULL << 21)    /* 2 MiB */
 #define SP_SHIFT                9               /* log2(2M/4K)*/
 
-#define PAGE_ADDR(i)            (PAGESIZE * (i))
-#define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (i))
+#define PAGE_ADDR(i)            (PAGESIZE * (u64)(i))
+#define SUPERPAGE_ADDR(i)       (SUPERPAGESIZE * (u64)(i))
 #define PAGE_INDEX(a)           ((u64)(a) / PAGESIZE)
 #define SUPERPAGE_INDEX(a)      ((u64)(a) / SUPERPAGESIZE)
 
@@ -76,12 +76,8 @@
 #define VMEM_USED               (1<<1)
 #define VMEM_GLOBAL             (1<<2)
 #define VMEM_SUPERPAGE          (1<<3)
-#define VMEM_MMAN               (1<<4)
 #define VMEM_IS_FREE(x)         (VMEM_USABLE == ((x)->flags & 0x3))
 #define VMEM_IS_SUPERPAGE(x)    (VMEM_SUPERPAGE & (x)->flags)
-
-#define VMEM_NORM_REGION        0
-#define VMEM_MMAN_REGION        1
 
 #define INITRAMFS_BASE          0x20000ULL
 #define USTACK_INIT             0xbfe00000ULL
@@ -156,7 +152,7 @@ struct vmem_page {
     /* Buddy system */
     struct vmem_page *next;
     struct vmem_page *prev;
-} __attribute__ ((packed));
+};
 
 /*
  * Virtual superpage
@@ -192,8 +188,6 @@ struct vmem_region {
     /* Region information */
     ptr_t start;
     size_t len;                 /* Constant multiplication of SUPERPAGESIZE */
-
-    int type;
 
     /* Capacity and the number of used pages */
     //size_t total_pgs;
@@ -346,9 +340,15 @@ struct kmem {
     /* Virtual memory */
     struct vmem_space *space;
 
-    /* Free pages */
-    struct kmem_mm_page *mm_pgs;
-
+    /* Memory pool; Page data structure pool */
+    struct {
+        /* Free pages for page table */
+        struct kmem_mm_page *mm_pgs;
+        /* Pages in a superpage */
+        //struct vmem_page *spgs;
+        /* Regions */
+        //struct vmem_region *regs;
+    } pool;
 
     /* Physical memory */
     struct pmem *pmem;
@@ -472,6 +472,15 @@ extern struct pmem *pmem;
 extern struct proc_table *proc_table;
 extern struct ktask_root *ktask_root;
 
+/* for variable-length arguments */
+typedef __builtin_va_list va_list;
+#define va_start(ap, last)      __builtin_va_start((ap), (last))
+#define va_arg                  __builtin_va_arg
+#define va_end(ap)              __builtin_va_end(ap)
+#define va_copy(dest, src)      __builtin_va_copy((dest), (src))
+#define alloca(size)            __builtin_alloca((size))
+
+
 /* in kernel.c */
 void kernel(void);
 int kstrcmp(const char *, const char *);
@@ -479,6 +488,10 @@ size_t kstrlen(const char *);
 char * kstrcpy(char *, const char *);
 char * kstrncpy(char *, const char *, size_t);
 size_t kstrlcpy(char *, const char *, size_t);
+
+/* in strfmt.c */
+int kvsnprintf(char *, size_t, const char *, va_list);
+int ksnprintf(char *, size_t, const char *, ...);
 
 /* in asm.s */
 #define HAS_KMEMSET     1       /* kmemset is implemented in asm.s. */
@@ -508,9 +521,10 @@ void * vmem_buddy_alloc_pages(struct vmem_space *, int);
 void vmem_buddy_free_superpages(struct vmem_space *, void *);
 void vmem_buddy_free_pages(struct vmem_space *, void *);
 void * vmem_search_available_region(struct vmem_space *, size_t);
-void * vmem_addr_v2p(struct vmem_space *, void *);
 
 void * pmem_alloc_pages(int, int);
+void * pmem_alloc_page(int);
+void * pmem_alloc_superpage(int);
 void pmem_free_pages(void *);
 
 /* in ramfs.c */
@@ -536,6 +550,7 @@ int sys_sysarch(int, void *);
 
 /* The followings are mandatory functions for the kernel and should be
    implemented somewhere in arch/<arch_name>/ */
+reg_t bitwidth(reg_t);
 struct ktask * this_ktask(void);
 void set_next_ktask(struct ktask *);
 void set_next_idle(void);
@@ -546,6 +561,9 @@ void task_set_return(struct ktask *, unsigned long long);
 pid_t sys_fork(void);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
+int arch_vmem_map(struct vmem_space *, void *, void *, int);
+int arch_address_width(void);
+void * arch_vmem_addr_v2p(struct vmem_space *, void *);
 
 #endif /* _KERNEL_H */
 

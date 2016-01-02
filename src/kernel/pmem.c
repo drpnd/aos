@@ -114,6 +114,28 @@ pmem_alloc_page(int zone)
 }
 
 /*
+ * Allocate a superpage from the specified zone of a physical memory region
+ *
+ * SYNOPSIS
+ *      void *
+ *      pmem_alloc_superpage(int zone);
+ *
+ * DESCRIPTION
+ *      The pmem_alloc_superpage() function allocates a superpages of physical
+ *      memory from the zone of a physical memory region specified by the zone
+ *      argument.
+ *
+ * RETURN VALUES
+ *      The pmem_alloc_superpage() function returns a pointer to allocated
+ *      physical memory.  If there is an error, it returns NULL.
+ */
+void *
+pmem_alloc_superpage(int zone)
+{
+    return pmem_alloc_pages(zone, SP_SHIFT);
+}
+
+/*
  * Deallocate physical memory space pointed by a
  *
  * SYNOPSIS

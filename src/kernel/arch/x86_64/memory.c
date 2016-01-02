@@ -27,7 +27,7 @@
 #include "../../kernel.h"
 
 extern struct kmem *g_kmem;
-int g_paddr_width;
+extern int g_paddr_width;
 
 #define KMEM_LOW_P2V(a)     (a)
 
@@ -355,7 +355,7 @@ _kmem_init(struct kstring *region)
     struct kmem *kmem;
     struct vmem_space *space;
     struct vmem_region *reg;
-    struct kmem_mm_page *fpg;
+    struct kmem_mm_page *mmpg;
     int ret;
 
     /* Reset the offset to KMEM_BASE for the memory arrangement */
@@ -388,13 +388,13 @@ _kmem_init(struct kstring *region)
     kmem->space = space;
 
     /* Add the remaining pages to the free page list */
-    kmem->mm_pgs = NULL;
+    kmem->pool.mm_pgs = NULL;
     for ( i = DIV_CEIL(off, PAGESIZE);
           i < DIV_FLOOR(KMEM_MAX_SIZE, PAGESIZE); i++ ) {
         /* Prepend a page */
-        fpg = (struct kmem_mm_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
-        fpg->next = kmem->mm_pgs;
-        kmem->mm_pgs = fpg;
+        mmpg = (struct kmem_mm_page *)KMEM_LOW_P2V(KMEM_BASE + PAGE_ADDR(i));
+        mmpg->next = kmem->pool.mm_pgs;
+        kmem->pool.mm_pgs = mmpg;
     }
 
     /* Initialize slab */
@@ -574,7 +574,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_low, 0, sizeof(struct vmem_region));
     reg_low->start = (void *)0;
     reg_low->len = CEIL(PMEM_LBOUND, SUPERPAGESIZE);
-    reg_low->type = VMEM_NORM_REGION;
 
     /* Physical pages: This region is not placed at the kernel region because
        this is not directly referred from user-land processes (e.g., through
@@ -587,7 +586,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_pmem, 0, sizeof(struct vmem_region));
     reg_pmem->start = (void *)KMEM_REGION_PMEM_BASE;
     reg_pmem->len = CEIL(pmsz, SUPERPAGESIZE);
-    reg_pmem->type = VMEM_NORM_REGION;
 
     /* Kernel address space (3-3.64 GiB) */
     reg_kernel = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
@@ -598,7 +596,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_kernel, 0, sizeof(struct vmem_region));
     reg_kernel->start = (void *)KMEM_REGION_KERNEL_BASE;
     reg_kernel->len = KMEM_REGION_KERNEL_SIZE;
-    reg_kernel->type = VMEM_NORM_REGION;
 
     /* Kernel address space for special use (3.64-4 GiB) */
     reg_spec = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
@@ -609,7 +606,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     kmemset(reg_spec, 0, sizeof(struct vmem_region));
     reg_spec->start = (void *)KMEM_REGION_SPEC_BASE;
     reg_spec->len = KMEM_REGION_SPEC_SIZE;
-    reg_spec->type = VMEM_NORM_REGION;
 
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
@@ -767,30 +763,30 @@ _kmem_vmem_space_pgt_reflect(struct kmem *kmem)
 static void *
 _kmem_mm_page_alloc(struct kmem *kmem)
 {
-    struct kmem_mm_page *fpg;
+    struct kmem_mm_page *mmpg;
     int ret;
 
     /* Get the head of the free page list */
-    fpg = kmem->mm_pgs;
-    if ( NULL == fpg ) {
+    mmpg = kmem->pool.mm_pgs;
+    if ( NULL == mmpg ) {
         /* No free page found */
         return NULL;
     }
-    kmem->mm_pgs = fpg->next;
+    kmem->pool.mm_pgs = mmpg->next;
 
-    if ( NULL == kmem->mm_pgs ) {
+    if ( NULL == kmem->pool.mm_pgs ) {
         /* Pages for memory management are empty, then allocate new pages using
-           the fpg page. */
-        ret = _kmem_create_mm_region(kmem, fpg);
+           the mmpg page. */
+        ret = _kmem_create_mm_region(kmem, mmpg);
         if ( ret < 0 ) {
             /* Failed, then return an error */
-            fpg->next = kmem->mm_pgs;
-            kmem->mm_pgs = fpg;
+            mmpg->next = kmem->pool.mm_pgs;
+            kmem->pool.mm_pgs = mmpg;
             return NULL;
         }
     }
 
-    return (void *)fpg;
+    return (void *)mmpg;
 }
 
 /*
@@ -800,7 +796,7 @@ static int
 _kmem_create_mm_region(struct kmem *kmem, void *availpg)
 {
     void *paddr;
-    struct kmem_mm_page *fpg;
+    struct kmem_mm_page *mmpg;
     struct vmem_region *reg;
     struct vmem_superpage *spg;
     void *vstart;
@@ -815,7 +811,7 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
     }
 
     /* Allocate physical page */
-    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, binorder(SUPERPAGESIZE));
+    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, bitwidth(SUPERPAGESIZE));
     if ( NULL == paddr ) {
         return -1;
     }
@@ -857,10 +853,10 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
     /* Use all pages in this superpage as memory management pages, and add them
        to the list of free pages in kmem. */
     for ( i = 0; i < SUPERPAGESIZE / PAGESIZE; i++ ) {
-        fpg = vstart + PAGE_ADDR(i);
+        mmpg = vstart + PAGE_ADDR(i);
         /* Prepend the page to the list */
-        fpg->next = kmem->mm_pgs;
-        kmem->mm_pgs = fpg;
+        mmpg->next = kmem->pool.mm_pgs;
+        kmem->pool.mm_pgs = mmpg;
     }
 
     return 0;
@@ -872,13 +868,13 @@ _kmem_create_mm_region(struct kmem *kmem, void *availpg)
 static void
 _kmem_mm_page_free(struct kmem *kmem, void *vaddr)
 {
-    struct kmem_mm_page *fpg;
+    struct kmem_mm_page *mmpg;
 
     /* Resolve the virtual address */
-    fpg = (struct kmem_mm_page *)vaddr;
+    mmpg = (struct kmem_mm_page *)vaddr;
     /* Return to the list */
-    fpg->next = kmem->mm_pgs;
-    kmem->mm_pgs = fpg;
+    mmpg->next = kmem->pool.mm_pgs;
+    kmem->pool.mm_pgs = mmpg;
 }
 
 /*
@@ -961,7 +957,7 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
                 return -1;
             }
             /* Get the virtual address */
-            pt = vmem_addr_v2p(kmem->space, vpt);
+            pt = arch_vmem_addr_v2p(kmem->space, vpt);
             /* Update the entry */
             VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_DIR_RW((u64)pt);
             avmem->vls[idxpd][idxp] = KMEM_DIR_RW((u64)vpt);
@@ -1201,7 +1197,7 @@ _disable_page_global(void)
  * Map a virtual page to a physical page
  */
 int
-arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
+arch_vmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
 {
     struct arch_vmem_space *avmem;
     int idxpd;
@@ -1220,20 +1216,21 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
     avmem = (struct arch_vmem_space *)space->arch;
 
     /* Index to page directory */
-    idxpd = (vaddr >> 30);
+    idxpd = ((u64)vaddr >> 30);
     if ( idxpd >= 4 ) {
         return -1;
     }
     /* Index to page table */
-    idxp = (vaddr >> 21) & 0x1ff;
+    idxp = ((u64)vaddr >> 21) & 0x1ff;
     /* Index to page entry */
-    idx = (vaddr >> 12) & 0x1ffULL;
+    idx = ((u64)vaddr >> 12) & 0x1ffULL;
 
     /* Superpage or page? */
     if ( VMEM_SUPERPAGE & flags ) {
         /* Superpage */
         /* Check the physical address argument */
-        if ( 0 != (paddr % SUPERPAGESIZE) || 0 != (vaddr % SUPERPAGESIZE) ) {
+        if ( 0 != ((u64)paddr % SUPERPAGESIZE)
+             || 0 != ((u64)vaddr % SUPERPAGESIZE) ) {
             /* Invalid physical address */
             return -1;
         }
@@ -1251,11 +1248,11 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
 
         /* Remapping */
         if ( flags & VMEM_GLOBAL ) {
-            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_GRW(paddr);
-            avmem->vls[idxpd][idxp] = KMEM_PG_GRW(vaddr);
+            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_GRW((u64)paddr);
+            avmem->vls[idxpd][idxp] = KMEM_PG_GRW((u64)vaddr);
         } else {
-            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_RW(paddr);
-            avmem->vls[idxpd][idxp] = KMEM_PG_RW(vaddr);
+            VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_RW((u64)paddr);
+            avmem->vls[idxpd][idxp] = KMEM_PG_RW((u64)vaddr);
         }
 
         /* Invalidate the page */
@@ -1263,7 +1260,7 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
     } else {
         /* Page */
         /* Check the physical address argument */
-        if ( 0 != (paddr % PAGESIZE) || 0 != (vaddr % PAGESIZE) ) {
+        if ( 0 != ((u64)paddr % PAGESIZE) || 0 != ((u64)vaddr % PAGESIZE) ) {
             /* Invalid physical address */
             return -1;
         }
@@ -1277,7 +1274,7 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
                 return -1;
             }
             /* Get the virtual address */
-            pt = vmem_addr_v2p(g_kmem->space, vpt);
+            pt = arch_vmem_addr_v2p(g_kmem->space, vpt);
 
             /* Update the entry */
             VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_DIR_RW((u64)pt);
@@ -1290,9 +1287,9 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
 
         /* Remapping */
         if ( flags & VMEM_GLOBAL ) {
-            pt[idx] = KMEM_PG_GRW(paddr);
+            pt[idx] = KMEM_PG_GRW((u64)paddr);
         } else {
-            pt[idx] = KMEM_PG_RW(paddr);
+            pt[idx] = KMEM_PG_RW((u64)paddr);
         }
 
         /* Invalidate the page */
@@ -1303,32 +1300,12 @@ arch_vmem_map(struct vmem_space *space, u64 vaddr, u64 paddr, int flags)
 }
 
 /*
- * Search the start address of available region
+ * Get the address width
  */
-void *
-vmem_search_available_region(struct vmem_space *space, size_t size)
+int
+arch_address_width(void)
 {
-    struct vmem_region *reg;
-    reg_t maxaddr;
-
-    /* Search the maximum address in the space */
-    reg = space->first_region;
-    maxaddr = 0;
-    while ( NULL != reg ) {
-        if ( (reg_t)reg->start + reg->len > maxaddr ) {
-            maxaddr = (reg_t)reg->start + reg->len;
-        }
-        reg = reg->next;
-    }
-
-    /* Check the range of the physical-memory address */
-    if ( (1ULL << g_paddr_width) < size
-         || maxaddr >= (1ULL << g_paddr_width) - size ) {
-        /* Out of the range */
-        return NULL;
-    }
-
-    return (void *)maxaddr;
+    return g_paddr_width;
 }
 
 /*
@@ -1336,7 +1313,7 @@ vmem_search_available_region(struct vmem_space *space, size_t size)
  * memory space
  */
 void *
-vmem_addr_v2p(struct vmem_space *space, void *vaddr)
+arch_vmem_addr_v2p(struct vmem_space *space, void *vaddr)
 {
     struct arch_vmem_space *avmem;
     int idxpd;

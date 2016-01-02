@@ -45,9 +45,6 @@ struct acpi arch_acpi;
 /* Multiprocessor enabled */
 int mp_enabled;
 
-#define FLOOR(val, base)        ((val) / (base)) * (base)
-#define CEIL(val, base)         (((val) - 1) / (base) + 1) * (base)
-
 /*
  * Relocate the trampoline code to a 4 KiB page alined space
  */
@@ -169,8 +166,7 @@ bsp_init(void)
         return;
     }
 
-    /* Map the virtual pages */
-    //arch_acpi.acpi_ioapic_base;
+    /* ToDo: Prepare the virtual pages for ACPI etc. */
 
     /* Initialize I/O APIC */
     ioapic_init();
@@ -187,11 +183,8 @@ bsp_init(void)
     tss_init();
     tr_load(lapic_id());
 
-    panic("stop here for refactoring");
-
     /* Initialize the local APIC */
     lapic_init();
-    //lapic_base_addr(); // to page table
 
     /* Setup system call */
     for ( i = 0; i < SYS_MAXSYSCALL; i++ ) {
@@ -215,6 +208,11 @@ bsp_init(void)
     syscall_table[SYS_lseek] = sys_lseek;
     syscall_table[SYS_sysarch] = sys_sysarch;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
+
+    void *x = kmalloc(10);
+    __asm__ ("movq %%rax,%%dr0" :: "a"(x));
+
+    panic("stop here for refactoring");
 
     /* Initialize the process table */
     proc_table = kmalloc(sizeof(struct proc_table));
@@ -648,17 +646,11 @@ isr_general_protection_fault(u64 error)
 void
 isr_page_fault(void *addr, u64 error)
 {
-    //__asm__ ("movq %%rax,%%dr0" :: "a"(this_ktask()));
     char buf[512];
-    int i;
     u64 x = (u64)addr;
-    for ( i = 0; i < 16; i++ ) {
-        buf[15 - i] = '0' + (x % 10);
-        x /= 10;
-    }
-    buf[i] = 0;
+
+    ksnprintf(buf, sizeof(buf), "Page Fault (%d): %016x", error, x);
     panic(buf);
-    panic("FIXME: page fault");
 }
 
 /*
