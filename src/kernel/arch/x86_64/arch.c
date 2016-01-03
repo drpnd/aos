@@ -45,6 +45,9 @@ struct acpi arch_acpi;
 /* Multiprocessor enabled */
 int mp_enabled;
 
+/* Kernel memory */
+extern struct kmem *g_kmem;
+
 /*
  * Relocate the trampoline code to a 4 KiB page alined space
  */
@@ -209,11 +212,6 @@ bsp_init(void)
     syscall_table[SYS_sysarch] = sys_sysarch;
     syscall_setup(syscall_table, SYS_MAXSYSCALL);
 
-    void *x = kmalloc(10);
-    __asm__ ("movq %%rax,%%dr0" :: "a"(x));
-
-    panic("stop here for refactoring");
-
     /* Initialize the process table */
     proc_table = kmalloc(sizeof(struct proc_table));
     if ( NULL == proc_table ) {
@@ -288,6 +286,7 @@ bsp_init(void)
     /* Launch the `init' server */
     cli();
 
+#if 0
     if ( proc_create("/servers/pm", "pm", 0) < 0 ) {
         panic("Fatal: Cannot create the `pm' server.");
         return;
@@ -296,6 +295,7 @@ bsp_init(void)
         panic("Fatal: Cannot create the `init' server.");
         return;
     }
+#endif
 
     /* Schedule the idle task */
     this_cpu()->cur_task = NULL;
@@ -319,6 +319,9 @@ ap_init(void)
     /* Load interrupt descriptor table */
     idt_load();
 
+    /* Set the page table */
+    set_cr3(VMEM_PML4(((struct arch_vmem_space *)g_kmem->space->arch)->array));
+
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
@@ -331,7 +334,7 @@ ap_init(void)
     /* Set an idle task for this processor */
     pdata->idle_task = task_create_idle();
     if ( NULL == pdata->idle_task ) {
-        panic("Fatal: Could not create the idle task for BSP.");
+        panic("Fatal: Could not create the idle task for AP.");
         return;
     }
 
@@ -623,12 +626,16 @@ isr_debug(void)
 }
 
 /*
- * I/O fault
+ * Invalid operand fault
  */
 void
-isr_io_fault(void)
+isr_io_fault(void *addr)
 {
-    panic("FIXME: I/O fault");
+    char buf[512];
+    u64 x = (u64)addr;
+
+    ksnprintf(buf, sizeof(buf), "Invalid Operand Fault: %016x", x);
+    panic(buf);
 }
 
 /*

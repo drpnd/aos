@@ -26,6 +26,9 @@
 #include "arch.h"
 #include "memory.h"
 
+/* Kernel memory */
+extern struct kmem *g_kmem;
+
 /*
  * Create a new task
  */
@@ -325,7 +328,7 @@ task_create_idle(void)
     kmemset(t, 0, sizeof(struct arch_task));
 
     /* Page table for the kernel */
-    t->cr3 = KERNEL_PGT;
+    t->cr3 = VMEM_PML4(((struct arch_vmem_space *)g_kmem->space->arch)->array);
 
     /* Kernel stack */
     t->kstack = kmalloc(KSTACK_SIZE);

@@ -277,13 +277,6 @@ struct pmem {
 };
 
 /*
- * A slab object
- */
-struct kmem_slab_obj {
-    void *addr;
-} __attribute__ ((packed));
-
-/*
  * Slab objects
  *  slab_hdr
  *    object 0
@@ -298,7 +291,7 @@ struct kmem_slab {
     int free;
     void *obj_head;
     /* Free marks follows (nr byte) */
-    u8 marks[1];
+    u8 marks[0];
     /* Objects follows */
 } __attribute__ ((packed));
 
@@ -317,6 +310,26 @@ struct kmem_slab_free_list {
 struct kmem_slab_root {
     /* Generic slabs */
     struct kmem_slab_free_list gslabs[KMEM_SLAB_ORDER];
+};
+
+/*
+ * Region
+ */
+struct kmem_region {
+    /* Region information */
+    ptr_t start;
+    size_t len;                 /* Constant multiplication of SUPERPAGESIZE */
+
+    /* Superpages belonging to this region */
+    struct vmem_superpage *superpages;
+
+    /* Buddy system for superpages and pages */
+    struct vmem_superpage *spgheads[VMEM_MAX_BUDDY_ORDER + 1];
+    struct vmem_page *pgheads[SP_SHIFT + 1];
+
+    /* Pointer to the next region */
+    struct vmem_region *next;
+
 };
 
 /*
@@ -522,6 +535,16 @@ void vmem_buddy_free_superpages(struct vmem_space *, void *);
 void vmem_buddy_free_pages(struct vmem_space *, void *);
 void * vmem_search_available_region(struct vmem_space *, size_t);
 
+struct vmem_superpage * vmem_grab_superpages(struct vmem_space *, int);
+void vmem_return_superpages(struct vmem_superpage *);
+struct vmem_page * vmem_grab_pages(struct vmem_space *, int);
+void vmem_return_pages(struct vmem_page *);
+
+/* in kmem.c */
+void * kmem_alloc_pages(struct kmem *, size_t);
+void kmem_free_pages(struct kmem *, void *);
+
+/* in pmem.c */
 void * pmem_alloc_pages(int, int);
 void * pmem_alloc_page(int);
 void * pmem_alloc_superpage(int);

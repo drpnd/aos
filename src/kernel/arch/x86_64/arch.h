@@ -59,6 +59,9 @@
 #define IDT_ADDR                0x76000ULL
 #define IDT_MAX_SIZE            0x2000
 
+/* Kernel variable */
+#define KVAR_ADDR               0x78000ULL
+
 /*********************************************************/
 /* The folloowing values are also defined in asmconst.h */
 /*********************************************************/
@@ -196,21 +199,10 @@ struct arch_page_dir {
 };
 
 /*
- * Kernel memory
- */
-struct arch_kmem {
-    /* Physical addresses of the page directories */
-    u64 *pml4;
-    u64 *pdpt;
-    u64 *pd[4];                 /* Superpage */
-    /* Virtual address */
-    u64 *vpd[4];                /* Superpage */
-};
-/*
  * Level-3 Complete multiway (512-ary) tree for virtual memory
  */
 #define VMEM_NENT(x)    (DIV_CEIL((x), 512 * 512) + DIV_CEIL((x), 512) + (x))
-#define VMEM_PML4(x, pg)    (x[0])
+#define VMEM_PML4(x)        (x[0])
 #define VMEM_PDPT(x, pg)    (x[0 + DIV_CEIL((pg) + 1, 512) + FLOOR((pg), 512)])
 #define VMEM_PD(x, pg)      (x[1 + DIV_CEIL((pg) + 1, 512) + pg])
 struct arch_vmem_space {
@@ -220,17 +212,6 @@ struct arch_vmem_space {
     /* Leaves for virtual memory */
     u64 **vls;
 };
-#if 0
-/*
- * Virtual memory
- */
-struct arch_vmem_space {
-    /* Page table (virtual address of cr3) */
-    void *pgt;
-    /* The root of the hierarchical page table */
-    struct arch_page_dir *pgtroot;
-} __attribute__ ((packed));
-#endif
 
 /*
  * Task (architecture specific structure)

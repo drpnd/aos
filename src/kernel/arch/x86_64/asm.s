@@ -692,7 +692,7 @@ _intr_iof:
 	pushq	%rbx
 	movq	16(%rbp),%rbx
 	//movq	%rbx,%dr0	/* cs */
-	movq	8(%rbp),%rbx
+	movq	8(%rbp),%rdi
 	//movq	%rbx,%dr1	/* rip */
 	movq	32(%rbp),%rbx
 	//movq	%rbx,%dr2	/* rsp */

@@ -71,6 +71,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/kernel.o \
 	kernel/memory.o \
 	kernel/pmem.o \
+	kernel/kmem.o \
 	kernel/vmem.o \
 	kernel/strfmt.o \
 	kernel/sched.o \

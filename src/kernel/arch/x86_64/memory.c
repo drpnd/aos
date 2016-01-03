@@ -27,9 +27,8 @@
 #include "../../kernel.h"
 
 extern struct kmem *g_kmem;
-extern int g_paddr_width;
 
-#define KMEM_LOW_P2V(a)     (a)
+#define KMEM_LOW_P2V(a)         ((u64)(a))
 
 #define KMEM_DIR_RW(a)          ((a) | 0x007ULL)
 #define KMEM_PG_RW(a)           ((a) | 0x083ULL)
@@ -98,13 +97,6 @@ arch_memory_init(struct bootinfo *bi, struct acpi *acpi)
     struct kstring pmem;
     struct kstring pmem_pages;
     int ret;
-    u64 rax;
-    u64 rcx;
-    u64 rdx;
-
-    /* Get the physical-address width */
-    rax = cpuid(0x80000008, &rcx, &rdx);
-    g_paddr_width = rax & 0xff;
 
     /* Stage 1: Initialize the physical memory with the page table of linear
        addressing.  This allocates the data structure for the physical memory
@@ -209,12 +201,12 @@ _pmem_init_stage1(struct bootinfo *bi, struct acpi *acpi,
     pm->nr = npg;
     pm->pages = NULL;
 
-    /* Initialize the pages with linear addressing page table */
+    /* Initialize the pages with the current linear addressing page table */
     pgs = (struct pmem_page *)pmem_pages->base;
     kmemset(pgs, 0, sizeof(struct pmem_page) * npg);
     for ( i = 0; i < npg; i++ ) {
-        /* Initialize this as a page in the UMA zone */
-        pgs[i].zone = PMEM_ZONE_UMA;
+        /* Initialize this as a page in the LOWMEM zone */
+        pgs[i].zone = PMEM_ZONE_LOWMEM;
         pgs[i].flags = 0;
         pgs[i].order = PMEM_INVAL_BUDDY_ORDER;
         pgs[i].next = PMEM_INVAL_INDEX;
@@ -367,7 +359,7 @@ _kmem_init(struct kstring *region)
         return NULL;
     }
 
-    /* Kernel memory space */
+    /* Prepare the kernel memory space */
     kmem = (struct kmem *)KMEM_LOW_P2V(KMEM_BASE + off);
     off += sizeof(struct kmem);
     if ( off > KMEM_MAX_SIZE ) {
@@ -475,7 +467,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     kmemset(ptr, 0, pgtsz);
 
     /* Set physical addresses to page directories */
-    VMEM_PML4(parr, 0) = ptr;
+    VMEM_PML4(parr) = ptr;
     VMEM_PDPT(parr, 0) = ptr + 512;
     for ( i = 0; i < KMEM_VMEM_NPD; i++ ) {
         VMEM_PD(parr, i) = ptr + 1024 + 512 * i;
@@ -486,7 +478,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     }
 
     /* Setup physical page table */
-    VMEM_PML4(parr, 0)[0] = KMEM_DIR_RW((u64)VMEM_PDPT(parr, 0));
+    VMEM_PML4(parr)[0] = KMEM_DIR_RW((u64)VMEM_PDPT(parr, 0));
     for ( i = 0; i < KMEM_VMEM_NPD; i++ ) {
         VMEM_PDPT(parr, 0)[i] = KMEM_DIR_RW((u64)VMEM_PD(parr, i));
     }
@@ -509,7 +501,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     _disable_page_global();
 
     /* Set the constructured page table */
-    set_cr3(VMEM_PML4(parr, 0));
+    set_cr3(VMEM_PML4(parr));
 
     /* Enable the global page feature */
     _enable_page_global();
@@ -518,6 +510,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     for ( i = 0; i < KMEM_VMEM_NPD; i++ ) {
         kmemset(vls[i], 0, PAGESIZE);
     }
+
     for ( i = 0; i < nspg; i++ ) {
         vls[0][i] = KMEM_PG_GRW(KMEM_LOW_P2V(SUPERPAGE_ADDR(i)));
     }
@@ -1305,7 +1298,14 @@ arch_vmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
 int
 arch_address_width(void)
 {
-    return g_paddr_width;
+    u64 rax;
+    u64 rcx;
+    u64 rdx;
+
+    /* Get the physical-address width */
+    rax = cpuid(0x80000008, &rcx, &rdx);
+
+    return rax & 0xff;
 }
 
 /*

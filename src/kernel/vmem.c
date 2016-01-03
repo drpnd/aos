@@ -32,10 +32,6 @@ _vmem_buddy_spg_merge(struct vmem_region *, struct vmem_superpage *, int);
 static int _vmem_buddy_pg_split(struct vmem_region *, int);
 static void _vmem_buddy_pg_merge(struct vmem_region *, struct vmem_page *, int);
 
-static struct vmem_superpage * _vmem_grab_superpages(struct vmem_space *, int);
-static void _vmem_return_superpages(struct vmem_superpage *);
-static struct vmem_page * _vmem_grab_pages(struct vmem_space *, int);
-static void _vmem_return_pages(struct vmem_page *);
 static struct vmem_region * _vmem_search_region(struct vmem_space *, void *);
 
 /*
@@ -73,7 +69,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
     return vaddr;
 
 #if 0
-    pg = _vmem_grab_pages(kmem->space, order);
+    pg = vmem_grab_pages(kmem->space, order);
     if ( NULL != pg ) {
         /* Found */
         vaddr = pg->superpage->region->start
@@ -84,7 +80,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
         paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
         if ( NULL == paddr ) {
             /* Release the virtual memory */
-            _vmem_return_pages(pg);
+            vmem_return_pages(pg);
             return NULL;
         }
 
@@ -92,7 +88,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
         ret = arch_vmem_map(kmem->space, vaddr, paddr, pg->flags);
         if ( ret < 0 ) {
             /* Release the virtual and physical memory */
-            _vmem_return_pages(pg);
+            vmem_return_pages(pg);
             pmem_free_pages(paddr);
             return NULL;
         }
@@ -102,7 +98,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
     }
 
     /* Try to grab a superpage from the kernel memory space */
-    spg = _vmem_grab_superpages(kmem->space, 0);
+    spg = vmem_grab_superpages(kmem->space, 0);
     if ( NULL != spg ) {
         /* Found */
         vaddr = spg->region->start
@@ -112,7 +108,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
         paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
         if ( NULL == paddr ) {
             /* Release the virtual memory */
-            _vmem_return_superpages(spg);
+            vmem_return_superpages(spg);
             return NULL;
         }
 
@@ -215,61 +211,60 @@ vmem_search_available_region(struct vmem_space *space, size_t size)
 struct vmem_region *
 vmem_region_create(void)
 {
-#if 0
-    struct vmem_region *region;
-    struct vmem_page *pages;
+    struct vmem_region *reg;
+    struct vmem_superpage *spgs;
     struct vmem_page *tmp;
     size_t i;
     off_t idx;
 
     /* Allocate a new virtual memory region */
-    region = kmalloc(sizeof(struct vmem_region));
-    if ( NULL == region ) {
+    reg = kmalloc(sizeof(struct vmem_region));
+    if ( NULL == reg ) {
         /* Cannot allocate a virtual memory region */
         return NULL;
     }
-    kmemset(region, 0, sizeof(struct vmem_region));
-    region->start = (void *)(1ULL << 30);
-    region->len = SUPERPAGESIZE * 512; /* 1 GiB */
-    region->next = NULL;
+    kmemset(reg, 0, sizeof(struct vmem_region));
+    reg->start = (void *)(1ULL << 30);
+    reg->len = SUPERPAGESIZE * 512; /* 1 GiB */
+    reg->next = NULL;
 
     /* Allocate virtual pages for this region */
-    pages = kmalloc(sizeof(struct vmem_page) * region->len / SUPERPAGESIZE);
-    if ( NULL == pages ) {
+    spgs = kmalloc(sizeof(struct vmem_superpage) * reg->len / SUPERPAGESIZE);
+    if ( NULL == spgs ) {
         /* Cannot allocate the virtual pages */
-        kfree(region);
+        kfree(reg);
         return NULL;
     }
 
     /* Initialize the all pages */
-    for ( i = 0; i < region->len / SUPERPAGESIZE; i++ ) {
-        pages[i].addr = 0;
-        //pages[i].type = 0;
-        pages[i].next = NULL;
-        pages[i].region = region;
+    for ( i = 0; i < reg->len / SUPERPAGESIZE; i++ ) {
+        spgs[i].u.superpage.addr = 0;
+        spgs[i].order = 0;
+        spgs[i].flags = VMEM_USED | VMEM_SUPERPAGE;
+        spgs[i].region = reg;
+        spgs[i].next = NULL;
+        spgs[i].prev = NULL;
     }
-    region->pages = pages;
+    reg->superpages = spgs;
 
     /* Prepare the buddy system */
     if ( VMEM_MAX_BUDDY_ORDER < 9 ) {
-        region->heads[VMEM_MAX_BUDDY_ORDER] = &pages[0];
-        tmp = &pages[0];
+        reg->spgheads[VMEM_MAX_BUDDY_ORDER] = &spgs[0];
+        tmp = &spgs[0];
         idx = 1ULL << (VMEM_MAX_BUDDY_ORDER);
-        for ( i = 0; i < (1 << (9 - VMEM_MAX_BUDDY_ORDER)); i++ ) {
-            tmp->next = &pages[idx];
-            tmp = &pages[idx];
+        for ( i = 0; i < (1LL << (9 - VMEM_MAX_BUDDY_ORDER)); i++ ) {
+            tmp->next = &spgs[idx];
+            tmp = &spgs[idx];
             /* For the next index */
             idx += 1ULL << VMEM_MAX_BUDDY_ORDER;
         }
         tmp->next = NULL;
     } else {
-        region->heads[9] = &pages[0];
-        pages[0].next = NULL;
+        reg->spgheads[9] = &spgs[0];
+        reg[0].next = NULL;
     }
 
-    return region;
-#endif
-    return NULL;
+    return reg;
 }
 
 /*
@@ -296,7 +291,7 @@ vmem_space_create(void)
         return NULL;
     }
 
-    /* Set */
+    /* Set the region to the first region */
     space->first_region = region;
 
     /* Initialize the architecture-specific data structure */
@@ -984,10 +979,7 @@ vmem_buddy_free_pages(struct vmem_space *space, void *a)
     }
 }
 
-
-
-
-
+#if 0
 /*
  * Superpage to pages
  */
@@ -1010,12 +1002,13 @@ _vmem_superpage_to_pages(struct vmem_region *reg, struct vmem_superpage *spg)
 
     return -1;
 }
+#endif
 
 /*
  * Find superpages
  */
-static struct vmem_superpage *
-_vmem_grab_superpages(struct vmem_space *space, int order)
+struct vmem_superpage *
+vmem_grab_superpages(struct vmem_space *space, int order)
 {
     struct vmem_region *reg;
     struct vmem_superpage *spg;
@@ -1065,8 +1058,8 @@ _vmem_grab_superpages(struct vmem_space *space, int order)
 /*
  * Release superpages
  */
-static void
-_vmem_return_superpages(struct vmem_superpage *spg)
+void
+vmem_return_superpages(struct vmem_superpage *spg)
 {
     struct vmem_region *reg;
     int order;
@@ -1111,8 +1104,8 @@ _vmem_return_superpages(struct vmem_superpage *spg)
 /*
  * Find pages
  */
-static struct vmem_page *
-_vmem_grab_pages(struct vmem_space *space, int order)
+struct vmem_page *
+vmem_grab_pages(struct vmem_space *space, int order)
 {
     struct vmem_region *reg;
     struct vmem_page *pg;
@@ -1162,8 +1155,8 @@ _vmem_grab_pages(struct vmem_space *space, int order)
 /*
  * Release pages
  */
-static void
-_vmem_return_pages(struct vmem_page *pg)
+void
+vmem_return_pages(struct vmem_page *pg)
 {
     struct vmem_region *reg;
     struct vmem_superpage *spg;
@@ -1207,173 +1200,6 @@ _vmem_return_pages(struct vmem_page *pg)
 
     /* Merge buddies if possible */
     _vmem_buddy_pg_merge(reg, pg, order);
-}
-
-/*
- * Create new region
- */
-static int
-_vmem_create_region(struct vmem_space *space)
-{
-    void *vstart;
-
-    /* Search an available memory space to allocate a new region */
-    vstart = vmem_search_available_region(space, 16 * SUPERPAGESIZE);
-    if ( NULL == vstart ) {
-        return -1;
-    }
-
-    return -1;
-}
-
-
-/*
- * Prepare pages
- */
-static void *
-_kmem_prepare_pages(struct kmem *kmem)
-{
-    void *paddr;
-    void *vaddr;
-    size_t sz;
-    int order;
-    struct vmem_region *reg;
-    struct vmem_superpage *spg;
-    struct vmem_page *pg;
-    ssize_t i;
-    size_t j;
-    int tmpo;
-    int flags;
-    int ret;
-
-    /* Calculate the size of the array of the page data structure */
-    sz = sizeof(struct vmem_page) * SUPERPAGESIZE / PAGESIZE;
-    order = bitwidth(DIV_CEIL(sz, PAGESIZE));
-
-    /* Assert */
-    if ( order > SP_SHIFT ) {
-        /* Must not be reached */
-        panic("Fatal Error in the _kmem_prepare_pages() function.");
-    }
-
-    /* Try to grab pages from the kernel memory space */
-    pg = _vmem_grab_pages(kmem->space, order);
-    if ( NULL != pg ) {
-        /* Found */
-        vaddr = pg->superpage->region->start
-            + SUPERPAGE_ADDR(pg->superpage - pg->superpage->region->superpages)
-            + PAGE_ADDR(pg - pg->superpage->u.page.pages);
-
-        /* Allocate physical memory */
-        paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
-        if ( NULL == paddr ) {
-            /* Release the virtual memory */
-            _vmem_return_pages(pg);
-            return NULL;
-        }
-
-        /* Map the physical and virtual memory */
-        ret = arch_vmem_map(kmem->space, vaddr, paddr, pg->flags);
-        if ( ret < 0 ) {
-            /* Release the virtual and physical memory */
-            _vmem_return_pages(pg);
-            pmem_free_pages(paddr);
-            return NULL;
-        }
-
-        /* Return */
-        return vaddr;
-    }
-
-    /* Try to grab a superpage from the kernel memory space */
-    spg = _vmem_grab_superpages(kmem->space, 0);
-    if ( NULL != spg ) {
-        /* Found */
-        vaddr = spg->region->start
-            + SUPERPAGE_ADDR(spg - spg->region->superpages);
-
-        /* Allocate physical memory */
-        paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
-        if ( NULL == paddr ) {
-            /* Release the virtual memory */
-            _vmem_return_superpages(spg);
-            return NULL;
-        }
-
-        /* Superpage to pages; map them first */
-        flags = spg->flags & ~VMEM_SUPERPAGE;
-        for ( i = 0; i < (1LL << SP_SHIFT); i++ ) {
-            ret = arch_vmem_map(kmem->space, vaddr + PAGE_ADDR(i),
-                                paddr + PAGE_ADDR(i), flags);
-            if ( ret < 0 ) {
-                _vmem_return_superpages(spg);
-                pmem_free_pages(paddr);
-                return NULL;
-            }
-        }
-
-        /* Setup the allocated pages */
-        pg = (struct vmem_page *)vaddr;
-        spg->flags &= ~VMEM_SUPERPAGE;
-        spg->u.page.pages = pg;
-        for ( i = 0; i < (1LL << order); i++ ) {
-            /* Used pages */
-            pg[i].addr = (reg_t)paddr + PAGE_ADDR(i);
-            pg[i].order = order;
-            pg[i].flags = flags;
-            pg[i].superpage = spg;
-            pg[i].next = NULL;
-            pg[i].prev = NULL;
-        }
-        /* Add the rest to the buddy system of usable pages */
-        for ( tmpo = order; tmpo < SP_SHIFT; tmpo++ ) {
-            spg->region->pgheads[tmpo]->prev = &pg[i];
-            pg[i].next = spg->region->pgheads[tmpo];
-            pg[i].prev = NULL;
-            for ( j = 0; j < (1LL << tmpo); j++ ) {
-                pg[i].addr = 0;
-                pg[i].order = tmpo;
-                pg[i].flags = flags & ~VMEM_USED;
-                pg[i].superpage = spg;
-                i++;
-            }
-        }
-
-        return vaddr;
-    }
-
-    /* Calculate the size of the array of the page data structure and a new
-       region */
-    sz = sizeof(struct vmem_page) * SUPERPAGESIZE / PAGESIZE;
-    order = bitwidth(DIV_CEIL(sz, PAGESIZE));
-
-    size_t sz2 = sizeof(struct vmem_region);
-    int order2 = bitwidth(DIV_CEIL(sz2, PAGESIZE));
-    void *paddr2;
-
-    /* Try to allocate pages with new region */
-    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
-    paddr2 = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order2);
-
-    /* Search available memory space for region allocation */
-    vaddr = vmem_search_available_region(kmem->space, SUPERPAGESIZE);
-    if ( NULL == vaddr ) {
-        pmem_free_pages(paddr);
-        pmem_free_pages(paddr2);
-        return NULL;
-    }
-
-    return NULL;
-}
-
-
-/*
- * Allocate pool
- */
-static int
-_kmem_expand_spgs_pool(struct kmem *kmem)
-{
-    return -1;
 }
 
 /*

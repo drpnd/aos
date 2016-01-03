@@ -25,7 +25,6 @@
 #include "kernel.h"
 
 struct kmem *g_kmem;
-int g_paddr_width;
 
 /* Prototype declarations of static functions */
 static void * _kmalloc_slab(struct kmem *, size_t);
@@ -191,27 +190,27 @@ _kmalloc_slab_new(struct kmem *kmem, size_t o)
     void *ptr;
     ssize_t i;
     size_t s;
-    int nr;
+    size_t nr;
 
     /* No free space, then allocate new page for slab objects */
     s = (1ULL << (o + KMEM_SLAB_BASE_ORDER + KMEM_SLAB_NR_OBJ_ORDER))
         + sizeof(struct kmem_slab);
     /* Align the page to fit to the buddy system, and get the order */
-    nr = bitwidth(DIV_CEIL(s, PAGESIZE));
+    nr = DIV_CEIL(s, PAGESIZE);
     /* Allocate pages */
-    hdr = vmem_alloc_pages(kmem->space, nr);
+    hdr = kmem_alloc_pages(kmem, nr);
     if ( NULL == hdr ) {
         return NULL;
     }
     /* Calculate the number of slab objects in this block; N.B., + 1 in the
        denominator is the `marks' for each objects. */
-    hdr->nr = ((1ULL << nr) * PAGESIZE - sizeof(struct kmem_slab))
+    hdr->nr = (nr * PAGESIZE - sizeof(struct kmem_slab))
         / ((1ULL << (o + KMEM_SLAB_BASE_ORDER)) + 1);
     /* Reset counters */
     hdr->nused = 0;
     hdr->free = 0;
     /* Set the address of the first slab object */
-    hdr->obj_head = (void *)((u64)hdr + ((1ULL << nr) * PAGESIZE)
+    hdr->obj_head = (void *)((u64)hdr + (nr * PAGESIZE)
                              - ((1ULL << (o + KMEM_SLAB_BASE_ORDER))
                                 * hdr->nr));
     /* Reset marks and next cache */
@@ -254,14 +253,12 @@ static void *
 _kmalloc_pages(struct kmem *kmem, size_t size)
 {
     void *ptr;
-    int o;
 
     /* Lock */
     spin_lock(&kmem->slab_lock);
 
     /* Large object: Page allocator */
-    o = bitwidth(DIV_CEIL(size, PAGESIZE));
-    ptr = vmem_alloc_pages(kmem->space, o);
+    ptr = kmem_alloc_pages(kmem, DIV_CEIL(size, PAGESIZE));
 
     /* Unlock */
     spin_unlock(&kmem->slab_lock);
