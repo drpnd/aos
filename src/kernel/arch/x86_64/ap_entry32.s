@@ -55,9 +55,8 @@ ap_entry32:
 	movl	%eax,%esp
 
 	/* Enable PAE */
-	movl	$0x20,%eax	/* CR4[bit 5] = PAE */
+	movl	$0x220,%eax	/* CR4[bit 5] = PAE */
 	movl	%eax,%cr4	/* CR4[bit 9] = OSFXSR */
-	movl	%eax,%cr4
 
 	/* Setup page table register */
 	movl	$KERNEL_PGT,%ebx
