@@ -184,135 +184,6 @@ task_clone(struct ktask *ot)
 }
 
 /*
- * Clone a process of the context specified by the ot argument
- */
-struct proc *
-proc_clone(struct ktask *ot)
-{
-    struct proc *np;
-    struct arch_task *nt;
-
-    /* Allocate a new process */
-    np = kmalloc(sizeof(struct proc));
-    if ( NULL == np ) {
-        return NULL;
-    }
-    kmemset(np, 0, sizeof(struct proc));
-    kmemcpy(np->name, ot->proc->name, 1024); /* FIXME */
-
-    /* Allocate the architecture-specific task structure of a new task */
-    nt = kmalloc(sizeof(struct arch_task));
-    if ( NULL == nt ) {
-        kfree(np);
-        return NULL;
-    }
-    /* Allocate the kernel stack of the new task */
-    nt->kstack = kmalloc(KSTACK_SIZE);
-    if ( NULL == nt->kstack ) {
-        kfree(nt);
-        kfree(np);
-        return NULL;
-    }
-    /* Allocate the user stack of the new task */
-    nt->ustack = kmalloc(USTACK_SIZE);
-    if ( NULL == nt->ustack ) {
-        kfree(nt->kstack);
-        kfree(nt);
-        kfree(np);
-        return NULL;
-    }
-    /* Allocate the kernel task of the new task */
-    nt->ktask = kmalloc(sizeof(struct ktask));
-    if ( NULL == nt->ktask ) {
-        kfree(nt->ustack);
-        kfree(nt->kstack);
-        kfree(nt);
-        kfree(np);
-        return NULL;
-    }
-    /* Create the bidirectional link */
-    nt->ktask->arch = nt;
-
-    /* Copy the kernel and user stacks */
-    kmemcpy(nt->kstack, ((struct arch_task *)ot->arch)->kstack,
-            KSTACK_SIZE);
-
-    /* Setup the restart point */
-    nt->rp = (struct stackframe64 *)
-        ((u64)((struct arch_task *)ot->arch)->rp + (u64)nt->kstack
-         - (u64)((struct arch_task *)ot->arch)->kstack);
-
-
-
-    return NULL;
-#if 0
-    struct page_entry *pgt;
-    u64 i;
-    u64 j;
-
-
-    /* Copy the user memory space */
-    /* Setup page table */
-    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
-    if ( NULL == pgt ) {
-        return NULL;
-    }
-    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* Kernel */
-    pgt[0].entries[0] = kmem_paddr((u64)&pgt[1]) | 0x007;
-    /* PDPT */
-    for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-    /* PT (1GB-- +2MiB) */
-    for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    pgt[2 + 1].entries[0] = kmem_paddr((u64)&pgt[6]) | 0x007;
-    pgt[2 + 1].entries[510] = kmem_paddr((u64)&pgt[516]) | 0x007;
-    pgt[2 + 1].entries[511] = kmem_paddr((u64)&pgt[517]) | 0x007;
-    for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            /* Not present */
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    /* Kernel */
-    for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-    /* Executable */
-    for ( i = 0; i < 512; i++ ) {
-        /* Mapping */
-        pgt[6].entries[i] = ((struct page_entry *)((struct arch_proc *)ot->proc
-                                                   ->arch)->pgt)[6].entries[i];
-    }
-    /* Setup the page table for user stack */
-    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
-        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = (kmem_paddr((u64)t->ustack) + i * PAGESIZE) | 0x087;
-    }
-    /* Arguments */
-    pgt[516].entries[0] = ((struct page_entry *)((struct arch_proc *)ot->proc
-                                                 ->arch)->pgt)[516].entries[0];
-
-    t->cr3 = kmem_paddr((u64)pgt);
-
-    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
-
-    /* Set the page table for the process */
-    //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
-
-    return t->ktask;
-#endif
-}
-
-
-/*
  * Create an idle task
  */
 struct arch_task *
@@ -445,9 +316,6 @@ proc_create(const char *path, const char *name, pid_t pid)
     proc_table->procs[pid] = proc;
     proc_table->lastpid = pid;
 
-    /* Set the page table */
-    //set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
-
     /* Create an architecture-specific task data structure */
     t = kmalloc(sizeof(struct arch_task));
     if ( NULL == t ) {
@@ -503,15 +371,13 @@ proc_create(const char *path, const char *name, pid_t pid)
         panic("FIXME 2");
     }
 
-    /* FIXME */
+    /* Temporary set the page table to the user's one to copy the exec file from
+       kernel to the user space */
     saved_cr3 = get_cr3();
     set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
 
+    /* Copy the program from the initramfs to user space */
     (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
-
-    //char buf[128];
-    //ksnprintf(buf, sizeof(buf), "xyz: %016llx %016llx", *(u64 *)exec, *((u64 *)exec + 1));
-    //panic(buf);
 
     /* Restore CR3 */
     set_cr3(saved_cr3);

@@ -290,12 +290,11 @@ bsp_init(void)
         panic("Fatal: Cannot create the `pm' server.");
         return;
     }
-#if 0
     if ( proc_create("/servers/init", "init", 1) < 0 ) {
         panic("Fatal: Cannot create the `init' server.");
         return;
     }
-#endif
+
     /* Schedule the idle task */
     this_cpu()->cur_task = NULL;
     this_cpu()->next_task = this_cpu()->idle_task;
