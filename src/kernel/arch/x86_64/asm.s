@@ -689,6 +689,7 @@ _intr_ssf:
 _intr_iof:
 	pushq	%rbp
 	movq	%rsp,%rbp
+	pushq	%rdi
 	pushq	%rbx
 	movq	16(%rbp),%rbx
 	//movq	%rbx,%dr0	/* cs */
@@ -698,6 +699,7 @@ _intr_iof:
 	//movq	%rbx,%dr2	/* rsp */
 	call	_isr_io_fault
 	popq	%rbx
+	popq	%rdi
 	popq	%rbp
 	iretq
 
@@ -707,21 +709,20 @@ _intr_gpf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rbx
-	movq	16(%rbp),%rbx
-	//movq	%rbx,%dr0	/* rip */
-	movq	8(%rbp),%rbx
-	//movq	%rbx,%dr1	/* error code */
-	movq	40(%rbp),%rbx
-	//movq	%rbx,%dr2	/* rsp */
-	movq	48(%rbp),%rbx
-	//movq	%rbx,%dr3	/* ss */
+	movq	16(%rbp),%rbx	/* rip */
+	movq	8(%rbp),%rbx	/* error code */
+	movq	40(%rbp),%rbx	/* rsp */
+	movq	48(%rbp),%rbx	/* ss */
 	//movq	(gpf_reentry),%rbx
 	//cmpq	$0,%rbx
 	//jz	1f
 	//movq	%rbx,16(%rbp)   /* Overwrite the reentry point (%rip) */
 	pushq	%rdi
-	movq	8(%rbp),%rdi	/* error code */
+	pushq	%rsi
+	movq	16(%rbp),%rdi	/* rip */
+	movq	8(%rbp),%rsi	/* error code */
 	call	_isr_general_protection_fault
+	popq	%rsi
 	popq	%rdi
 1:	popq	%rbx
 	popq	%rbp
@@ -735,12 +736,13 @@ _intr_pf:
 	pushq	%rbp
 	movq	%rsp,%rbp
 	pushq	%rdi
-	movq	16(%rbp),%rdi
-	movq	%rdi,%dr1	/* rip */
 	pushq	%rsi
-	movq	%cr2,%rdi	/* virtual address */
-	movq	8(%rbp),%rsi	/* error code */
+	pushq	%rdx
+	movq	16(%rbp),%rdi	/* rip */
+	movq	%cr2,%rsi	/* virtual address */
+	movq	8(%rbp),%rdx	/* error code */
 	call	_isr_page_fault
+	popq	%rdx
 	popq	%rsi
 	popq	%rdi
 	popq	%rbp

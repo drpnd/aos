@@ -577,7 +577,7 @@ reg_t bitwidth(reg_t);
 struct ktask * this_ktask(void);
 void set_next_ktask(struct ktask *);
 void set_next_idle(void);
-void panic(char *);
+void panic(const char *);
 void halt(void);
 struct ktask * task_clone(struct ktask *);
 void task_set_return(struct ktask *, unsigned long long);
@@ -587,6 +587,10 @@ void spin_unlock(u32 *);
 int arch_vmem_map(struct vmem_space *, void *, void *, int);
 int arch_address_width(void);
 void * arch_vmem_addr_v2p(struct vmem_space *, void *);
+int arch_vmem_init(struct vmem_space *);
+
+
+int run_experiment(int);
 
 #endif /* _KERNEL_H */
 

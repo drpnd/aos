@@ -74,7 +74,7 @@ _load_trampoline(void)
  * Panic -- damn blue screen, lovely green screen
  */
 void
-panic(char *s)
+panic(const char *s)
 {
     int i;
     u16 *video;
@@ -286,7 +286,7 @@ bsp_init(void)
     /* Launch the `init' server */
     cli();
 
-#if 0
+#if 1
     if ( proc_create("/servers/pm", "pm", 0) < 0 ) {
         panic("Fatal: Cannot create the `pm' server.");
         return;
@@ -296,7 +296,6 @@ bsp_init(void)
         return;
     }
 #endif
-
     /* Schedule the idle task */
     this_cpu()->cur_task = NULL;
     this_cpu()->next_task = this_cpu()->idle_task;
@@ -319,8 +318,12 @@ ap_init(void)
     /* Load interrupt descriptor table */
     idt_load();
 
+    /* Disable the global page feature */
+    set_cr4(get_cr4() & ~CR4_PGE);
     /* Set the page table */
     set_cr3(VMEM_PML4(((struct arch_vmem_space *)g_kmem->space->arch)->array));
+    /* Enable the global page feature */
+    set_cr4(get_cr4() | CR4_PGE);
 
     /* Enable this processor */
     pdata = this_cpu();
@@ -346,6 +349,9 @@ ap_init(void)
 
     /* Initialize the local APIC */
     lapic_init();
+
+    /* Run experiment */
+    //run_experiment(lapic_id());
 }
 
 /*
@@ -626,15 +632,15 @@ isr_debug(void)
 }
 
 /*
- * Invalid operand fault
+ * Invalid opcode fault
  */
 void
-isr_io_fault(void *addr)
+isr_io_fault(void *rip)
 {
-    char buf[512];
-    u64 x = (u64)addr;
+    char buf[128];
+    u64 x = (u64)rip;
 
-    ksnprintf(buf, sizeof(buf), "Invalid Operand Fault: %016x", x);
+    ksnprintf(buf, sizeof(buf), "Invalid Opcode Fault: %016x", x);
     panic(buf);
 }
 
@@ -642,21 +648,27 @@ isr_io_fault(void *addr)
  * General protection fault
  */
 void
-isr_general_protection_fault(u64 error)
+isr_general_protection_fault(void *rip, u64 error)
 {
-    panic("FIXME: general protection fault");
+    char buf[128];
+    u64 x = (u64)rip;
+
+    ksnprintf(buf, sizeof(buf), "FIXME: General Protection Fault (%d): %016x",
+              error, x);
+    panic(buf);
 }
 
 /*
  * Page fault handler
  */
 void
-isr_page_fault(void *addr, u64 error)
+isr_page_fault(void *rip, void *addr, u64 error)
 {
-    char buf[512];
-    u64 x = (u64)addr;
+    char buf[128];
+    u64 x = (u64)rip;
+    u64 y = (u64)addr;
 
-    ksnprintf(buf, sizeof(buf), "Page Fault (%d): %016x", error, x);
+    ksnprintf(buf, sizeof(buf), "Page Fault (%d): %016x @%016x", error, y, x);
     panic(buf);
 }
 

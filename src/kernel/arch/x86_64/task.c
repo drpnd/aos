@@ -444,8 +444,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     proc_table->lastpid = pid;
 
     /* Set the page table */
-    //set_cr3((void *)kmem_paddr(
-    //(u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt));
+    //set_cr3(VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
 
     /* Create an architecture-specific task data structure */
     t = kmalloc(sizeof(struct arch_task));
@@ -476,9 +475,6 @@ proc_create(const char *path, const char *name, pid_t pid)
     if ( NULL == ppage1 ) {
         goto error_ustack;
     }
-    t->ustack = (void *)USTACK_INIT;
-    /* FIXME */
-    //vmem_remap(proc->vmem, (u64)t->ustack, (u64)ppage1, 1);
 
     /* Prepare exec */
     ppage2 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
@@ -486,11 +482,30 @@ proc_create(const char *path, const char *name, pid_t pid)
         goto error_exec;
         return -1;
     }
-    exec = (void *)CODE_INIT;
-    /* FIXME */
-    //vmem_remap(proc->vmem, (u64)exec, (u64)ppage2, 1);
-    (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
 
+    /* FIXME */
+    void *cr3 = get_cr3();
+    set_cr3(VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
+    char buf[128];
+    ksnprintf(buf, sizeof(buf), "XXXX: %016x", VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
+    panic(buf);
+
+    /* Set user stack */
+    int ret;
+    t->ustack = (void *)USTACK_INIT;
+    ret = arch_vmem_map(proc->vmem, t->ustack, ppage1, VMEM_USABLE | VMEM_USED);
+    if ( ret < 0 ) {
+        panic("FIXME 1");
+    }
+    exec = (void *)CODE_INIT;
+    ret = arch_vmem_map(proc->vmem, exec, ppage2, VMEM_USABLE | VMEM_USED);
+    if ( ret < 0 ) {
+        panic("FIXME 2");
+    }
+
+    (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
+    /* Restore CR3 */
+    set_cr3(cr3);
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     t->ktask->state = KTASK_STATE_READY;
@@ -536,7 +551,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     t->rp->cs = cs;
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
-    //t->cr3 = kmem_paddr((u64)((struct arch_vmem_space *)proc->vmem->arch)->pgt);
+    t->cr3 = VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array);
 
     return 0;
 

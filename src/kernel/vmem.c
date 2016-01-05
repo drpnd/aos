@@ -213,9 +213,8 @@ vmem_region_create(void)
 {
     struct vmem_region *reg;
     struct vmem_superpage *spgs;
-    struct vmem_page *tmp;
     size_t i;
-    off_t idx;
+    int ret;
 
     /* Allocate a new virtual memory region */
     reg = kmalloc(sizeof(struct vmem_region));
@@ -240,28 +239,18 @@ vmem_region_create(void)
     for ( i = 0; i < reg->len / SUPERPAGESIZE; i++ ) {
         spgs[i].u.superpage.addr = 0;
         spgs[i].order = 0;
-        spgs[i].flags = VMEM_USED | VMEM_SUPERPAGE;
+        spgs[i].flags = VMEM_SUPERPAGE | VMEM_USABLE;
         spgs[i].region = reg;
         spgs[i].next = NULL;
         spgs[i].prev = NULL;
     }
     reg->superpages = spgs;
 
-    /* Prepare the buddy system */
-    if ( VMEM_MAX_BUDDY_ORDER < 9 ) {
-        reg->spgheads[VMEM_MAX_BUDDY_ORDER] = &spgs[0];
-        tmp = &spgs[0];
-        idx = 1ULL << (VMEM_MAX_BUDDY_ORDER);
-        for ( i = 0; i < (1LL << (9 - VMEM_MAX_BUDDY_ORDER)); i++ ) {
-            tmp->next = &spgs[idx];
-            tmp = &spgs[idx];
-            /* For the next index */
-            idx += 1ULL << VMEM_MAX_BUDDY_ORDER;
-        }
-        tmp->next = NULL;
-    } else {
-        reg->spgheads[9] = &spgs[0];
-        reg[0].next = NULL;
+    ret = vmem_buddy_init(reg);
+    if ( ret < 0 ) {
+        kfree(spgs);
+        kfree(reg);
+        return NULL;
     }
 
     return reg;
@@ -274,7 +263,7 @@ struct vmem_space *
 vmem_space_create(void)
 {
     struct vmem_space *space;
-    struct vmem_region *region;
+    struct vmem_region *reg;
 
     /* Allocate a new virtual memory space */
     space = kmalloc(sizeof(struct vmem_space));
@@ -284,24 +273,22 @@ vmem_space_create(void)
     kmemset(space, 0, sizeof(struct vmem_space));
 
     /* Allocate a new virtual memory region */
-    region = vmem_region_create();
-    if ( NULL == region ) {
+    reg = vmem_region_create();
+    if ( NULL == reg ) {
         /* Cannot allocate a virtual memory region */
         kfree(space);
         return NULL;
     }
 
     /* Set the region to the first region */
-    space->first_region = region;
+    space->first_region = reg;
 
     /* Initialize the architecture-specific data structure */
-#if 0
-    if ( vmem_arch_init(space) < 0 ) {
+    if ( arch_vmem_init(space) < 0 ) {
         /* FIXME: Release pages in the region */
         kfree(space);
         return NULL;
     }
-#endif
 
     return space;
 }

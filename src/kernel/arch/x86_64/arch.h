@@ -206,7 +206,7 @@ struct arch_page_dir {
 #define VMEM_PDPT(x, pg)    (x[0 + DIV_CEIL((pg) + 1, 512) + FLOOR((pg), 512)])
 #define VMEM_PD(x, pg)      (x[1 + DIV_CEIL((pg) + 1, 512) + pg])
 struct arch_vmem_space {
-    /* Level-3 Complete multiway (512-ary) tree */
+    /* Level-3 complete multiway (512-ary) tree */
     int nr;
     u64 **array;
     /* Leaves for virtual memory */
@@ -223,7 +223,7 @@ struct arch_task {
     /* SP0 for tss */
     u64 sp0;
     /* CR3: Physical address of the page table */
-    u64 cr3;
+    void *cr3;
     /* Kernel stack pointer (kernel address) */
     void *kstack;
     /* User stack pointer (virtual address) */

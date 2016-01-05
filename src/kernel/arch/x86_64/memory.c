@@ -33,6 +33,8 @@ extern struct kmem *g_kmem;
 #define KMEM_DIR_RW(a)          ((a) | 0x007ULL)
 #define KMEM_PG_RW(a)           ((a) | 0x083ULL)
 #define KMEM_PG_GRW(a)          ((a) | 0x183ULL)
+#define VMEM_DIR_RW(a)          ((a) | 0x007ULL)
+#define VMEM_PG_RW(a)           ((a) | 0x003ULL)
 #define VMEM_IS_PAGE(a)         ((a) & 0x080ULL)
 #define VMEM_IS_PRESENT(a)      ((a) & 0x001ULL)
 #define VMEM_PT(a)              (u64 *)((a) & 0x7ffffffffffff000ULL)
@@ -1346,8 +1348,101 @@ arch_vmem_addr_v2p(struct vmem_space *space, void *vaddr)
         pt = VMEM_PT(avmem->vls[idxpd][idxp]);
         /* Get the offset */
         off = ((reg_t)vaddr) & 0xfffULL;
-        return (void *)(pt[idx] + off);
+        return (void *)(VMEM_PT(pt[idx]) + off);
     }
+}
+
+/*
+ * Initialize the architecture-specific virtual memory
+ */
+#define VMEM_NPD    4
+int
+arch_vmem_init(struct vmem_space *space)
+{
+    struct arch_vmem_space *avmem;
+    u64 *vpg;
+    u64 *vls;
+    ssize_t i;
+
+    avmem = kmalloc(sizeof(struct arch_vmem_space));
+    if ( NULL == avmem ) {
+        return -1;
+    }
+    avmem->array = kmalloc(sizeof(u64 *) * (VMEM_NENT(VMEM_NPD) + VMEM_NPD));
+    if ( NULL == avmem->array ) {
+        kfree(avmem);
+        return -1;
+    }
+    avmem->vls = kmalloc(sizeof(u64 *) * VMEM_NPD);
+    if ( NULL == avmem->vls ) {
+        kfree(avmem->array);
+        kfree(avmem);
+        return -1;
+    }
+    avmem->nr = VMEM_NPD;
+
+    kmemset(avmem->array, 0, sizeof(u64 *) * (VMEM_NENT(VMEM_NPD) + VMEM_NPD));
+    kmemset(avmem->vls, 0, sizeof(u64 *) * VMEM_NPD);
+
+    vpg = kmalloc(PAGESIZE * (VMEM_NENT(VMEM_NPD) + VMEM_NPD));
+    if ( NULL == vpg ) {
+        kfree(avmem->vls);
+        kfree(avmem->array);
+        kfree(avmem);
+        return -1;
+    }
+    vls = kmalloc(PAGESIZE * VMEM_NPD);
+    if ( NULL == vls ) {
+        kfree(vpg);
+        kfree(avmem->vls);
+        kfree(avmem->array);
+        kfree(avmem);
+        return -1;
+    }
+    kmemset(vpg, 0, PAGESIZE * (VMEM_NENT(VMEM_NPD) + VMEM_NPD));
+    kmemset(vls, 0, PAGESIZE * VMEM_NPD);
+
+    /* Set physical addresses to page directories */
+    VMEM_PML4(avmem->array) = arch_vmem_addr_v2p(g_kmem->space, vpg);
+    VMEM_PDPT(avmem->array, 0) = arch_vmem_addr_v2p(g_kmem->space, vpg + 512);
+    for ( i = 0; i < VMEM_NPD; i++ ) {
+        VMEM_PD(avmem->array, i)
+            = arch_vmem_addr_v2p(g_kmem->space, vpg + 1024 + 512 * i);
+    }
+
+    /* Page directories with virtual address */
+    for ( i = 0; i < VMEM_NPD; i++ ) {
+        avmem->vls[i] = vls + 512 * i;
+    }
+
+    /* Setup physical page table */
+    vpg[0] = VMEM_DIR_RW((u64)VMEM_PDPT(avmem->array, 0));
+    for ( i = 0; i < VMEM_NPD; i++ ) {
+        vpg[512 + i] = VMEM_DIR_RW((u64)VMEM_PD(avmem->array, i));
+    }
+
+    /* FIXME: Set the kernel region */
+    struct arch_vmem_space *tmp = g_kmem->space->arch;
+    vpg[512] = KMEM_PG_GRW((u64)VMEM_PD(tmp->array, 0));
+    vpg[512 + 3] = KMEM_PG_GRW((u64)VMEM_PD(tmp->array, 3));
+    avmem->vls[0] = tmp->vls[0];
+    avmem->vls[3] = tmp->vls[3];
+
+    char buf[128];
+    ksnprintf(buf, sizeof(buf), "XXXX: %016x %016x %016x %016x %016x %016x",
+              vpg[0], vpg[512], vpg[513], vpg[514], vpg[515], vpg[1024]);
+    set_cr3((void *)KERNEL_PGT);
+#if 1
+    ksnprintf(buf, sizeof(buf), "XXXX: %016x %016x %016x %016x %016x %016x",
+              *(u64 *)0x2861000, *(u64 *)0x103000, *(u64 *)0x2863000,
+              *(u64 *)0x2864000, *(u64 *)0x106000, 0);
+#endif
+    panic(buf);
+
+    /* Set the architecture-specific data structure to its parent */
+    space->arch = avmem;
+
+    return 0;
 }
 
 /*
