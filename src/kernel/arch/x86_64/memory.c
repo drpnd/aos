@@ -426,13 +426,14 @@ _kmem_init(struct kstring *region)
  *      The _kmem_pgt_init() function initializes the page table for the kernel
  *      memory.  It creates the mapping entries from 0 to 4 GiB memory space of
  *      virtual memory with 2 MiB paging, and enables the low address space
- *      (0-32 MiB).
+ *      (0-32 MiB).  (FIXME: Temporarily use 5 GiB space to support hundreds
+ *      gigabytes memory)
  *
  * RETURN VALUES
  *      If successful, the _kmem_pgt_init() function returns the value of 0.  It
  *      returns the value of -1 on failure.
  */
-#define KMEM_VMEM_NPD   4
+#define KMEM_VMEM_NPD   6
 static int
 _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
 {
@@ -460,7 +461,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
 
-    /* Page table: Allocate 10 blocks (6 for keeping physical address, and 4 for
+    /* Page table: Allocate 14 blocks (8 for keeping physical address, and 6 for
        keeping virtual address) */
     pgtsz = PAGESIZE * (VMEM_NENT(KMEM_VMEM_NPD) + KMEM_VMEM_NPD);
     ptr = (u64 *)(KMEM_BASE + *off);
@@ -479,7 +480,8 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     }
     /* Page directories with virtual address */
     for ( i = 0; i < KMEM_VMEM_NPD; i++ ) {
-        vls[i] = (u64 *)KMEM_LOW_P2V(ptr + 3072 + 512 * i);
+        vls[i] = (u64 *)KMEM_LOW_P2V(ptr + 512 * VMEM_NENT(KMEM_VMEM_NPD)
+                                     + 512 * i);
     }
 
     /* Setup physical page table */
@@ -534,6 +536,11 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     /* Copy */
     kmemcpy((*avmem)->vls, vls, sizeof(u64 *) * KMEM_VMEM_NPD);
 
+    /* FIXME */
+    char buf[256];
+    ksnprintf(buf, sizeof(buf), "%016x", vls[0][0]);
+    //panic(buf);
+
     return 0;
 }
 
@@ -577,18 +584,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     reg_low->start = (void *)0;
     reg_low->len = CEIL(PMEM_LBOUND, SUPERPAGESIZE);
 
-    /* Physical pages: This region is not placed at the kernel region because
-       this is not directly referred from user-land processes (e.g., through
-       system calls). */
-    reg_pmem = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
-    *off += sizeof(struct vmem_region);
-    if ( *off > KMEM_MAX_SIZE ) {
-        return NULL;
-    }
-    kmemset(reg_pmem, 0, sizeof(struct vmem_region));
-    reg_pmem->start = (void *)KMEM_REGION_PMEM_BASE;
-    reg_pmem->len = CEIL(pmsz, SUPERPAGESIZE);
-
     /* Kernel address space (3-3.64 GiB) */
     reg_kernel = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
     *off += sizeof(struct vmem_region);
@@ -609,6 +604,18 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
     reg_spec->start = (void *)KMEM_REGION_SPEC_BASE;
     reg_spec->len = KMEM_REGION_SPEC_SIZE;
 
+    /* Physical pages: This region is not placed at the kernel region because
+       this is not directly referred from user-land processes (e.g., through
+       system calls).  FIXME: This temporarily uses 4-5 GiB region. */
+    reg_pmem = (struct vmem_region *)KMEM_LOW_P2V(KMEM_BASE + *off);
+    *off += sizeof(struct vmem_region);
+    if ( *off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(reg_pmem, 0, sizeof(struct vmem_region));
+    reg_pmem->start = (void *)KMEM_REGION_PMEM_BASE;
+    reg_pmem->len = CEIL(pmsz, SUPERPAGESIZE);
+
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
 
@@ -628,22 +635,6 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
         spgs_low[i].flags = VMEM_USED | VMEM_GLOBAL | VMEM_SUPERPAGE;
         spgs_low[i].region = reg_low;
         spgs_low[i].next = NULL;
-    }
-
-    /* Prepare page data structures for physical memory management region */
-    spgs_pmem = (struct vmem_superpage *)KMEM_LOW_P2V(KMEM_BASE + *off);
-    n = DIV_CEIL(reg_pmem->len, SUPERPAGESIZE);
-    *off += sizeof(struct vmem_superpage) * n;
-    if ( *off > KMEM_MAX_SIZE ) {
-        return NULL;
-    }
-    kmemset(spgs_pmem, 0, sizeof(struct vmem_superpage) * n);
-    for ( i = 0; i < n; i++ ) {
-        spgs_pmem[i].u.superpage.addr = (reg_t)pmbase + SUPERPAGE_ADDR(i);
-        spgs_pmem[i].order = VMEM_INVAL_BUDDY_ORDER;
-        spgs_pmem[i].flags = VMEM_USABLE | VMEM_USED | VMEM_SUPERPAGE;
-        spgs_pmem[i].region = reg_pmem;
-        spgs_pmem[i].next = NULL;
     }
 
     /* Prepare page data structures for kernel memory region */
@@ -682,21 +673,38 @@ _kmem_vmem_space_create(void *pmbase, u64 pmsz, u64 *off)
         spgs_spec[i].next = NULL;
     }
 
+    /* Prepare page data structures for physical memory management region */
+    spgs_pmem = (struct vmem_superpage *)KMEM_LOW_P2V(KMEM_BASE + *off);
+    n = DIV_CEIL(reg_pmem->len, SUPERPAGESIZE);
+    *off += sizeof(struct vmem_superpage) * n;
+    if ( *off > KMEM_MAX_SIZE ) {
+        return NULL;
+    }
+    kmemset(spgs_pmem, 0, sizeof(struct vmem_superpage) * n);
+    for ( i = 0; i < n; i++ ) {
+        spgs_pmem[i].u.superpage.addr = (reg_t)pmbase + SUPERPAGE_ADDR(i);
+        spgs_pmem[i].order = VMEM_INVAL_BUDDY_ORDER;
+        spgs_pmem[i].flags = VMEM_USABLE | VMEM_USED | VMEM_GLOBAL
+            | VMEM_SUPERPAGE;
+        spgs_pmem[i].region = reg_pmem;
+        spgs_pmem[i].next = NULL;
+    }
+
     /* Page-alignment */
     *off = CEIL(*off, PAGESIZE);
 
     /* Set the allocated pages to each region */
     reg_low->superpages = spgs_low;
-    reg_pmem->superpages = spgs_pmem;
     reg_kernel->superpages = spgs_kernel;
     reg_spec->superpages = spgs_spec;
+    reg_pmem->superpages = spgs_pmem;
 
     /* Create the chain of regions */
     space->first_region = reg_low;
-    reg_low->next = reg_pmem;
-    reg_pmem->next = reg_kernel;
+    reg_low->next = reg_kernel;
     reg_kernel->next = reg_spec;
-    reg_spec->next = NULL;
+    reg_spec->next = reg_pmem;
+    reg_pmem->next = NULL;
 
     return space;
 }
@@ -903,7 +911,7 @@ _kmem_vmem_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
 
     /* Index to page directory */
     idxpd = (vaddr >> 30);
-    if ( idxpd >= 4 ) {
+    if ( idxpd >= avmem->nr ) {
         return -1;
     }
     /* Index to page table */
@@ -1469,7 +1477,7 @@ arch_vmem_addr_v2p(struct vmem_space *space, void *vaddr)
 /*
  * Initialize the architecture-specific virtual memory
  */
-#define VMEM_NPD    4
+#define VMEM_NPD    6
 int
 arch_vmem_init(struct vmem_space *space)
 {
@@ -1541,11 +1549,21 @@ arch_vmem_init(struct vmem_space *space)
     /* FIXME: Set the kernel region */
     struct arch_vmem_space *tmp = g_kmem->space->arch;
     paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 0));
+
+    char buf[256];
+    ksnprintf(buf, sizeof(buf), "%016x %016x %016x %016x",
+              paddr, tmp->array[2][0], tmp->vls[0][0],
+              arch_vmem_addr_v2p(g_kmem->space, tmp->array[1]));
+    //panic(buf);
+
     vpg[512] = KMEM_DIR_RW((u64)paddr);
     paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 3));
     vpg[512 + 3] = KMEM_DIR_RW((u64)paddr);
+    paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 4));
+    vpg[512 + 4] = KMEM_DIR_RW((u64)paddr);
     avmem->vls[0] = tmp->vls[0];
     avmem->vls[3] = tmp->vls[3];
+    avmem->vls[4] = tmp->vls[4];
 
     /* Set the architecture-specific data structure to its parent */
     space->arch = avmem;

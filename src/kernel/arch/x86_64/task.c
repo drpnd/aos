@@ -374,6 +374,19 @@ proc_create(const char *path, const char *name, pid_t pid)
     /* Temporary set the page table to the user's one to copy the exec file from
        kernel to the user space */
     saved_cr3 = get_cr3();
+#if 0
+    void *x = ((struct arch_vmem_space *)g_kmem->space->arch)->pgt;
+    char buf[256];
+    set_cr3((void *)KERNEL_PGT);
+    ksnprintf(buf, sizeof(buf),
+              "xxx: %016x %016x / %016x %016x %016x %016x %016x %016x / %016x",
+              *(u64 *)0x102000,
+              //*(u64 *)0x101000, // saved_cr3
+              *(u64 *)0x2860000, *(u64 *)0x2861000, *(u64 *)0x2861008,
+              *(u64 *)0x2861010, *(u64 *)0x2861018, *(u64 *)0x2861020,
+              *(u64 *)0x2861028, *(u64 *)0x2107f00);
+    panic(buf);
+#endif
     set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
 
     /* Copy the program from the initramfs to user space */
