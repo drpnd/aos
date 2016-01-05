@@ -286,11 +286,11 @@ bsp_init(void)
     /* Launch the `init' server */
     cli();
 
-#if 1
     if ( proc_create("/servers/pm", "pm", 0) < 0 ) {
         panic("Fatal: Cannot create the `pm' server.");
         return;
     }
+#if 0
     if ( proc_create("/servers/init", "init", 1) < 0 ) {
         panic("Fatal: Cannot create the `init' server.");
         return;
@@ -321,7 +321,7 @@ ap_init(void)
     /* Disable the global page feature */
     set_cr4(get_cr4() & ~CR4_PGE);
     /* Set the page table */
-    set_cr3(VMEM_PML4(((struct arch_vmem_space *)g_kmem->space->arch)->array));
+    set_cr3(((struct arch_vmem_space *)g_kmem->space->arch)->pgt);
     /* Enable the global page feature */
     set_cr4(get_cr4() | CR4_PGE);
 

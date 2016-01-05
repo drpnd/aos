@@ -585,6 +585,7 @@ pid_t sys_fork(void);
 void spin_lock(u32 *);
 void spin_unlock(u32 *);
 int arch_vmem_map(struct vmem_space *, void *, void *, int);
+int arch_kmem_map(struct vmem_space *, void *, void *, int);
 int arch_address_width(void);
 void * arch_vmem_addr_v2p(struct vmem_space *, void *);
 int arch_vmem_init(struct vmem_space *);

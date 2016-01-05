@@ -34,7 +34,8 @@ extern struct kmem *g_kmem;
 #define KMEM_PG_RW(a)           ((a) | 0x083ULL)
 #define KMEM_PG_GRW(a)          ((a) | 0x183ULL)
 #define VMEM_DIR_RW(a)          ((a) | 0x007ULL)
-#define VMEM_PG_RW(a)           ((a) | 0x003ULL)
+#define VMEM_PG_RW(a)           ((a) | 0x087ULL)
+#define VMEM_PG_GRW(a)          ((a) | 0x187ULL)
 #define VMEM_IS_PAGE(a)         ((a) & 0x080ULL)
 #define VMEM_IS_PRESENT(a)      ((a) & 0x001ULL)
 #define VMEM_PT(a)              (u64 *)((a) & 0x7ffffffffffff000ULL)
@@ -435,6 +436,7 @@ _kmem_init(struct kstring *region)
 static int
 _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
 {
+    void *pgt;
     u64 *parr[VMEM_NENT(KMEM_VMEM_NPD)];
     u64 *vls[KMEM_VMEM_NPD];
     int i;
@@ -469,6 +471,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     kmemset(ptr, 0, pgtsz);
 
     /* Set physical addresses to page directories */
+    pgt = ptr;
     VMEM_PML4(parr) = ptr;
     VMEM_PDPT(parr, 0) = ptr + 512;
     for ( i = 0; i < KMEM_VMEM_NPD; i++ ) {
@@ -503,7 +506,7 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     _disable_page_global();
 
     /* Set the constructured page table */
-    set_cr3(VMEM_PML4(parr));
+    set_cr3(pgt);
 
     /* Enable the global page feature */
     _enable_page_global();
@@ -518,13 +521,17 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     }
 
     /* Set the address */
+    (*avmem)->pgt = pgt;
     (*avmem)->nr = KMEM_VMEM_NPD;
     (*avmem)->array = (u64 **)(*avmem + sizeof(int));
     (*avmem)->vls = (u64 **)(*avmem + sizeof(int)
                              + sizeof(u64 *) * VMEM_NENT(KMEM_VMEM_NPD));
 
+    /* Convert to virtual address */
+    for ( i = 0; i < VMEM_NENT(KMEM_VMEM_NPD); i++ ) {
+        (*avmem)->array[i] = (u64 *)KMEM_LOW_P2V(parr[i]);
+    }
     /* Copy */
-    kmemcpy((*avmem)->array, parr, sizeof(u64 *) * VMEM_NENT(KMEM_VMEM_NPD));
     kmemcpy((*avmem)->vls, vls, sizeof(u64 *) * KMEM_VMEM_NPD);
 
     return 0;
@@ -1243,6 +1250,113 @@ arch_vmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
 
         /* Remapping */
         if ( flags & VMEM_GLOBAL ) {
+            VMEM_PD(avmem->array, idxpd)[idxp] = VMEM_PG_GRW((u64)paddr);
+            avmem->vls[idxpd][idxp] = VMEM_PG_GRW((u64)vaddr);
+        } else {
+            VMEM_PD(avmem->array, idxpd)[idxp] = VMEM_PG_RW((u64)paddr);
+            avmem->vls[idxpd][idxp] = VMEM_PG_RW((u64)vaddr);
+        }
+
+        /* Invalidate the page */
+        invlpg((void *)vaddr);
+    } else {
+        /* Page */
+        /* Check the physical address argument */
+        if ( 0 != ((u64)paddr % PAGESIZE) || 0 != ((u64)vaddr % PAGESIZE) ) {
+            /* Invalid physical address */
+            return -1;
+        }
+
+        /* Check whether the page presented */
+        if ( !VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             || VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
+            /* Not present or 2 MiB page, then create a new page table */
+            vpt = _kmem_mm_page_alloc(g_kmem);
+            if ( NULL == vpt ) {
+                return -1;
+            }
+            /* Get the virtual address */
+            pt = arch_vmem_addr_v2p(g_kmem->space, vpt);
+
+            /* Update the entry */
+            VMEM_PD(avmem->array, idxpd)[idxp] = VMEM_DIR_RW((u64)pt);
+            avmem->vls[idxpd][idxp] = VMEM_DIR_RW((u64)vpt);
+        } else {
+            /* Directory */
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
+        }
+
+        /* Remapping */
+        if ( flags & VMEM_GLOBAL ) {
+            pt[idx] = VMEM_PG_GRW((u64)paddr);
+        } else {
+            pt[idx] = VMEM_PG_RW((u64)paddr);
+        }
+
+        /* Invalidate the page */
+        invlpg((void *)vaddr);
+    }
+
+    return 0;
+}
+
+/*
+ * Map a virtual page to a physical page
+ * FIXME: This is redundant....  Will merge with arch_vmem_map?
+ */
+int
+arch_kmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
+{
+    struct arch_vmem_space *avmem;
+    int idxpd;
+    int idxp;
+    int idx;
+    u64 *pt;
+    u64 *vpt;
+
+    /* Check the flags */
+    if ( !(VMEM_USABLE & flags) || !(VMEM_USED & flags) ) {
+        /* This page is not usable nor used, then do nothing. */
+        return -1;
+    }
+
+    /* Get the architecture-specific kernel memory manager */
+    avmem = (struct arch_vmem_space *)space->arch;
+
+    /* Index to page directory */
+    idxpd = ((u64)vaddr >> 30);
+    if ( idxpd >= 4 ) {
+        return -1;
+    }
+    /* Index to page table */
+    idxp = ((u64)vaddr >> 21) & 0x1ff;
+    /* Index to page entry */
+    idx = ((u64)vaddr >> 12) & 0x1ffULL;
+
+    /* Superpage or page? */
+    if ( VMEM_SUPERPAGE & flags ) {
+        /* Superpage */
+        /* Check the physical address argument */
+        if ( 0 != ((u64)paddr % SUPERPAGESIZE)
+             || 0 != ((u64)vaddr % SUPERPAGESIZE) ) {
+            /* Invalid physical address */
+            return -1;
+        }
+
+        /* Check whether the page presented */
+        if ( VMEM_IS_PRESENT(VMEM_PD(avmem->array, idxpd)[idxp])
+             && !VMEM_IS_PAGE(VMEM_PD(avmem->array, idxpd)[idxp]) ) {
+            /* Present and 4 KiB paging, then remove the descendant table */
+            pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
+            vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
+
+            /* Delete descendant table */
+            _kmem_mm_page_free(g_kmem, vpt);
+        }
+
+        /* Remapping */
+        if ( flags & VMEM_GLOBAL ) {
             VMEM_PD(avmem->array, idxpd)[idxp] = KMEM_PG_GRW((u64)paddr);
             avmem->vls[idxpd][idxp] = KMEM_PG_GRW((u64)vaddr);
         } else {
@@ -1362,6 +1476,7 @@ arch_vmem_init(struct vmem_space *space)
     struct arch_vmem_space *avmem;
     u64 *vpg;
     u64 *vls;
+    u64 *paddr;
     ssize_t i;
 
     avmem = kmalloc(sizeof(struct arch_vmem_space));
@@ -1403,11 +1518,11 @@ arch_vmem_init(struct vmem_space *space)
     kmemset(vls, 0, PAGESIZE * VMEM_NPD);
 
     /* Set physical addresses to page directories */
-    VMEM_PML4(avmem->array) = arch_vmem_addr_v2p(g_kmem->space, vpg);
-    VMEM_PDPT(avmem->array, 0) = arch_vmem_addr_v2p(g_kmem->space, vpg + 512);
+    avmem->pgt = arch_vmem_addr_v2p(g_kmem->space, vpg);
+    VMEM_PML4(avmem->array) = vpg;
+    VMEM_PDPT(avmem->array, 0) = vpg + 512;
     for ( i = 0; i < VMEM_NPD; i++ ) {
-        VMEM_PD(avmem->array, i)
-            = arch_vmem_addr_v2p(g_kmem->space, vpg + 1024 + 512 * i);
+        VMEM_PD(avmem->array, i) = vpg + 1024 + 512 * i;
     }
 
     /* Page directories with virtual address */
@@ -1416,28 +1531,21 @@ arch_vmem_init(struct vmem_space *space)
     }
 
     /* Setup physical page table */
-    vpg[0] = VMEM_DIR_RW((u64)VMEM_PDPT(avmem->array, 0));
+    paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PDPT(avmem->array, 0));
+    vpg[0] = VMEM_DIR_RW((u64)paddr);
     for ( i = 0; i < VMEM_NPD; i++ ) {
-        vpg[512 + i] = VMEM_DIR_RW((u64)VMEM_PD(avmem->array, i));
+        paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(avmem->array, i));
+        vpg[512 + i] = VMEM_DIR_RW((u64)paddr);
     }
 
     /* FIXME: Set the kernel region */
     struct arch_vmem_space *tmp = g_kmem->space->arch;
-    vpg[512] = KMEM_PG_GRW((u64)VMEM_PD(tmp->array, 0));
-    vpg[512 + 3] = KMEM_PG_GRW((u64)VMEM_PD(tmp->array, 3));
+    paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 0));
+    vpg[512] = KMEM_DIR_RW((u64)paddr);
+    paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 3));
+    vpg[512 + 3] = KMEM_DIR_RW((u64)paddr);
     avmem->vls[0] = tmp->vls[0];
     avmem->vls[3] = tmp->vls[3];
-
-    char buf[128];
-    ksnprintf(buf, sizeof(buf), "XXXX: %016x %016x %016x %016x %016x %016x",
-              vpg[0], vpg[512], vpg[513], vpg[514], vpg[515], vpg[1024]);
-    set_cr3((void *)KERNEL_PGT);
-#if 1
-    ksnprintf(buf, sizeof(buf), "XXXX: %016x %016x %016x %016x %016x %016x",
-              *(u64 *)0x2861000, *(u64 *)0x103000, *(u64 *)0x2863000,
-              *(u64 *)0x2864000, *(u64 *)0x106000, 0);
-#endif
-    panic(buf);
 
     /* Set the architecture-specific data structure to its parent */
     space->arch = avmem;

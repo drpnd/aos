@@ -97,7 +97,7 @@ _kmem_alloc_superpages(struct kmem *kmem, int order)
 
     /* Map the physical and virtual memory */
     for ( i = 0; i < (1LL << order); i++ ) {
-        ret = arch_vmem_map(kmem->space, vaddr + SUPERPAGE_ADDR(i),
+        ret = arch_kmem_map(kmem->space, vaddr + SUPERPAGE_ADDR(i),
                             paddr + SUPERPAGE_ADDR(i), spg->flags);
         if ( ret < 0 ) {
             /* Release the virtual and physical memory */
@@ -144,7 +144,7 @@ _kmem_alloc_pages(struct kmem *kmem, int order)
 
     /* Map the physical and virtual memory */
     for ( i = 0; i < (1LL << order); i++ ) {
-        ret = arch_vmem_map(kmem->space, vaddr + PAGE_ADDR(i),
+        ret = arch_kmem_map(kmem->space, vaddr + PAGE_ADDR(i),
                             paddr + PAGE_ADDR(i), pg->flags);
         if ( ret < 0 ) {
             /* Release the virtual and physical memory */
@@ -252,7 +252,7 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
 
     /* Superpage to pages; map pages first */
     for ( i = 0; i < (1LL << po); i++ ) {
-        ret = arch_vmem_map(kmem->space, vaddr1 + PAGE_ADDR(i),
+        ret = arch_kmem_map(kmem->space, vaddr1 + PAGE_ADDR(i),
                             paddr1 + PAGE_ADDR(i), flags);
         if ( ret < 0 ) {
             vmem_return_superpages(spg0);
@@ -308,7 +308,7 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
 
     /* Superpage to pages; map pages first */
     for ( i = 0; i < (1LL << order); i++ ) {
-        ret = arch_vmem_map(kmem->space, vaddr0 + PAGE_ADDR(i),
+        ret = arch_kmem_map(kmem->space, vaddr0 + PAGE_ADDR(i),
                             paddr0 + PAGE_ADDR(i), flags);
         if ( ret < 0 ) {
             vmem_return_superpages(spg0);

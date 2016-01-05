@@ -206,6 +206,8 @@ struct arch_page_dir {
 #define VMEM_PDPT(x, pg)    (x[0 + DIV_CEIL((pg) + 1, 512) + FLOOR((pg), 512)])
 #define VMEM_PD(x, pg)      (x[1 + DIV_CEIL((pg) + 1, 512) + pg])
 struct arch_vmem_space {
+    /* The root of the page table */
+    void *pgt;
     /* Level-3 complete multiway (512-ary) tree */
     int nr;
     u64 **array;

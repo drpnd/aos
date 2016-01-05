@@ -393,12 +393,14 @@ proc_create(const char *path, const char *name, pid_t pid)
     struct proc *proc;
     void *ppage1;
     void *ppage2;
-    void *paddr;
     u64 cs;
     u64 ss;
     u64 flags;
     int policy = KTASK_POLICY_USER;
     void *exec;
+    void *saved_cr3;
+    int ret;
+    ssize_t i;
 
     /* Check the process table first */
     if ( NULL != proc_table->procs[pid] ) {
@@ -444,7 +446,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     proc_table->lastpid = pid;
 
     /* Set the page table */
-    //set_cr3(VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
+    //set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
 
     /* Create an architecture-specific task data structure */
     t = kmalloc(sizeof(struct arch_task));
@@ -471,7 +473,8 @@ proc_create(const char *path, const char *name, pid_t pid)
     }
 
     /* Prepare the user stack */
-    ppage1 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
+    ppage1 = pmem_alloc_pages(PMEM_ZONE_LOWMEM,
+                              bitwidth(USTACK_SIZE / PAGESIZE));
     if ( NULL == ppage1 ) {
         goto error_ustack;
     }
@@ -483,29 +486,35 @@ proc_create(const char *path, const char *name, pid_t pid)
         return -1;
     }
 
-    /* FIXME */
-    void *cr3 = get_cr3();
-    set_cr3(VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
-    char buf[128];
-    ksnprintf(buf, sizeof(buf), "XXXX: %016x", VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array));
-    panic(buf);
-
     /* Set user stack */
-    int ret;
     t->ustack = (void *)USTACK_INIT;
-    ret = arch_vmem_map(proc->vmem, t->ustack, ppage1, VMEM_USABLE | VMEM_USED);
-    if ( ret < 0 ) {
-        panic("FIXME 1");
+    for ( i = 0; i < (ssize_t)(USTACK_SIZE / PAGESIZE); i++ ) {
+        ret = arch_vmem_map(proc->vmem, t->ustack + PAGE_ADDR(i),
+                            ppage1 + PAGE_ADDR(i), VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME 1");
+        }
     }
     exec = (void *)CODE_INIT;
     ret = arch_vmem_map(proc->vmem, exec, ppage2, VMEM_USABLE | VMEM_USED);
     if ( ret < 0 ) {
+        /* FIXME: Handle this error */
         panic("FIXME 2");
     }
 
+    /* FIXME */
+    saved_cr3 = get_cr3();
+    set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
+
     (void)kmemcpy(exec, (void *)(INITRAMFS_BASE + offset), size);
+
+    //char buf[128];
+    //ksnprintf(buf, sizeof(buf), "xyz: %016llx %016llx", *(u64 *)exec, *((u64 *)exec + 1));
+    //panic(buf);
+
     /* Restore CR3 */
-    set_cr3(cr3);
+    set_cr3(saved_cr3);
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     t->ktask->state = KTASK_STATE_READY;
@@ -551,7 +560,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     t->rp->cs = cs;
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
-    t->cr3 = VMEM_PML4(((struct arch_vmem_space *)proc->vmem->arch)->array);
+    t->cr3 = ((struct arch_vmem_space *)proc->vmem->arch)->pgt;
 
     return 0;
 
