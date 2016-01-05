@@ -194,6 +194,7 @@ _output_decimal(char *str, size_t size, struct strfmt_format *strfmt,
     int sz;
     int i;
     char *buf;
+    int sign;
 
     /* Get the value from an argument */
     switch ( strfmt->mod ) {
@@ -209,15 +210,16 @@ _output_decimal(char *str, size_t size, struct strfmt_format *strfmt,
 
     /* Calculate the maximum buffer size, and allocate a buffer to store a
        decimal string */
-    sz = 3 * sizeof(val);       /* max. 3 chars per byte (rough approx.) */
+    sz = 3 * sizeof(val) + 1; /* max. 3 chars per byte (rough approx.) + sign */
     buf = alloca(sz);
     ptr = 0;
 
     /* Signed? */
     if ( val < 0 ) {
-        buf[ptr] = '-';
-        ptr++;
+        sign = -1;
         val *= -1;
+    } else {
+        sign = 1;
     }
 
     /* Store the decimal string to the buffer */
@@ -230,6 +232,12 @@ _output_decimal(char *str, size_t size, struct strfmt_format *strfmt,
     }
     if ( !ptr ) {
         buf[ptr] = '0';
+        ptr++;
+    }
+
+    /* Append a sign mark */
+    if ( sign < 0 ) {
+        buf[ptr] = '-';
         ptr++;
     }
 
@@ -275,9 +283,9 @@ static off_t
 _output_hexdecimal(char *str, size_t size, struct strfmt_format *strfmt,
                    va_list ap, int cap)
 {
-    long long int val;
-    long long int q;
-    long long int r;
+    unsigned long long int val;
+    unsigned long long int q;
+    unsigned long long int r;
     off_t pos;
     off_t ptr;
     int sz;
@@ -287,13 +295,13 @@ _output_hexdecimal(char *str, size_t size, struct strfmt_format *strfmt,
     /* Get the value from an argument */
     switch ( strfmt->mod ) {
     case STRFMT_MOD_LONG:
-        val = (long int)va_arg(ap, long int);
+        val = (unsigned long int)va_arg(ap, unsigned long int);
         break;
     case STRFMT_MOD_LONGLONG:
-        val = (long long int)va_arg(ap, long long int);
+        val = (unsigned long long int)va_arg(ap, unsigned long long int);
         break;
     default:
-        val = (int)va_arg(ap, int);
+        val = (unsigned int)va_arg(ap, unsigned int);
     }
 
     /* Calculate the maximum buffer size, and allocate a buffer to store a
@@ -301,13 +309,6 @@ _output_hexdecimal(char *str, size_t size, struct strfmt_format *strfmt,
     sz = 2 * sizeof(val);       /* max. 3 chars per byte (rough approx.) */
     buf = alloca(sz);
     ptr = 0;
-
-    /* Signed? */
-    if ( val < 0 ) {
-        buf[ptr] = '-';
-        ptr++;
-        val *= -1;
-    }
 
     /* Store the decimal string to the buffer */
     q = val;
