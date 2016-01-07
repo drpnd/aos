@@ -23,7 +23,7 @@
  */
 
 	.set	KERNEL_BASE,0x10000
-	.set	INITRAMFS_BASE,0x20000
+	.set	INITRAMFS_BASE,0x30000
 	.set	KERNEL_PGT,0x00079000	/* Page table */
 	.set	P_DATA_SIZE,0x10000	/* Data size for each processor */
 	.set	P_DATA_BASE,0x1000000	/* Data base for each processor */

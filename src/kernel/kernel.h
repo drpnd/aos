@@ -79,7 +79,7 @@
 #define VMEM_IS_FREE(x)         (VMEM_USABLE == ((x)->flags & 0x3))
 #define VMEM_IS_SUPERPAGE(x)    (VMEM_SUPERPAGE & (x)->flags)
 
-#define INITRAMFS_BASE          0x20000ULL
+#define INITRAMFS_BASE          0x30000ULL
 #define USTACK_INIT             0xbfe00000ULL
 #define CODE_INIT               0x40000000ULL
 #define KSTACK_SIZE             4096

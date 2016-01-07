@@ -28,7 +28,7 @@
 	.set	PXENV_SIGNATURE1,0x2b56		/* V+ */
 	.set	PXE_SIGNATURE,0x45585021	/* !PXE */
 	.set	KERNEL_ADDR,0x10000
-	.set	INITRD_ADDR,0x00020000
+	.set	INITRD_ADDR,0x00030000
 	.set	MME_SIZE,24		/* Memory map entry size */
 	.set	MME_SIGN,0x534d4150	/* MME signature (ascii "SMAP")  */
 	.set	GDT_CODE64_SEL,0x08
