@@ -198,6 +198,11 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         panic("FIXME b");
     }
 
+    /* This function uses "user"-stack, not kernel stack because syscall does
+       not switch the stack pointer.  Therefore, the user stack must be copied
+       before swapping the page table.  The following function maps the physical
+       pages of the user stack of new process to a certain virtual memory space,
+       and copies the stack there. */
     void *ustack2copy = (void *)0xa0000000ULL;
     for ( i = 0; i < (ssize_t)(USTACK_SIZE / PAGESIZE); i++ ) {
         ret = arch_vmem_map(op->vmem, ustack2copy + PAGE_ADDR(i),
