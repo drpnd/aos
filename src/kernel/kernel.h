@@ -579,7 +579,7 @@ void set_next_ktask(struct ktask *);
 void set_next_idle(void);
 void panic(const char *);
 void halt(void);
-struct ktask * task_clone(struct ktask *);
+struct proc * proc_fork(struct proc *, struct ktask *, struct ktask **);
 void task_set_return(struct ktask *, unsigned long long);
 pid_t sys_fork(void);
 void spin_lock(u32 *);

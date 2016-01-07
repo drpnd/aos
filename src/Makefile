@@ -81,6 +81,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/syscall.o \
 	kernel/exp.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
+	$(LD) -N -e kstart64 -Ttext=0x10000 -o kpack.dbg $^
 
 ## init server
 init: servers/init/init.o lib/arch/$(ARCH)/libc.o lib/arch/$(ARCH)/libcasm.o

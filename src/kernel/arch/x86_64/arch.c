@@ -121,6 +121,7 @@ bsp_init(void)
     struct bootinfo *bi;
     struct p_data *pdata;
     long long i;
+    int prox;
 
     /* Reset */
     mp_enabled = 0;
@@ -163,12 +164,6 @@ bsp_init(void)
     idt_setup_intr_gate(IV_LOC_TMR, intr_apic_loc_tmr);
     idt_setup_intr_gate(IV_CRASH, intr_crash);
 
-    /* Initialize the physical memory manager */
-    if ( arch_memory_init(bi, &arch_acpi) < 0 ) {
-        panic("Fatal: Could not initialize the memory manager.");
-        return;
-    }
-
     /* ToDo: Prepare the virtual pages for ACPI etc. */
 
     /* Initialize I/O APIC */
@@ -179,15 +174,24 @@ bsp_init(void)
         ioapic_map_intr(IV_IRQ(i), i, arch_acpi.acpi_ioapic_base); /* IRQn */
     }
 
+    /* Initialize the local APIC */
+    lapic_init();
+
+    /* Get the proximity domain */
+    prox = acpi_lapic_prox_domain(&arch_acpi, lapic_id());
+
+    /* Initialize the physical memory manager */
+    if ( arch_memory_init(bi, &arch_acpi) < 0 ) {
+        panic("Fatal: Could not initialize the memory manager.");
+        return;
+    }
+
     /* Load LDT */
     lldt(0);
 
     /* Initialize TSS */
     tss_init();
     tr_load(lapic_id());
-
-    /* Initialize the local APIC */
-    lapic_init();
 
     /* Setup system call */
     for ( i = 0; i < SYS_MAXSYSCALL; i++ ) {
@@ -237,7 +241,7 @@ bsp_init(void)
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
-    pdata->prox_domain = acpi_lapic_prox_domain(&arch_acpi, pdata->cpu_id);
+    pdata->prox_domain = prox;
     pdata->flags |= 1;
 
     /* Estimate the frequency */
@@ -310,12 +314,16 @@ void
 ap_init(void)
 {
     struct p_data *pdata;
+    int prox;
 
     /* Load global descriptor table */
     gdt_load();
 
     /* Load interrupt descriptor table */
     idt_load();
+
+    /* Get the proximity domain */
+    prox = acpi_lapic_prox_domain(&arch_acpi, lapic_id());
 
     /* Disable the global page feature */
     set_cr4(get_cr4() & ~CR4_PGE);
@@ -327,7 +335,7 @@ ap_init(void)
     /* Enable this processor */
     pdata = this_cpu();
     pdata->cpu_id = lapic_id();
-    pdata->prox_domain = acpi_lapic_prox_domain(&arch_acpi, pdata->cpu_id);
+    pdata->prox_domain = prox;
     pdata->flags |= 1;
 
     /* Estimate the frequency */

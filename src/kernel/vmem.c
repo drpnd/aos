@@ -309,26 +309,37 @@ vmem_space_delete(struct vmem_space *vmem)
 struct vmem_space *
 vmem_space_copy(struct vmem_space *vmem)
 {
-    struct vmem_space *nvmem;
+    struct vmem_space *space;
+    struct vmem_region *reg;
 
     /* Allocate a new virtual memory space */
-    nvmem = kmalloc(sizeof(struct vmem_space));
-    if ( NULL == nvmem ) {
+    space = kmalloc(sizeof(struct vmem_space));
+    if ( NULL == space ) {
+        return NULL;
+    }
+    kmemset(space, 0, sizeof(struct vmem_space));
+
+    /* Allocate a new virtual memory region */
+    reg = vmem_region_create();
+    if ( NULL == reg ) {
+        /* Cannot allocate a virtual memory region */
+        kfree(space);
         return NULL;
     }
 
-    /* Region */
-    nvmem->first_region = kmalloc(sizeof(struct vmem_region));
-    if ( NULL == nvmem->first_region ) {
-        kfree(nvmem);
+    /* Set the region to the first region */
+    space->first_region = reg;
+
+    /* Initialize the architecture-specific data structure */
+    if ( arch_vmem_init(space) < 0 ) {
+        /* FIXME: Release pages in the region */
+        kfree(space);
         return NULL;
     }
 
-    /* Copy all the pages */
+    /* FIXME: Copy */
 
-    /* FIXME */
-
-    return nvmem;
+    return space;
 }
 
 /*

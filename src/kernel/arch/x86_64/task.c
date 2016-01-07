@@ -73,114 +73,169 @@ task_new(void)
 /*
  * Clone the task
  */
-struct ktask *
-task_clone(struct ktask *ot)
+struct proc *
+proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
 {
     struct arch_task *t;
-    struct page_entry *pgt;
-    u64 i;
-    u64 j;
+    struct proc *np;
+    void *paddr1;
+    void *paddr2;
+    void *exec;
+    void *ustack;
+    void *saved_cr3;
+    ssize_t i;
+    int ret;
+
+    /* Create a new process */
+    np = kmalloc(sizeof(struct proc));
+    if ( NULL == np ) {
+        return NULL;
+    }
+    kmemset(np, 0, sizeof(struct proc));
+    kmemcpy(np->name, op->name, PATH_MAX);
 
     /* Allocate the architecture-specific task structure of a new task */
     t = kmalloc(sizeof(struct arch_task));
     if ( NULL == t ) {
+        kfree(np);
         return NULL;
     }
     /* Allocate the kernel task structure of a new task */
     t->kstack = kmalloc(KSTACK_SIZE);
     if ( NULL == t->kstack ) {
         kfree(t);
-        return NULL;
-    }
-    /* Allocate the user stack of a new task */
-    t->ustack = kmalloc(USTACK_SIZE);
-    if ( NULL == t->ustack ) {
-        kfree(t->kstack);
-        kfree(t);
+        kfree(np);
         return NULL;
     }
     /* Allocate the kernel stack of a new task */
     t->ktask = kmalloc(sizeof(struct ktask));
     if ( NULL == t->ktask ) {
-        kfree(t->ustack);
         kfree(t->kstack);
         kfree(t);
+        kfree(np);
         return NULL;
     }
     t->ktask->arch = t;
+    t->ktask->proc = np;
+    t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->next = NULL;
+    /* Allocate the user stack of a new task */
+    paddr1 = pmem_alloc_pages(PMEM_ZONE_LOWMEM,
+                             bitwidth(USTACK_SIZE / PAGESIZE));
+    if ( NULL == paddr1 ) {
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
+    /* For exec */
+    paddr2 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
+    if ( NULL == paddr2 ) {
+        pmem_free_pages(paddr1);
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
+    t->ustack = ((struct arch_task *)ot->arch)->ustack;
+    ustack = kmalloc(USTACK_SIZE);
+    if ( NULL == ustack ) {
+        pmem_free_pages(paddr2);
+        pmem_free_pages(paddr1);
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
+    exec = kmalloc(PAGESIZE);
+    if ( NULL == ustack ) {
+        kfree(ustack);
+        pmem_free_pages(paddr2);
+        pmem_free_pages(paddr1);
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
 
-    return NULL;
-#if 0
-    /* Copy the kernel and user stacks */
-    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack,
-            KSTACK_SIZE);
-    kmemcpy(t->ustack, ((struct arch_task *)ot->arch)->ustack,
-            USTACK_SIZE);
+    /* Copy the user stack to the temporary buffer */
+    kmemcpy(ustack, ((struct arch_task *)ot->arch)->ustack, USTACK_SIZE);
+    kmemcpy(exec, (void *)CODE_INIT, PAGESIZE);
+
+    /* Copy the kernel stack */
+    kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack, KSTACK_SIZE);
+
+    /* Create a virtual memory space */
+    np->vmem = vmem_space_create();
+    if ( NULL == np->vmem ) {
+        kfree(exec);
+        kfree(ustack);
+        pmem_free_pages(paddr2);
+        pmem_free_pages(paddr1);
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
+
+    /* FIXME: Tempoary... */
+    for ( i = 0; i < (ssize_t)(USTACK_SIZE / PAGESIZE); i++ ) {
+        ret = arch_vmem_map(np->vmem, t->ustack + PAGE_ADDR(i),
+                            paddr1 + PAGE_ADDR(i), VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME a");
+        }
+    }
+    ret = arch_vmem_map(np->vmem, exec, paddr2, VMEM_USABLE | VMEM_USED);
+    if ( ret < 0 ) {
+        /* FIXME: Handle this error */
+        panic("FIXME b");
+    }
+
+    void *ustack2copy = (void *)0xa0000000ULL;
+    for ( i = 0; i < (ssize_t)(USTACK_SIZE / PAGESIZE); i++ ) {
+        ret = arch_vmem_map(op->vmem, ustack2copy + PAGE_ADDR(i),
+                            paddr1 + PAGE_ADDR(i), VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME c");
+        }
+    }
+    kmemcpy(ustack2copy, ((struct arch_task *)ot->arch)->ustack, USTACK_SIZE);
+
+    /* Save the current cr3 */
+    saved_cr3 = get_cr3();
+
+    set_cr3(((struct arch_vmem_space *)np->vmem->arch)->pgt);
+
+    /* Copy the user stack from the temporary buffer */
+    kmemcpy(t->ustack, ustack, USTACK_SIZE);
+    kmemcpy((void *)CODE_INIT, exec, PAGESIZE);
+
+    /* Restore cr3 */
+    set_cr3(saved_cr3);
 
     /* Setup the restart point */
     t->rp = (struct stackframe64 *)
         ((u64)((struct arch_task *)ot->arch)->rp + (u64)t->kstack
          - (u64)((struct arch_task *)ot->arch)->kstack);
 
-    /* Copy the user memory space */
-    /* Setup page table */
-    pgt = kmalloc(sizeof(struct page_entry) * (6 + 512));
-    if ( NULL == pgt ) {
-        return NULL;
-    }
-    kmemset(pgt, 0, sizeof(struct page_entry) * (6 + 512));
-    /* Kernel */
-    pgt[0].entries[0] = kmem_paddr((u64)&pgt[1]) | 0x007;
-    /* PDPT */
-    for ( i = 0; i < 1; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-    /* PT (1GB-- +2MiB) */
-    for ( i = 1; i < 2; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-    pgt[2 + 1].entries[0] = kmem_paddr((u64)&pgt[6]) | 0x007;
-    pgt[2 + 1].entries[510] = kmem_paddr((u64)&pgt[516]) | 0x007;
-    pgt[2 + 1].entries[511] = kmem_paddr((u64)&pgt[517]) | 0x007;
-    for ( i = 2; i < 3; i++ ) {
-        pgt[1].entries[i] = kmem_paddr((u64)&pgt[2 + i]) | 0x007;
-        for ( j = 0; j < 512; j++ ) {
-            /* Not present */
-            pgt[2 + i].entries[j] = 0x000;
-        }
-    }
-#if 0
-    /* Kernel */
-    for ( i = 3; i < 4; i++ ) {
-        pgt[1].entries[i] = ((u64)KERNEL_PGT + 4096 * (2 + i)) | 0x007;
-    }
-    /* Executable */
-    for ( i = 0; i < 512; i++ ) {
-        /* Mapping */
-        pgt[6].entries[i] = ((struct page_entry *)((struct arch_proc *)ot->proc
-                                                   ->arch)->pgt)[6].entries[i];
-    }
-    /* Setup the page table for user stack */
-    for ( i = 0; i < (USTACK_SIZE - 1) / PAGESIZE + 1; i++ ) {
-        pgt[517].entries[511 - (USTACK_SIZE - 1) / PAGESIZE + i]
-            = (kmem_paddr((u64)t->ustack) + i * PAGESIZE) | 0x087;
-    }
-    /* Arguments */
-    pgt[516].entries[0] = ((struct page_entry *)((struct arch_proc *)ot->proc
-                                                 ->arch)->pgt)[516].entries[0];
-#endif
-    t->cr3 = kmem_paddr((u64)pgt);
+    /* Free the temporary buffers */
+    kfree(ustack);
+    kfree(exec);
 
+    t->cr3 = ((struct arch_vmem_space *)np->vmem->arch)->pgt;
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
 
-    /* Set the page table for the process */
-    //((struct arch_proc *)t->ktask->proc->arch)->pgt = pgt;
-
-    return t->ktask;
-#endif
+    /* Return */
+    *ntp = t->ktask;
+    return np;
 }
 
 /*
@@ -199,7 +254,7 @@ task_create_idle(void)
     kmemset(t, 0, sizeof(struct arch_task));
 
     /* Page table for the kernel */
-    t->cr3 = VMEM_PML4(((struct arch_vmem_space *)g_kmem->space->arch)->array);
+    t->cr3 = ((struct arch_vmem_space *)g_kmem->space->arch)->pgt;
 
     /* Kernel stack */
     t->kstack = kmalloc(KSTACK_SIZE);
@@ -374,19 +429,6 @@ proc_create(const char *path, const char *name, pid_t pid)
     /* Temporary set the page table to the user's one to copy the exec file from
        kernel to the user space */
     saved_cr3 = get_cr3();
-#if 0
-    void *x = ((struct arch_vmem_space *)g_kmem->space->arch)->pgt;
-    char buf[256];
-    set_cr3((void *)KERNEL_PGT);
-    ksnprintf(buf, sizeof(buf),
-              "xxx: %016x %016x / %016x %016x %016x %016x %016x %016x / %016x",
-              *(u64 *)0x102000,
-              //*(u64 *)0x101000, // saved_cr3
-              *(u64 *)0x2860000, *(u64 *)0x2861000, *(u64 *)0x2861008,
-              *(u64 *)0x2861010, *(u64 *)0x2861018, *(u64 *)0x2861020,
-              *(u64 *)0x2861028, *(u64 *)0x2107f00);
-    panic(buf);
-#endif
     set_cr3(((struct arch_vmem_space *)proc->vmem->arch)->pgt);
 
     /* Copy the program from the initramfs to user space */
@@ -394,6 +436,8 @@ proc_create(const char *path, const char *name, pid_t pid)
 
     /* Restore CR3 */
     set_cr3(saved_cr3);
+
+    /* Set the restart pointer and the task state */
     t->rp = t->kstack + KSTACK_SIZE - 16 - sizeof(struct stackframe64);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     t->ktask->state = KTASK_STATE_READY;

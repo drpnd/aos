@@ -741,6 +741,11 @@ _intr_pf:
 	movq	16(%rbp),%rdi	/* rip */
 	movq	%cr2,%rsi	/* virtual address */
 	movq	8(%rbp),%rdx	/* error code */
+	movq	%rdi,%dr0
+	movq	%rsi,%dr1
+	movq	%rdx,%dr2
+1:	hlt
+	jmp	1b
 	call	_isr_page_fault
 	popq	%rdx
 	popq	%rsi

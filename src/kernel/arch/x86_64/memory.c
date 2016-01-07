@@ -536,11 +536,6 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     /* Copy */
     kmemcpy((*avmem)->vls, vls, sizeof(u64 *) * KMEM_VMEM_NPD);
 
-    /* FIXME */
-    char buf[256];
-    ksnprintf(buf, sizeof(buf), "%016x", vls[0][0]);
-    //panic(buf);
-
     return 0;
 }
 
@@ -1482,6 +1477,7 @@ int
 arch_vmem_init(struct vmem_space *space)
 {
     struct arch_vmem_space *avmem;
+    struct arch_vmem_space *tmp;
     u64 *vpg;
     u64 *vls;
     u64 *paddr;
@@ -1546,16 +1542,9 @@ arch_vmem_init(struct vmem_space *space)
         vpg[512 + i] = VMEM_DIR_RW((u64)paddr);
     }
 
-    /* FIXME: Set the kernel region */
-    struct arch_vmem_space *tmp = g_kmem->space->arch;
+    /* Set the kernel region */
+    tmp = g_kmem->space->arch;
     paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 0));
-
-    char buf[256];
-    ksnprintf(buf, sizeof(buf), "%016x %016x %016x %016x",
-              paddr, tmp->array[2][0], tmp->vls[0][0],
-              arch_vmem_addr_v2p(g_kmem->space, tmp->array[1]));
-    //panic(buf);
-
     vpg[512] = KMEM_DIR_RW((u64)paddr);
     paddr = arch_vmem_addr_v2p(g_kmem->space, VMEM_PD(tmp->array, 3));
     vpg[512 + 3] = KMEM_DIR_RW((u64)paddr);

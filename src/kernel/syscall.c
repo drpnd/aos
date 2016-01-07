@@ -102,24 +102,12 @@ sys_fork_c(u64 *task, u64 *ret0, u64 *ret1)
         return - 1;
     }
 
-    /* Create a new process */
-    np = kmalloc(sizeof(struct proc));
+    /* Fork a process */
+    np = proc_fork(this_ktask()->proc, this_ktask(), &nt);
     if ( NULL == np ) {
         kfree(l);
         return -1;
     }
-    kmemset(np, 0, sizeof(struct proc));
-    kmemcpy(np->name, this_ktask()->proc->name, 1024); /* FIXME */
-    nt = task_clone(t);
-    if ( NULL == nt ) {
-        kfree(l);
-        kfree(np);
-        return -1;
-    }
-    nt->proc = np;
-    nt->state = KTASK_STATE_CREATED;
-    nt->next = NULL;
-
     proc_table->procs[pid] = np;
     proc_table->lastpid = pid;
 
