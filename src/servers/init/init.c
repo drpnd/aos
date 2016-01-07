@@ -47,7 +47,9 @@ main(int argc, char *argv[])
         break;
     case 0:
         /* The child process */
-        while ( 1 ) {}
+        while ( 1 ) {
+            read(0, NULL, 0);
+        }
         ret = execve("/drivers/tty", tty_args, NULL);
         if ( ret < 0 ) {
             /* Error */
@@ -58,8 +60,10 @@ main(int argc, char *argv[])
         /* The parent process */
         ;
     }
-    while ( 1 ) {}
-
+    while ( 1 ) {
+        write(0, NULL, 0);
+    }
+#if 0
     /* fork */
     pid = fork();
     switch ( pid ) {
@@ -104,7 +108,7 @@ main(int argc, char *argv[])
     while ( 1 ) {
         //write(0, NULL, 0);
     }
-
+#endif
     return 0;
 }
 

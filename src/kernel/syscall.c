@@ -47,6 +47,7 @@ sys_exit(int status)
     if ( NULL == t ) {
         return;
     }
+    panic("FIXME: exit");
 
     /* Call atexit */
     while ( 1 ) {}
@@ -550,7 +551,7 @@ int arch_exec(void *, void (*)(void), size_t, int, char *const [],
 int
 sys_execve(const char *path, char *const argv[], char *const envp[])
 {
-    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
     u64 offset = 0;
     u64 size;
     struct ktask *t;

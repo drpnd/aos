@@ -468,6 +468,8 @@ sys_fork_restart:
 	movq	%rdx,%rax
 	leaveq			/* Restore the stack */
 	addq	$8,%rsp		/* Pop the return point */
+	pushq	%rdi
+	pushq	%rsi
 
 	/* Setup the stackframe for the forked task */
 	movq	TASK_RP(%rdi),%rdx
@@ -489,18 +491,25 @@ sys_fork_restart:
 	movq	-8(%rbp),%rcx
 	movq	%rcx,-64(%rdx)	/* rcx */
 	movq	-16(%rbp),%rcx
-	movq	%r11,-104(%rdx)	/* r11 */
+	movq	%rcx,-104(%rdx)	/* r11 */
 	movq	%r12,-112(%rdx)	/* r12 */
 	movq	%r13,-120(%rdx)	/* r13 */
 	movq	%r14,-128(%rdx)	/* r14 */
 	movq	%r15,-136(%rdx)	/* r15 */
+	movq	-32(%rbp),%rcx
+	movq	%rcx,-144(%rdx)	/* rsi */
+	movq	-40(%rbp),%rcx
+	movq	%rcx,-152(%rdx)	/* rdi */
 	movq	0(%rbp),%rcx
-	movq	%rcx,-152(%rdx)	/* rbp */
+	movq	$0xabcd,%rcx
+	movq	%rcx,-160(%rdx)	/* rbp */
 	movw	$(GDT_RING3_DATA_SEL+3),%cx
 	movw	%cx,-162(%rdx)	/* fs */
 	movw	%cx,-164(%rdx)	/* gs */
 
 	/* Restore */
+	popq	%rsi
+	popq	%rdi
 	popq	%rbx
 	popq	%r11
 	popq	%rcx
@@ -741,11 +750,9 @@ _intr_pf:
 	movq	16(%rbp),%rdi	/* rip */
 	movq	%cr2,%rsi	/* virtual address */
 	movq	8(%rbp),%rdx	/* error code */
-	movq	%rdi,%dr0
-	movq	%rsi,%dr1
-	movq	%rdx,%dr2
-1:	hlt
-	jmp	1b
+	//movq	%rdi,%dr0
+	//movq	%rsi,%dr1
+	//movq	%rdx,%dr2
 	call	_isr_page_fault
 	popq	%rdx
 	popq	%rsi

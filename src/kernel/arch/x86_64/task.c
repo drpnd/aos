@@ -81,7 +81,6 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     void *paddr1;
     void *paddr2;
     void *exec;
-    void *ustack;
     void *saved_cr3;
     ssize_t i;
     int ret;
@@ -115,13 +114,14 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         kfree(np);
         return NULL;
     }
+    kmemset(t->ktask, 0, sizeof(struct ktask));
     t->ktask->arch = t;
     t->ktask->proc = np;
-    t->ktask->state = KTASK_STATE_CREATED;
+    t->ktask->state = KTASK_STATE_READY;
     t->ktask->next = NULL;
     /* Allocate the user stack of a new task */
     paddr1 = pmem_alloc_pages(PMEM_ZONE_LOWMEM,
-                             bitwidth(USTACK_SIZE / PAGESIZE));
+                              bitwidth(USTACK_SIZE / PAGESIZE));
     if ( NULL == paddr1 ) {
         kfree(t->ktask);
         kfree(t->kstack);
@@ -140,19 +140,8 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         return NULL;
     }
     t->ustack = ((struct arch_task *)ot->arch)->ustack;
-    ustack = kmalloc(USTACK_SIZE);
-    if ( NULL == ustack ) {
-        pmem_free_pages(paddr2);
-        pmem_free_pages(paddr1);
-        kfree(t->ktask);
-        kfree(t->kstack);
-        kfree(t);
-        kfree(np);
-        return NULL;
-    }
     exec = kmalloc(PAGESIZE);
-    if ( NULL == ustack ) {
-        kfree(ustack);
+    if ( NULL == exec ) {
         pmem_free_pages(paddr2);
         pmem_free_pages(paddr1);
         kfree(t->ktask);
@@ -163,7 +152,6 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     }
 
     /* Copy the user stack to the temporary buffer */
-    kmemcpy(ustack, ((struct arch_task *)ot->arch)->ustack, USTACK_SIZE);
     kmemcpy(exec, (void *)CODE_INIT, PAGESIZE);
 
     /* Copy the kernel stack */
@@ -173,7 +161,6 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     np->vmem = vmem_space_create();
     if ( NULL == np->vmem ) {
         kfree(exec);
-        kfree(ustack);
         pmem_free_pages(paddr2);
         pmem_free_pages(paddr1);
         kfree(t->ktask);
@@ -192,18 +179,23 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
             panic("FIXME a");
         }
     }
-    ret = arch_vmem_map(np->vmem, exec, paddr2, VMEM_USABLE | VMEM_USED);
+    ret = arch_vmem_map(np->vmem, (void *)CODE_INIT, paddr2,
+                        VMEM_USABLE | VMEM_USED);
     if ( ret < 0 ) {
         /* FIXME: Handle this error */
         panic("FIXME b");
     }
+
+    /* Save the current cr3: This must be done before copying the user stack to
+       copy this variable to the new stack. */
+    saved_cr3 = get_cr3();
 
     /* This function uses "user"-stack, not kernel stack because syscall does
        not switch the stack pointer.  Therefore, the user stack must be copied
        before swapping the page table.  The following function maps the physical
        pages of the user stack of new process to a certain virtual memory space,
        and copies the stack there. */
-    void *ustack2copy = (void *)0xa0000000ULL;
+    void *ustack2copy = (void *)0x90000000ULL;
     for ( i = 0; i < (ssize_t)(USTACK_SIZE / PAGESIZE); i++ ) {
         ret = arch_vmem_map(op->vmem, ustack2copy + PAGE_ADDR(i),
                             paddr1 + PAGE_ADDR(i), VMEM_USABLE | VMEM_USED);
@@ -214,13 +206,9 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     }
     kmemcpy(ustack2copy, ((struct arch_task *)ot->arch)->ustack, USTACK_SIZE);
 
-    /* Save the current cr3 */
-    saved_cr3 = get_cr3();
-
     set_cr3(((struct arch_vmem_space *)np->vmem->arch)->pgt);
 
     /* Copy the user stack from the temporary buffer */
-    kmemcpy(t->ustack, ustack, USTACK_SIZE);
     kmemcpy((void *)CODE_INIT, exec, PAGESIZE);
 
     /* Restore cr3 */
@@ -232,7 +220,6 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
          - (u64)((struct arch_task *)ot->arch)->kstack);
 
     /* Free the temporary buffers */
-    kfree(ustack);
     kfree(exec);
 
     t->cr3 = ((struct arch_vmem_space *)np->vmem->arch)->pgt;

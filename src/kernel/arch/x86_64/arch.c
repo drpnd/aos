@@ -555,6 +555,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     }
     *narg = NULL;
 
+    panic("FIXME: execve()");
     /* Create a process */
     ret = _create_process(t, entry, size, policy, arg);
     if ( ret < 0 ) {
