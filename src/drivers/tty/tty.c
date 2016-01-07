@@ -40,6 +40,9 @@ main(int argc, char *argv[])
 
     /* Check the arguments */
     if ( argc != 2 ) {
+        while ( 1 ) {
+            read(0, NULL, 0);
+        }
         exit(-1);
     }
     tty = argv[1];

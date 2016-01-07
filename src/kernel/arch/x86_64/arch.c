@@ -555,6 +555,41 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     }
     *narg = NULL;
 
+
+
+    u64 cs;
+    u64 ss;
+    u64 flags;
+    /* Configure the ring protection by the policy */
+    switch ( policy ) {
+    case KTASK_POLICY_KERNEL:
+        cs = GDT_RING0_CODE_SEL;
+        ss = GDT_RING0_DATA_SEL;
+        flags = 0x0200;
+        break;
+    case KTASK_POLICY_DRIVER:
+    case KTASK_POLICY_SERVER:
+    case KTASK_POLICY_USER:
+    default:
+        cs = GDT_RING3_CODE64_SEL + 3;
+        ss = GDT_RING3_DATA_SEL + 3;
+        flags = 0x3200;
+        break;
+    }
+
+    kmemcpy((void *)CODE_INIT, entry, PAGESIZE);
+    kmemset(t->rp, 0, sizeof(struct stackframe64));
+    /* Replace the current process with the new process */
+    t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
+    t->rp->gs = ss;
+    t->rp->fs = ss;
+    t->rp->sp = USTACK_INIT + USTACK_SIZE - 16;
+    t->rp->ss = ss;
+    t->rp->cs = cs;
+    t->rp->ip = CODE_INIT;
+    t->rp->flags = flags;
+
+#if 0
     panic("FIXME: execve()");
     /* Create a process */
     ret = _create_process(t, entry, size, policy, arg);
@@ -562,7 +597,8 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         kfree(arg);
         return -1;
     }
-    t->rp->di = argc;
+#endif
+    t->rp->di = 0;//argc;
     t->rp->si = 0x7fc00000ULL;
 
     /* Restart the task */

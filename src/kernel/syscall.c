@@ -571,7 +571,7 @@ sys_execve(const char *path, char *const argv[], char *const envp[])
     }
 
     t = this_ktask();
-    arch_exec(t->arch, (void *)(0x20000ULL + offset), size,
+    arch_exec(t->arch, (void *)(INITRAMFS_BASE + offset), size,
               KTASK_POLICY_USER, argv, envp);
 
     /* On failure */

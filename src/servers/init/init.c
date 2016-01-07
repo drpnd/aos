@@ -47,9 +47,6 @@ main(int argc, char *argv[])
         break;
     case 0:
         /* The child process */
-        while ( 1 ) {
-            read(0, NULL, 0);
-        }
         ret = execve("/drivers/tty", tty_args, NULL);
         if ( ret < 0 ) {
             /* Error */
