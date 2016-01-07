@@ -67,7 +67,7 @@ int
 test_strlen(void)
 {
     const char *str[] = {"test", "", "testing"};
-    int i;
+    size_t i;
 
     /* Test */
     for ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
@@ -86,7 +86,7 @@ int
 test_atoi(void)
 {
     const char *str[] = {"10", "0d", "31.a"};
-    int i;
+    size_t i;
 
     /* Test */
     for ( i = 0; i < sizeof(str) / sizeof(char *); i++ ) {
