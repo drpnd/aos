@@ -65,6 +65,7 @@ vmem_alloc_pages(struct vmem_space *space, int order)
     }
 
     /* FIXME: Map page table */
+    panic("FIXME: vmem_alloc_pages()");
 
     return vaddr;
 
