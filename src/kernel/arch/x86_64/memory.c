@@ -48,6 +48,9 @@ extern struct kmem *g_kmem;
 #define BSE_ACPI_NVS            4
 #define BSE_BAD                 5
 
+#define KMEM_VMEM_NPD   6
+#define VMEM_NPD    6
+
 /*
  * Prototype declarations of static functions
  */
@@ -433,7 +436,6 @@ _kmem_init(struct kstring *region)
  *      If successful, the _kmem_pgt_init() function returns the value of 0.  It
  *      returns the value of -1 on failure.
  */
-#define KMEM_VMEM_NPD   6
 static int
 _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
 {
@@ -1009,7 +1011,7 @@ _kmem_superpage_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
 
     /* Index to page directory */
     idxpd = (vaddr >> 30);
-    if ( idxpd >= 4 ) {
+    if ( idxpd >= KMEM_VMEM_NPD ) {
         return -1;
     }
     /* Index to page table */
@@ -1222,7 +1224,7 @@ arch_vmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
 
     /* Index to page directory */
     idxpd = ((u64)vaddr >> 30);
-    if ( idxpd >= 4 ) {
+    if ( idxpd >= VMEM_NPD ) {
         return -1;
     }
     /* Index to page table */
@@ -1329,7 +1331,7 @@ arch_kmem_map(struct vmem_space *space, void *vaddr, void *paddr, int flags)
 
     /* Index to page directory */
     idxpd = ((u64)vaddr >> 30);
-    if ( idxpd >= 4 ) {
+    if ( idxpd >= KMEM_VMEM_NPD ) {
         return -1;
     }
     /* Index to page table */
@@ -1472,7 +1474,6 @@ arch_vmem_addr_v2p(struct vmem_space *space, void *vaddr)
 /*
  * Initialize the architecture-specific virtual memory
  */
-#define VMEM_NPD    6
 int
 arch_vmem_init(struct vmem_space *space)
 {
