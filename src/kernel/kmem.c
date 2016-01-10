@@ -268,7 +268,7 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
     spg0->order = 0;
     for ( i = 0; i < (1LL << po); i++ ) {
         /* Setup pages */
-        pg[i].addr = (reg_t)vaddr1 + PAGE_ADDR(i);
+        pg[i].addr = (reg_t)paddr1 + PAGE_ADDR(i);
         pg[i].order = po;
         pg[i].flags = flags;
         pg[i].superpage = spg0;
@@ -277,9 +277,12 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
     }
     /* Add the rest to the buddy system of usable pages */
     for ( tmpo = po; tmpo < SP_SHIFT; tmpo++ ) {
-        spg0->region->pgheads[tmpo]->prev = &pg[i];
+        if ( NULL != spg0->region->pgheads[tmpo] ) {
+            spg0->region->pgheads[tmpo]->prev = &pg[i];
+        }
         pg[i].next = spg0->region->pgheads[tmpo];
         pg[i].prev = NULL;
+        spg0->region->pgheads[tmpo] = &pg[i];
         for ( j = 0; j < (1LL << tmpo); j++ ) {
             pg[i].addr = 0;
             pg[i].order = tmpo;
@@ -320,13 +323,13 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
     }
 
     /* Change the superpage to a collection of pages */
-    pg = (struct vmem_page *)vaddr0;
+    pg = ((struct vmem_page *)vaddr1) + (1LL << SP_SHIFT);
     spg1->u.page.pages = pg;
     spg1->flags = flags;
     spg1->order = 0;
     for ( i = 0; i < (1LL << order); i++ ) {
         /* Setup pages */
-        pg[i].addr = (reg_t)vaddr0 + PAGE_ADDR(i);
+        pg[i].addr = (reg_t)paddr0 + PAGE_ADDR(i);
         pg[i].order = order;
         pg[i].flags = flags;
         pg[i].superpage = spg1;
@@ -335,9 +338,12 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
     }
     /* Add the rest to the buddy system of usable pages */
     for ( tmpo = order; tmpo < SP_SHIFT; tmpo++ ) {
-        spg1->region->pgheads[tmpo]->prev = &pg[i];
+        if ( NULL != spg1->region->pgheads[tmpo] ) {
+            spg1->region->pgheads[tmpo]->prev = &pg[i];
+        }
         pg[i].next = spg1->region->pgheads[tmpo];
         pg[i].prev = NULL;
+        spg1->region->pgheads[tmpo] = &pg[i];
         for ( j = 0; j < (1LL << tmpo); j++ ) {
             pg[i].addr = 0;
             pg[i].order = tmpo;

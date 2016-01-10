@@ -630,7 +630,9 @@ _vmem_buddy_pg_split(struct vmem_region *reg, int o)
     p0->next = p1;
     p1->prev = p0;
     p1->next = reg->pgheads[o];
-    reg->pgheads[o]->prev = p1;
+    if ( NULL != reg->pgheads[o] ) {
+        reg->pgheads[o]->prev = p1;
+    }
     reg->pgheads[o] = p0;
     /* Remove the split one from the upper order */
     reg->pgheads[o + 1] = next;
@@ -716,7 +718,9 @@ _vmem_buddy_pg_merge(struct vmem_region *reg, struct vmem_page *off, int o)
     /* Prepend it to the upper order */
     p0->prev = NULL;
     p0->next = reg->pgheads[o + 1];
-    reg->pgheads[o + 1]->prev = p0;
+    if ( NULL != reg->pgheads[o + 1] ) {
+        reg->pgheads[o + 1]->prev = p0;
+    }
     reg->pgheads[o + 1] = p0;
 
     /* Try to merge the upper order of buddies */
@@ -889,7 +893,7 @@ vmem_buddy_alloc_pages(struct vmem_space *space, int order)
             vpage = reg->pgheads[order];
             reg->pgheads[order] = vpage->next;
             if ( NULL != reg->pgheads[order] ) {
-                reg->spgheads[order]->prev = NULL;
+                reg->pgheads[order]->prev = NULL;
             }
 
             /* Validate all the pages are not used */
