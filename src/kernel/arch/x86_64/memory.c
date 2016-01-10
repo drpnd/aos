@@ -229,6 +229,12 @@ _pmem_init_stage1(struct bootinfo *bi, struct acpi *acpi,
         pgs[pg].flags |= PMEM_USED;
     }
 
+    /* Mark the special use region */
+    for ( i = 0; i < DIV_CEIL(KMEM_REGION_SPEC_SIZE, PAGESIZE); i++ ) {
+        pg = DIV_CEIL(KMEM_REGION_SPEC_BASE, PAGESIZE) + i;
+        pgs[pg].flags |= PMEM_USED;
+    }
+
     /* Mark the usable region */
     for ( i = 0; i < bi->sysaddrmap.nr; i++ ) {
         bse = &bi->sysaddrmap.entries[i];
@@ -1461,7 +1467,7 @@ arch_vmem_addr_v2p(struct vmem_space *space, void *vaddr)
         /* 2-MiB paging */
         /* Get the offset */
         off = ((reg_t)vaddr) & 0x1fffffULL;
-        return (void *)(VMEM_PDPG(avmem->vls[idxpd][idxp]) + off);
+        return (void *)(VMEM_PDPG(VMEM_PD(avmem->array, idxpd)[idxp]) + off);
     } else {
         /* 4-KiB paging */
         pt = VMEM_PT(avmem->vls[idxpd][idxp]);
