@@ -533,8 +533,8 @@ _kmem_pgt_init(struct arch_vmem_space **avmem, u64 *off)
     /* Set the address */
     (*avmem)->pgt = pgt;
     (*avmem)->nr = KMEM_VMEM_NPD;
-    (*avmem)->array = (u64 **)(*avmem + sizeof(int));
-    (*avmem)->vls = (u64 **)(*avmem + sizeof(int)
+    (*avmem)->array = (u64 **)(*avmem + sizeof(struct arch_vmem_space));
+    (*avmem)->vls = (u64 **)(*avmem + sizeof(struct arch_vmem_space)
                              + sizeof(u64 *) * VMEM_NENT(KMEM_VMEM_NPD));
 
     /* Convert to virtual address */
