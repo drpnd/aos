@@ -214,7 +214,7 @@ _pmem_buddy_split(struct pmem *pmem, struct pmem_buddy *buddy, int o)
     }
 
     /* Check the order */
-    if ( o + 1 >= PMEM_MAX_BUDDY_ORDER ) {
+    if ( o + 1 > PMEM_MAX_BUDDY_ORDER ) {
         /* No space available */
         return -1;
     }
