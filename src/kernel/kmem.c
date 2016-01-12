@@ -232,6 +232,9 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
         return _kmem_alloc_pages_from_new_region(kmem, so);
     }
 
+    /* Second superpage for pages */
+    spg1 = spg0 + 1;
+
     /* Allocate physical pages for (struct vmem_page *) */
     paddr1 = pmem_alloc_pages(PMEM_ZONE_LOWMEM, po);
     if ( NULL == paddr1 ) {
@@ -245,10 +248,10 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
        (struct vmem_page *), respectively. */
     vaddr0 = spg0->region->start
         + SUPERPAGE_ADDR(spg0 - spg0->region->superpages);
-    vaddr1 = vaddr0 + (1ULL << order) * PAGESIZE;
+    vaddr1 = vaddr0 + SUPERPAGESIZE;
 
     /* Remove the superpage flag */
-    flags = spg0->flags & ~VMEM_SUPERPAGE;
+    flags = spg1->flags & ~VMEM_SUPERPAGE;
 
     /* Superpage to pages; map pages first */
     for ( i = 0; i < (1LL << po); i++ ) {
@@ -263,38 +266,35 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
 
     /* Change the superpage to a collection of pages */
     pg = (struct vmem_page *)vaddr1;
-    spg0->u.page.pages = pg;
-    spg0->flags = flags;
+    spg1->u.page.pages = pg;
+    spg1->flags = flags;
+    spg1->order = 0;
     spg0->order = 0;
     for ( i = 0; i < (1LL << po); i++ ) {
         /* Setup pages */
         pg[i].addr = (reg_t)paddr1 + PAGE_ADDR(i);
         pg[i].order = po;
         pg[i].flags = flags;
-        pg[i].superpage = spg0;
+        pg[i].superpage = spg1;
         pg[i].next = NULL;
         pg[i].prev = NULL;
     }
     /* Add the rest to the buddy system of usable pages */
     for ( tmpo = po; tmpo < SP_SHIFT; tmpo++ ) {
-        if ( NULL != spg0->region->pgheads[tmpo] ) {
-            spg0->region->pgheads[tmpo]->prev = &pg[i];
+        if ( NULL != spg1->region->pgheads[tmpo] ) {
+            spg1->region->pgheads[tmpo]->prev = &pg[i];
         }
-        pg[i].next = spg0->region->pgheads[tmpo];
+        pg[i].next = spg1->region->pgheads[tmpo];
         pg[i].prev = NULL;
-        spg0->region->pgheads[tmpo] = &pg[i];
+        spg1->region->pgheads[tmpo] = &pg[i];
         for ( j = 0; j < (1LL << tmpo); j++ ) {
             pg[i].addr = 0;
             pg[i].order = tmpo;
             pg[i].flags = flags & ~VMEM_USED;
-            pg[i].superpage = spg0;
+            pg[i].superpage = spg1;
             i++;
         }
     }
-
-    /* Second superpage for pages */
-    spg1 = spg0 + 1;
-    spg1->order = 0;
 
     /* Allocate physical pages */
     paddr0 = pmem_alloc_pages(PMEM_ZONE_LOWMEM, order);
@@ -324,31 +324,30 @@ _kmem_alloc_pages_from_new_superpage(struct kmem *kmem, int order)
 
     /* Change the superpage to a collection of pages */
     pg = ((struct vmem_page *)vaddr1) + (1LL << SP_SHIFT);
-    spg1->u.page.pages = pg;
-    spg1->flags = flags;
-    spg1->order = 0;
+    spg0->u.page.pages = pg;
+    spg0->flags = flags;
     for ( i = 0; i < (1LL << order); i++ ) {
         /* Setup pages */
         pg[i].addr = (reg_t)paddr0 + PAGE_ADDR(i);
         pg[i].order = order;
         pg[i].flags = flags;
-        pg[i].superpage = spg1;
+        pg[i].superpage = spg0;
         pg[i].next = NULL;
         pg[i].prev = NULL;
     }
     /* Add the rest to the buddy system of usable pages */
     for ( tmpo = order; tmpo < SP_SHIFT; tmpo++ ) {
-        if ( NULL != spg1->region->pgheads[tmpo] ) {
-            spg1->region->pgheads[tmpo]->prev = &pg[i];
+        if ( NULL != spg0->region->pgheads[tmpo] ) {
+            spg0->region->pgheads[tmpo]->prev = &pg[i];
         }
-        pg[i].next = spg1->region->pgheads[tmpo];
+        pg[i].next = spg0->region->pgheads[tmpo];
         pg[i].prev = NULL;
-        spg1->region->pgheads[tmpo] = &pg[i];
+        spg0->region->pgheads[tmpo] = &pg[i];
         for ( j = 0; j < (1LL << tmpo); j++ ) {
             pg[i].addr = 0;
             pg[i].order = tmpo;
             pg[i].flags = flags & ~VMEM_USED;
-            pg[i].superpage = spg1;
+            pg[i].superpage = spg0;
             i++;
         }
     }
