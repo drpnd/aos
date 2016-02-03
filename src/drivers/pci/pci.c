@@ -70,6 +70,7 @@ pci_read_mmio(uint8_t bus, uint8_t slot, uint8_t func)
 
     type = (bar0 >> 1) & 0x3;
     prefetchable = (bar0 >> 3) & 0x1;
+    (void)prefetchable;
     addr = bar0 & 0xfffffff0;
 
     if ( 0x00 == type ) {
@@ -262,7 +263,7 @@ int
 main(int argc, char *argv[])
 {
     while ( 1 ) {
-        write(0, NULL, NULL);
+        write(0, NULL, 0);
     }
     exit(0);
 }

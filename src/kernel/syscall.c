@@ -266,6 +266,7 @@ sys_open(const char *path, int oflag, ...)
         /* Could not find the file */
         return -1;
     }
+    (void)size;
 
     /* Get the task */
     t = this_ktask();
@@ -681,6 +682,8 @@ sys_lseek(int fildes, off_t offset, int whence)
 /*
  * Architecture specific system call
  */
+u32 inl(u16);
+void outl(u16, u32);
 int
 sys_sysarch(int number, void *args)
 {

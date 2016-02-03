@@ -155,6 +155,10 @@ _output(char *str, size_t size, struct strfmt_format *strfmt, va_list ap)
         /* % */
         ret += _output_percent(str, size);
         break;
+    case 's':
+        /* % */
+        ret += _output_string(str, size, strfmt, ap);
+        break;
     case 'd':
         /* Decimal */
         ret += _output_decimal(str, size, strfmt, ap);

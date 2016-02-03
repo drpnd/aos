@@ -1035,6 +1035,7 @@ _kmem_superpage_map(struct kmem *kmem, u64 vaddr, u64 paddr, int flags)
         /* Present and 4 KiB paging, then remove the descendant table */
         pt = VMEM_PT(VMEM_PD(avmem->array, idxpd)[idxp]);
         vpt = VMEM_PT(avmem->vls[idxpd][idxp]);
+        (void)pt;
 
         /* Delete descendant table */
         _kmem_mm_page_free(kmem, vpt);

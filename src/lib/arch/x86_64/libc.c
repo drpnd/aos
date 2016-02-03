@@ -50,6 +50,7 @@ entry(int argc, char *argv[])
     int ret;
 
     ret = main(argc, argv);
+    (void)ret;
 
     while ( 1 ) {}
 }

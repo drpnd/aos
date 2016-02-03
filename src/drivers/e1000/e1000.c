@@ -21,50 +21,20 @@
  * SOFTWARE.
  */
 
-#include <aos/const.h>
-#include "kernel.h"
-
-/* Note: Message Packet Queue (MPQ) must implement lock-free algorithm. */
-
-/*
- * Message packet
- */
-struct mp {
-    u16 type;
-    void *hdr;
-    void *msg;
-};
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 /*
- * Mesage packet queue
- */
-struct mpq {
-    int head;
-    int tail;
-    int nr_order;
-    int nr;
-    struct mp **mps;
-};
-
-/*
- * Push to the queue
+ * Entry point for the e1000 driver
  */
 int
-mpq_push(struct mpq *mpq, struct mp *mp)
+main(int argc, char *argv[])
 {
-    int tail_saved;
-
-    tail_saved = mpq->tail;
-    if ( mpq->head == mpq->tail ) {
-        return -1;
+    while ( 1 ) {
+        write(0, NULL, 0);
     }
-
-    /* Compare and swap: */
-    mpq->mps[mpq->tail] = mp;
-
-    (void)tail_saved;
-
-    return 0;
+    exit(0);
 }
 
 /*

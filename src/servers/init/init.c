@@ -35,8 +35,8 @@ main(int argc, char *argv[])
     pid_t pid;
     //int stat;
     char *tty_args[] = {"/drivers/tty", "tty0", NULL};
-    char *pci_args[] = {"/drivers/pci", NULL};
-    char *e1000_args[] = {"/drivers/e1000", NULL};
+    //char *pci_args[] = {"/drivers/pci", NULL};
+    //char *e1000_args[] = {"/drivers/e1000", NULL};
 
     /* fork */
     pid = fork();
