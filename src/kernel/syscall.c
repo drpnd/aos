@@ -153,6 +153,7 @@ sys_read(int fildes, void *buf, size_t nbyte)
     u16 *video;
     int i;
     char *s;
+
     s = "read";
 
     video = (u16 *)0xb8000;

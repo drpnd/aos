@@ -254,6 +254,7 @@ task_create_idle(void)
         kfree(t);
         return NULL;
     }
+    kmemset(t->kstack, 0, KSTACK_SIZE);
 
     /* User stack (in the kernel space) */
     t->ustack = kmalloc(USTACK_SIZE);
@@ -262,6 +263,7 @@ task_create_idle(void)
         kfree(t);
         return NULL;
     }
+    kmemset(t->ustack, 0, USTACK_SIZE);
 
     /* Kernel task */
     t->ktask = kmalloc(sizeof(struct ktask));
@@ -271,6 +273,7 @@ task_create_idle(void)
         kfree(t);
         return NULL;
     }
+    kmemset(t->ktask, 0, sizeof(struct ktask));
 
     /* Create a bidirectional link */
     t->ktask->arch = t;
