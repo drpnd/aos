@@ -78,8 +78,7 @@ kpack: kernel/arch/$(ARCH)/asm.o \
 	kernel/rbtree.o \
 	kernel/mpq.o \
 	kernel/ramfs.o \
-	kernel/syscall.o \
-	kernel/exp.o
+	kernel/syscall.o
 	$(LD) -N -e kstart64 -Ttext=0x10000 --oformat binary -o $@ $^
 	$(LD) -N -e kstart64 -Ttext=0x10000 -o kpack.dbg $^
 
