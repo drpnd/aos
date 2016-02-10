@@ -201,7 +201,8 @@ struct arch_page_dir {
 /*
  * Level-3 Complete multiway (512-ary) tree for virtual memory
  */
-#define VMEM_NENT(x)    (DIV_CEIL((x), 512 * 512) + DIV_CEIL((x), 512) + (x))
+#define VMEM_NENT(x)        (DIV_CEIL((x), 512 * 512) + DIV_CEIL((x), 512) \
+                             + (x))
 #define VMEM_PML4(x)        (x[0])
 #define VMEM_PDPT(x, pg)    (x[0 + DIV_CEIL((pg) + 1, 512) + FLOOR((pg), 512)])
 #define VMEM_PD(x, pg)      (x[1 + DIV_CEIL((pg) + 1, 512) + pg])
@@ -335,6 +336,9 @@ void trampoline_end(void);
 /* in task.c */
 struct arch_task * task_create_idle(void);
 int proc_create(const char *, const char *, pid_t);
+
+/* In-line assembly */
+#define set_cr3(cr3)    __asm__ __volatile__ ("movq %%rax,%%cr3" :: "a"((cr3)))
 
 #endif /* _KERNEL_ARCH_H */
 

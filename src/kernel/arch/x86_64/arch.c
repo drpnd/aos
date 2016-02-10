@@ -382,6 +382,12 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     int argc;
     char *const *tmp;
     size_t len;
+    void *ustack;
+    u8 *arg;
+
+    /* Set the user stack address */
+    ustack = t->ustack;
+    //USTACK_INIT + USTACK_SIZE - 16
 
     /* Count the number of arguments */
     tmp = argv;
@@ -393,25 +399,20 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         tmp++;
     }
 
-    /* Prepare arguments */
-    u8 *arg;
+    /* Prepare arguments from stack */
     len += argc + (argc + 1) * sizeof(void *);
-    if ( len < PAGESIZE ) {
-        /* FIXME: Replace kmalloc with vmalloc */
-        arg = kmalloc(PAGESIZE);
-    } else {
-        arg = kmalloc(len);
-    }
-    if ( NULL == arg ) {
-        return -1;
-    }
+    arg = ustack;
+
+    void *cr3 = get_cr3();
+    set_cr3(t->cr3);
+
     char **narg;
     u8 *saved;
     tmp = argv;
     narg = (char **)arg;
     saved = arg + sizeof(void *) * (argc + 1);
     while ( NULL != *tmp ) {
-        *narg = (char *)(saved - arg + 0x7fc00000ULL);
+        *narg = (char *)(saved);
         kmemcpy(saved, *tmp, kstrlen(*tmp));
         saved[kstrlen(*tmp)] = '\0';
         saved += kstrlen(*tmp) + 1;
@@ -420,7 +421,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     }
     *narg = NULL;
 
-
+    set_cr3(cr3);
 
     u64 cs;
     u64 ss;
@@ -454,9 +455,8 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     t->rp->ip = CODE_INIT;
     t->rp->flags = flags;
 
-    /* FIXME */
-    t->rp->di = 0;//argc;
-    t->rp->si = 0x7fc00000ULL;
+    t->rp->di = argc;
+    t->rp->si = USTACK_INIT;//0x7fc00000ULL;
 
     /* Restart the task */
     task_replace(t);

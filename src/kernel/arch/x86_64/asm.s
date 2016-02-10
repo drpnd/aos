@@ -62,7 +62,7 @@
 	.globl	_get_cr0
 	.globl	_set_cr0
 	.globl	_get_cr3
-	.globl	_set_cr3
+	//.globl	_set_cr3
 	.globl	_get_cr4
 	.globl	_set_cr4
 	.globl	_invlpg
@@ -562,9 +562,9 @@ _get_cr3:
 	ret
 
 /* void set_cr3(void *) */
-_set_cr3:
-	movq	%rdi,%cr3
-	ret
+//_set_cr3:
+//	movq	%rdi,%cr3
+//	ret
 
 /* u64 get_cr4(void) */
 _get_cr4:
