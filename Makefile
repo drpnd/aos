@@ -66,7 +66,7 @@ initrd:
 	printf "0: %.16x" $$off | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 16` conv=notrunc > /dev/null 2>&1; \
 	printf "0: %.16x" `stat -f "%z" src/$$target` | sed -E 's/0: (..)(..)(..)(..)(..)(..)(..)(..)/0: \8\7\6\5\4\3\2\1/'| xxd -r | dd of=initramfs bs=1 seek=`expr $$entry \* 32 + 24` conv=notrunc > /dev/null 2>&1; \
 	dd if=src/$$target of=initramfs seek=$$off bs=1 conv=notrunc > /dev/null 2>&1
-	@target='e1000'; fname="/drivers/$$target"; entry=5; \
+	@target='e1000'; fname="/drivers/$$target"; entry=6; \
 	ORG=0x40000000 make -C src $$target; \
 	off=`stat -f "%z" initramfs`; \
 	printf "$$fname\000" | dd of=initramfs seek=`expr $$entry \* 32` bs=1 conv=notrunc > /dev/null 2>&1; \

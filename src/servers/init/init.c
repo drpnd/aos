@@ -77,9 +77,6 @@ main(int argc, char *argv[])
         /* The parent process */
         ;
     }
-    while ( 1 ) {
-        write(0, NULL, 0);
-    }
 
     /* fork */
     pid = fork();
