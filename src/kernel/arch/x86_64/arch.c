@@ -384,10 +384,14 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     size_t len;
     void *ustack;
     u8 *arg;
+    char **narg;
+    u8 *saved;
+    u64 cs;
+    u64 ss;
+    u64 flags;
 
     /* Set the user stack address */
     ustack = t->ustack;
-    //USTACK_INIT + USTACK_SIZE - 16
 
     /* Count the number of arguments */
     tmp = argv;
@@ -403,11 +407,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     len += argc + (argc + 1) * sizeof(void *);
     arg = ustack;
 
-    void *cr3 = get_cr3();
-    set_cr3(t->cr3);
-
-    char **narg;
-    u8 *saved;
     tmp = argv;
     narg = (char **)arg;
     saved = arg + sizeof(void *) * (argc + 1);
@@ -421,11 +420,6 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     }
     *narg = NULL;
 
-    set_cr3(cr3);
-
-    u64 cs;
-    u64 ss;
-    u64 flags;
     /* Configure the ring protection by the policy */
     switch ( policy ) {
     case KTASK_POLICY_KERNEL:
@@ -456,7 +450,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
     t->rp->flags = flags;
 
     t->rp->di = argc;
-    t->rp->si = USTACK_INIT;//0x7fc00000ULL;
+    t->rp->si = USTACK_INIT;
 
     /* Restart the task */
     task_replace(t);

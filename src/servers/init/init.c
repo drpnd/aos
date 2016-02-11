@@ -35,8 +35,8 @@ main(int argc, char *argv[])
     pid_t pid;
     //int stat;
     char *tty_args[] = {"/drivers/tty", "tty0", NULL};
-    //char *pci_args[] = {"/drivers/pci", NULL};
-    //char *e1000_args[] = {"/drivers/e1000", NULL};
+    char *pci_args[] = {"/drivers/pci", NULL};
+    char *e1000_args[] = {"/drivers/e1000", NULL};
 
     /* fork */
     pid = fork();
@@ -57,10 +57,7 @@ main(int argc, char *argv[])
         /* The parent process */
         ;
     }
-    while ( 1 ) {
-        write(0, NULL, 0);
-    }
-#if 0
+
     /* fork */
     pid = fork();
     switch ( pid ) {
@@ -79,6 +76,9 @@ main(int argc, char *argv[])
     default:
         /* The parent process */
         ;
+    }
+    while ( 1 ) {
+        write(0, NULL, 0);
     }
 
     /* fork */
@@ -105,7 +105,7 @@ main(int argc, char *argv[])
     while ( 1 ) {
         //write(0, NULL, 0);
     }
-#endif
+
     return 0;
 }
 
