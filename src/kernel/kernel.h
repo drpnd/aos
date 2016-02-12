@@ -406,6 +406,9 @@ struct proc {
     /* File descriptors */
     struct fildes *fds[FD_MAX];
 
+    /* Code */
+    void *code;
+    size_t code_size;
 
     /* Exit status */
     int exit_status;

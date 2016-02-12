@@ -130,7 +130,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         return NULL;
     }
     /* For exec */
-    paddr2 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
+    paddr2 = pmem_alloc_pages(PMEM_ZONE_LOWMEM, 4);
     if ( NULL == paddr2 ) {
         pmem_free_pages(paddr1);
         kfree(t->ktask);
@@ -400,7 +400,7 @@ proc_create(const char *path, const char *name, pid_t pid)
     }
 
     /* Prepare exec */
-    ppage2 = pmem_alloc_page(PMEM_ZONE_LOWMEM);
+    ppage2 = pmem_alloc_pages(PMEM_ZONE_LOWMEM, 4);
     if ( NULL == ppage2 ) {
         goto error_exec;
         return -1;
