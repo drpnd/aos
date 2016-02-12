@@ -354,9 +354,6 @@ ap_init(void)
 
     /* Initialize the local APIC */
     lapic_init();
-
-    /* Run experiment */
-    //run_experiment(lapic_id());
 }
 
 /*
@@ -437,7 +434,7 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         break;
     }
 
-    kmemcpy((void *)CODE_INIT, entry, PAGESIZE);
+    kmemcpy((void *)CODE_INIT, entry, size);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     /* Replace the current process with the new process */
     t->sp0 = (u64)t->kstack + KSTACK_SIZE - 16;
@@ -562,8 +559,20 @@ isr_page_fault(void *rip, void *addr, u64 error)
     char buf[128];
     u64 x = (u64)rip;
     u64 y = (u64)addr;
+    struct ktask *t;
 
-    ksnprintf(buf, sizeof(buf), "Page Fault (%d): %016x @%016x", error, y, x);
+    /* Get the current process */
+    t = this_ktask();
+    if ( NULL == t || NULL == t->proc ) {
+        panic("FIXME: Invalid task calls sys_exit()");
+        return;
+    }
+
+    ksnprintf(buf, sizeof(buf), "Page Fault (%c%c%c%c[%d]): %016x @%016x %d",
+              (error & 0x10) ? 'I' : 'D', (error & 0x4) ? 'U' : 'S',
+              (error & 0x2) ? 'W' : 'R', (error & 0x1) ? 'P' : '*',
+              error, y, x,
+              (NULL != t && NULL != t->proc) ? t->proc->id : -1);
     panic(buf);
 }
 

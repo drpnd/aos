@@ -140,7 +140,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         return NULL;
     }
     t->ustack = ((struct arch_task *)ot->arch)->ustack;
-    exec = kmalloc(PAGESIZE);
+    exec = kmalloc(PAGESIZE * 16);
     if ( NULL == exec ) {
         pmem_free_pages(paddr2);
         pmem_free_pages(paddr1);
@@ -152,7 +152,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     }
 
     /* Copy the user stack to the temporary buffer */
-    kmemcpy(exec, (void *)CODE_INIT, PAGESIZE);
+    kmemcpy(exec, (void *)CODE_INIT, PAGESIZE * 16);
 
     /* Copy the kernel stack */
     kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack, KSTACK_SIZE);
@@ -179,11 +179,13 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
             panic("FIXME a");
         }
     }
-    ret = arch_vmem_map(np->vmem, (void *)CODE_INIT, paddr2,
-                        VMEM_USABLE | VMEM_USED);
-    if ( ret < 0 ) {
-        /* FIXME: Handle this error */
-        panic("FIXME b");
+    for ( i = 0; i < 16; i++ ) {
+        ret = arch_vmem_map(np->vmem, (void *)(CODE_INIT + PAGESIZE * i),
+                            paddr2 + PAGESIZE * i, VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME b");
+        }
     }
 
     /* Save the current cr3: This must be done before copying the user stack to
@@ -208,8 +210,8 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
 
     set_cr3(((struct arch_vmem_space *)np->vmem->arch)->pgt);
 
-    /* Copy the user stack from the temporary buffer */
-    kmemcpy((void *)CODE_INIT, exec, PAGESIZE);
+    /* Copy the program memory */
+    kmemcpy((void *)CODE_INIT, exec, PAGESIZE * 16);
 
     /* Restore cr3 */
     set_cr3(saved_cr3);
@@ -415,10 +417,13 @@ proc_create(const char *path, const char *name, pid_t pid)
         }
     }
     exec = (void *)CODE_INIT;
-    ret = arch_vmem_map(proc->vmem, exec, ppage2, VMEM_USABLE | VMEM_USED);
-    if ( ret < 0 ) {
-        /* FIXME: Handle this error */
-        panic("FIXME 2");
+    for ( i = 0; i < 16; i++ ) {
+        ret = arch_vmem_map(proc->vmem, exec + PAGESIZE * i,
+                            ppage2 + PAGESIZE * i, VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME 2");
+        }
     }
 
     /* Temporary set the page table to the user's one to copy the exec file from

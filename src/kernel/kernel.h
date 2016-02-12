@@ -405,6 +405,10 @@ struct proc {
 
     /* File descriptors */
     struct fildes *fds[FD_MAX];
+
+
+    /* Exit status */
+    int exit_status;
 };
 
 /*

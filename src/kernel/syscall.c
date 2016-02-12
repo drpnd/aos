@@ -41,16 +41,21 @@ void
 sys_exit(int status)
 {
     struct ktask *t;
+    struct proc *proc;
 
-    /* Get the task */
+    /* Get the current process */
     t = this_ktask();
-    if ( NULL == t ) {
+    if ( NULL == t || NULL == t->proc ) {
+        panic("FIXME: Invalid task calls sys_exit()");
         return;
     }
-    panic("FIXME: exit");
+    proc = t->proc;
+    proc->exit_status = status;
 
     /* Call atexit */
-    while ( 1 ) {}
+    while ( 1 ) {
+        halt();
+    }
 }
 
 /*

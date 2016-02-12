@@ -43,6 +43,7 @@ struct strfmt_format {
 
 
 static off_t _output_percent(char *, size_t);
+static off_t _output_char(char *, size_t, struct strfmt_format *, va_list);
 static off_t _output_decimal(char *, size_t, struct strfmt_format *, va_list);
 static off_t
 _output_hexdecimal(char *, size_t, struct strfmt_format *, va_list, int);
@@ -156,8 +157,12 @@ _output(char *str, size_t size, struct strfmt_format *strfmt, va_list ap)
         ret += _output_percent(str, size);
         break;
     case 's':
-        /* % */
+        /* String */
         ret += _output_string(str, size, strfmt, ap);
+        break;
+    case 'c':
+        /* Character */
+        ret += _output_char(str, size, strfmt, ap);
         break;
     case 'd':
         /* Decimal */
@@ -184,6 +189,20 @@ _output_percent(char *str, size_t size)
     if ( NULL != str && size > 1 ) {
         str[0] = '%';
     }
+    return 1;
+}
+static off_t
+_output_char(char *str, size_t size, struct strfmt_format *strfmt, va_list ap)
+{
+    char val;
+
+    /* Get the value from an argument */
+    val = (char)va_arg(ap, int);
+
+    if ( NULL != str && size > 1 ) {
+        str[0] = val;
+    }
+
     return 1;
 }
 static off_t

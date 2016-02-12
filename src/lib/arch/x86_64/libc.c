@@ -38,6 +38,9 @@ typedef __builtin_va_list va_list;
 /* in libcasm.s */
 unsigned long long syscall(int, ...);
 
+/* Atexit call-back function */
+void (*atexit_func)(void);
+
 #if !defined(TEST) || !TEST
 int main(int argc, char *argv[]);
 
@@ -49,8 +52,14 @@ entry(int argc, char *argv[])
 {
     int ret;
 
+    /* Clear the atexit() function */
+    atexit_func = NULL;;
+
+    /* Call the main routine */
     ret = main(argc, argv);
-    (void)ret;
+
+    /* Exit */
+    exit(ret);
 
     while ( 1 ) {}
 }
@@ -62,6 +71,12 @@ entry(int argc, char *argv[])
 void
 exit(int status)
 {
+    /* FIXME: Call the atexit function */
+    if ( NULL != atexit_func ) {
+        atexit_func();
+    }
+
+    /* System call */
     syscall(SYS_exit, status);
 
     /* Infinite loop to prevent the warning: 'noreturn' function does return */
@@ -205,7 +220,16 @@ free(void *ptr)
     //munmap(ptr, len);
 }
 
+/*
+ * atexit
+ */
+int
+atexit(void (*func)(void))
+{
+    atexit_func = func;
 
+    return 0;
+}
 
 
 #define PRINTF_MOD_NONE         0
