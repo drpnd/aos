@@ -434,6 +434,26 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
         break;
     }
 
+    /* For exec */
+    void *paddr;
+    paddr = pmem_alloc_pages(PMEM_ZONE_LOWMEM,
+                             bitwidth(DIV_CEIL(size, PAGESIZE)));
+    if ( NULL == paddr ) {
+        return -1;
+    }
+    ssize_t i;
+    int ret;
+    for ( i = 0; i < (ssize_t)DIV_CEIL(size, PAGESIZE); i++ ) {
+        ret = arch_vmem_map(t->ktask->proc->vmem,
+                            (void *)(CODE_INIT + PAGESIZE * i),
+                            paddr + PAGESIZE * i, VMEM_USABLE | VMEM_USED);
+        if ( ret < 0 ) {
+            /* FIXME: Handle this error */
+            panic("FIXME b");
+        }
+    }
+
+
     kmemcpy((void *)CODE_INIT, entry, size);
     kmemset(t->rp, 0, sizeof(struct stackframe64));
     /* Replace the current process with the new process */
@@ -448,6 +468,9 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
 
     t->rp->di = argc;
     t->rp->si = USTACK_INIT;
+
+    /* Specify the code size */
+    t->ktask->proc->code_size = size;
 
     /* Restart the task */
     task_replace(t);
