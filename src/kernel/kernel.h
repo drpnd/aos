@@ -407,7 +407,7 @@ struct proc {
     struct fildes *fds[FD_MAX];
 
     /* Code */
-    void *code;
+    void *code_paddr;
     size_t code_size;
 
     /* Exit status */

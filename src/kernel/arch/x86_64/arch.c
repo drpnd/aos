@@ -449,10 +449,13 @@ arch_exec(struct arch_task *t, void (*entry)(void), size_t size, int policy,
                             paddr + PAGESIZE * i, VMEM_USABLE | VMEM_USED);
         if ( ret < 0 ) {
             /* FIXME: Handle this error */
-            panic("FIXME b");
+            return -1;
         }
     }
 
+    /* Release the original one */
+    pmem_free_pages(t->ktask->proc->code_paddr);
+    t->ktask->proc->code_paddr = paddr;
 
     kmemcpy((void *)CODE_INIT, entry, size);
     kmemset(t->rp, 0, sizeof(struct stackframe64));

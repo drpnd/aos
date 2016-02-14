@@ -84,6 +84,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     void *saved_cr3;
     ssize_t i;
     int ret;
+    size_t size;
 
     /* Create a new process */
     np = kmalloc(sizeof(struct proc));
@@ -131,9 +132,18 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         return NULL;
     }
     /* For exec */
+    size = t->ktask->proc->code_size;
+    if ( size <= 0 ) {
+        /* Invald code */
+        pmem_free_pages(paddr1);
+        kfree(t->ktask);
+        kfree(t->kstack);
+        kfree(t);
+        kfree(np);
+        return NULL;
+    }
     paddr2 = pmem_alloc_pages(PMEM_ZONE_LOWMEM,
-                              bitwidth(DIV_CEIL(t->ktask->proc->code_size,
-                                                PAGESIZE)));
+                              bitwidth(DIV_CEIL(size, PAGESIZE)));
     if ( NULL == paddr2 ) {
         pmem_free_pages(paddr1);
         kfree(t->ktask);
@@ -142,8 +152,10 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
         kfree(np);
         return NULL;
     }
+    np->code_paddr = paddr2;
+
     t->ustack = ((struct arch_task *)ot->arch)->ustack;
-    exec = kmalloc(CEIL(t->ktask->proc->code_size, PAGESIZE));
+    exec = kmalloc(CEIL(size, PAGESIZE));
     if ( NULL == exec ) {
         pmem_free_pages(paddr2);
         pmem_free_pages(paddr1);
@@ -155,7 +167,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     }
 
     /* Copy the user stack to the temporary buffer */
-    kmemcpy(exec, (void *)CODE_INIT, t->ktask->proc->code_size);
+    kmemcpy(exec, (void *)CODE_INIT, size);
 
     /* Copy the kernel stack */
     kmemcpy(t->kstack, ((struct arch_task *)ot->arch)->kstack, KSTACK_SIZE);
@@ -182,8 +194,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
             panic("FIXME a");
         }
     }
-    for ( i = 0; i < (ssize_t)DIV_CEIL(t->ktask->proc->code_size, PAGESIZE);
-          i++ ) {
+    for ( i = 0; i < (ssize_t)DIV_CEIL(size, PAGESIZE); i++ ) {
         ret = arch_vmem_map(np->vmem, (void *)(CODE_INIT + PAGESIZE * i),
                             paddr2 + PAGESIZE * i, VMEM_USABLE | VMEM_USED);
         if ( ret < 0 ) {
@@ -215,7 +226,7 @@ proc_fork(struct proc *op, struct ktask *ot, struct ktask **ntp)
     set_cr3(((struct arch_vmem_space *)np->vmem->arch)->pgt);
 
     /* Copy the program memory */
-    kmemcpy((void *)CODE_INIT, exec, t->ktask->proc->code_size);
+    kmemcpy((void *)CODE_INIT, exec, size);
 
     /* Restore cr3 */
     set_cr3(saved_cr3);
@@ -411,6 +422,7 @@ proc_create(const char *path, const char *name, pid_t pid)
         goto error_exec;
         return -1;
     }
+    proc->code_paddr = ppage2;
 
     /* Set user stack */
     t->ustack = (void *)USTACK_INIT;
