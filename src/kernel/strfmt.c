@@ -403,7 +403,7 @@ _output_string(char *str, size_t size, struct strfmt_format *strfmt, va_list ap)
     }
 
     pos = 0;
-    while ( *s ) {
+    while ( s[pos] ) {
         if ( (size_t)pos + 1 < size ) {
             str[pos] = s[pos];
         }
