@@ -683,11 +683,11 @@ get_drive_params:
 
 /* Read one sector starting at LBA %eax to the buffer */
 read_to_buf:
+	pushl	%ecx
 	pushw	%bx
-	pushw	%cx
 	pushw	%dx
 	pushw	%es
-	movw	$1,%cx		/* Read 1 sector */
+	movl	$1,%ecx		/* Read 1 sector */
 	movb	(drive),%dl	/*  from the saved drive */
 	movw	$(BUFFER >> 4),%bx	/* to the BUFFER memory */
 	movw	%bx,%es
@@ -696,11 +696,11 @@ read_to_buf:
 	movl	%eax,(buf_lba)	/* Save the last buffered sector's LBA */
 	popw	%es
 	popw	%dx
-	popw	%cx
 	popw	%bx
+	popl	%ecx
 	ret
 
-/* Read %cx sector starting at LBA %eax to the kernel location (%edx offset) */
+/* Read %ecx sector starting at LBA %eax to the kernel location (%edx offset) */
 read_file:
 	pushl	%ebx
 	pushl	%edx
