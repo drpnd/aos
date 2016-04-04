@@ -254,7 +254,7 @@ sys_write(int fildes, const void *buf, size_t nbyte)
 int
 sys_open(const char *path, int oflag, ...)
 {
-    u64 *initramfs = (u64 *)0x20000ULL;
+    u64 *initramfs = (u64 *)INITRAMFS_BASE;
     u64 offset = 0;
     u64 size;
     struct ktask *t;
