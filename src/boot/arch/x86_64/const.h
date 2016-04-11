@@ -21,8 +21,8 @@
  * SOFTWARE.
  */
 
-#ifndef _CONST_H
-#define _CONST_H
+#ifndef _BOOT_CONST_H
+#define _BOOT_CONST_H
 
 #define KERNEL_BASE     0x10000
 #define INITRAMFS_BASE  0x30000
@@ -49,6 +49,15 @@
 #define SECTOR_SIZE     0x200           /* 512 bytes / sector */
 #define BUFFER          0x6000          /* Buffer: 6000-61ff */
 
+
+/* Descriptors */
+#define GDT_NULL        0x00
+#define GDT_CODE64      0x08
+#define GDT_DATA64      0x10
+#define GDT_CODE32      0x18
+#define GDT_DATA32      0x20
+#define GDT_CODE16      0x28
+
 /* I/O port */
 
 /* i8259 */
@@ -65,6 +74,7 @@
 /* CPUID leaves > 3 < 80000000 are visible only
    when IA32_MISC_ENABLE.BOOT_NT4[bit 22] = 0 (default). */
 /*
+ * SDM Table 3-17.
  * For Intel processors
  * EAX=00H
  *      EAX: Maximum Input Value for Basic CPUID Information
@@ -205,7 +215,6 @@
  *                       (if Version ID > 1)
  *          Bits 12-05: Bit width of fixed-function performance counters
  *                       (if Version ID > 1)
- *
  */
 
 

@@ -25,9 +25,7 @@
 #define _BOOT_H
 
 #include <aos/const.h>
-
-#define CODE_SEL        0x8
-#define KERNEL_BASE     0x10000
+#include "const.h"
 
 /* in entry64.s */
 void hlt(void);

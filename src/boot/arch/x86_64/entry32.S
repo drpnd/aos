@@ -39,7 +39,7 @@ entry32:
 	outb	%al,$IO_PIC2_DATA
 
 	/* %cs is automatically set after the long jump operation */
-	movl	$0x20,%eax
+	movl	$GDT_DATA32,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
 	movl	%eax,%es
@@ -66,7 +66,7 @@ entry32:
 	/* CPU feature check */
 	pushfl
 	popl	%eax
-	btl	$21,%eax		/* CPUID supported? */
+	btl	$EFLAGS_CPUID,%eax	/* CPUID supported? */
 	jz	1f
 	movl	$1,%eax
 	cpuid

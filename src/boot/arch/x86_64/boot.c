@@ -30,7 +30,7 @@ void
 centry(void)
 {
     /* Jump to the kernel */
-    ljmp(CODE_SEL, KERNEL_BASE);
+    ljmp(GDT_CODE64, KERNEL_BASE);
 }
 
 /*

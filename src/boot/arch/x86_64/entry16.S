@@ -21,6 +21,8 @@
  * SOFTWARE.
  */
 
+#include "const.h"
+
 	.text
 
 	.code16
@@ -40,7 +42,7 @@ entry16:
 	movl	%eax,%cr0
 
 	/* Go into protected mode and flush the pipeline */
-	ljmpl	$0x10,$entry32
+	ljmpl	$GDT_CODE32,$entry32
 
 	.data
 
@@ -52,10 +54,10 @@ idtr:
 gdt:
 	.word	0x0,0x0,0x0,0x0		/* Null descriptor */
 	.word	0xffff,0x0,0x9a00,0xaf	/* Code64 descriptor */
-	.word	0xffff,0x0,0x9a00,0xcf	/* Code32 descriptor */
-	.word	0xffff,0x0,0x9a00,0x8f	/* Code16 descriptor */
 	.word	0xffff,0x0,0x9200,0xaf	/* Data64 */
+	.word	0xffff,0x0,0x9a00,0xcf	/* Code32 descriptor */
 	.word	0xffff,0x0,0x9200,0xcf	/* Data32 */
+	.word	0xffff,0x0,0x9a00,0x8f	/* Code16 descriptor */
 gdt.1:
 /* Pseudo global descriptor table */
 gdtr:

@@ -21,6 +21,8 @@
  * SOFTWARE.
  */
 
+#include "const.h"
+
 	.text
 
 	.code64
