@@ -70,7 +70,7 @@ entry32:
 	jz	1f
 	movl	$1,%eax
 	cpuid
-	btl	$25,%ecx		/* SSE supported? */
+	btl	$25,%edx		/* SSE supported? */
 	jz	1f
 	btl	$26,%ecx		/* SSE2 supported? */
 	jz	1f

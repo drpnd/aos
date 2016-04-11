@@ -218,6 +218,66 @@
  */
 
 
+#define CPUID1H_ECX_SSE3        0       /* SSE3 Extensions */
+#define CPUID1H_ECX_PCLMULQDQ   1       /* Carryless Multiplication */
+#define CPUID1H_ECX_DTES64      2       /* 64-bit DS Area */
+#define CPUID1H_ECX_MONITOR     3       /* MONITOR/MWAIT */
+#define CPUID1H_ECX_DSCPL       4       /* CPL Qualified Debug Store */
+#define CPUID1H_ECX_VMX         5       /* Virtual Machine Extensions */
+#define CPUID1H_ECX_SMX         6       /* Safer Mode Extensions */
+#define CPUID1H_ECX_EST         7       /* Enhanced SpeedStep Technology */
+#define CPUID1H_ECX_TM2         8       /* Thermal Monitor 2 */
+#define CPUID1H_ECX_SSSE3       9       /* SSSE3 Extensions */
+#define CPUID1H_ECX_CNXTID      10      /* L1 Context ID */
+#define CPUID1H_ECX_FMA         12      /* Fused Multiply Add */
+#define CPUID1H_ECX_CMPXCHG16B  13      /* CMPXCHG16B */
+#define CPUID1H_ECX_XTPR        14      /* xTPR Update Control */
+#define CPUID1H_ECX_PDCM        15      /* Perf/Debug Capability MSR */
+#define CPUID1H_ECX_PCID        17      /* Process-context Identifiers */
+#define CPUID1H_ECX_DCA         18      /* Direct Cache Access */
+#define CPUID1H_ECX_SSE41       19      /* SSE4.1 */
+#define CPUID1H_ECX_SSE42       20      /* SSE4.2 */
+#define CPUID1H_ECX_X2APIC      21      /* x2APIC */
+#define CPUID1H_ECX_MOVBE       22      /* MOVBE */
+#define CPUID1H_ECX_POPCNT      23      /* POPCNT */
+#define CPUID1H_ECX_TSCDL       24      /* TSC-Deadline */
+#define CPUID1H_ECX_AES         25      /* AES */
+#define CPUID1H_ECX_XSAVE       26      /* XSAVE */
+#define CPUID1H_ECX_OSXSAVE     27      /* OSXSAVE */
+#define CPUID1H_ECX_AVX         28      /* AVX */
+#define CPUID1H_ECX_F16C        29      /* F16C */
+#define CPUID1H_ECX_RDRAND      30      /* RDRAND */
+
+#define CPUID1H_EDX_FPU         0       /* x87 FPU on Chip */
+#define CPUID1H_EDX_VME         1       /* Virtual-8086 Mode Enhancement */
+#define CPUID1H_EDX_DE          2       /* Debugging Extensions */
+#define CPUID1H_EDX_PSE         3       /* Page Size Extensions */
+#define CPUID1H_EDX_TSC         4       /* Time Stamp Counter */
+#define CPUID1H_EDX_MSR         5       /* RDMSR and WRMSR Support */
+#define CPUID1H_EDX_PAE         6       /* Page Address Extensions */
+#define CPUID1H_EDX_MCE         7       /* Machine Check Exception */
+#define CPUID1H_EDX_CX8         8       /* CMPXCHG8B Inst. */
+#define CPUID1H_EDX_APIC        9       /* APIC on Chip */
+#define CPUID1H_EDX_SEP         11      /* SYSENTER and SYSEXIT */
+#define CPUID1H_EDX_MTRR        12      /* Memory Type Range Registers */
+#define CPUID1H_EDX_PGE         13      /* PTE Global Bit */
+#define CPUID1H_EDX_MCA         14      /* Machine Check Architecture */
+#define CPUID1H_EDX_CMOV        15      /* Conditional Move/Compare Inst. */
+#define CPUID1H_EDX_PAT         16      /* Page Attribute Table */
+#define CPUID1H_EDX_PSE36       17      /* Page Size Extension */
+#define CPUID1H_EDX_PSN         18      /* Processor Serial Number */
+#define CPUID1H_EDX_CLFSH       19      /* CFLUSH instruction */
+#define CPUID1H_EDX_DS          21      /* Debug Store */
+#define CPUID1H_EDX_ACPI        22      /* Thermal Monitor and Clock Ctrl */
+#define CPUID1H_EDX_MMX         23      /* MMX Technology */
+#define CPUID1H_EDX_FXSR        24      /* FXSAVE/FXRSTOR */
+#define CPUID1H_EDX_SSE         25      /* SSE Extensions */
+#define CPUID1H_EDX_SSE2        26      /* SSE2 Extensions */
+#define CPUID1H_EDX_SS          27      /* Self Snoop */
+#define CPUID1H_EDX_HTT         28      /* Multi-threading */
+#define CPUID1H_EDX_TM          29      /* Therm. Monitor */
+#define CPUID1H_EDX_PBE         31      /* Pend. Brk. EN. */
+
 #endif
 
 /*
