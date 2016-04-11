@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-	.include	"asmconst.h"
+#include "const.h"
 
 	.text
 
@@ -34,9 +34,9 @@ entry32:
 
 	/* Mask all interrupts (i8259) */
 	movb	$0xff,%al
-	outb	%al,$0x21
+	outb	%al,$IO_PIC1_DATA
 	movb	$0xff,%al
-	outb	%al,$0xa1
+	outb	%al,$IO_PIC2_DATA
 
 	/* %cs is automatically set after the long jump operation */
 	movl	$0x20,%eax
@@ -49,9 +49,9 @@ entry32:
 	/* Obtain APIC ID */
 	movl	$MSR_APIC_BASE,%ecx
 	rdmsr
-	andl	$0xfffffffffffff000,%eax	/* APIC Base */
-	movl	APIC_LAPIC_ID(%eax),%eax
-	shrl	$24,%eax
+	andl	$APIC_BASE_MASK,%eax	/* APIC Base */
+	movl	LAPIC_ID_OFF(%eax),%eax
+	shrl	$LAPIC_ID_SHR,%eax
 	/* P6 family and Pentium processors: [27:24] */
 	/* Pentium 4 processors, Xeon processors, and later processors: [31:24] */
 
