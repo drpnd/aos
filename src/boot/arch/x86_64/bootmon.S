@@ -1,5 +1,5 @@
 /*_
- * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
+ * Copyright (c) 2015-2016 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -40,7 +40,7 @@
 	.set	MME_SIZE,24		/* Memory map entry size */
 	.set	MME_SIGN,0x534d4150	/* MME signature (ascii "SMAP")  */
 
-	.include	"asmconst.h"
+#include "const.h"
 
 	.text
 

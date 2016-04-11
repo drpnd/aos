@@ -21,7 +21,8 @@
  * SOFTWARE.
  */
 
-	.include	"asmconst.h"
+#include "const.h"
+
 	.file		"pxeboot.s"
 
 	.set	PXENV_SIGNATURE0,0x4e455850	/* PXEN */
@@ -42,7 +43,8 @@
 	.code16
 	.globl	pxeboot
 
-/* Entry point for the PXE boot
+/*
+ * Entry point for the PXE boot
  *  %cs:%ip is 0x0000:0x7c000
  *  %es:%bx points to the PXENV+ structure
  *  %ss:%sp points to a valid stack (at least 1.5 KiB available)
