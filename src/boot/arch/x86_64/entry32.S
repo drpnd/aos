@@ -136,7 +136,7 @@ pg_setup.2:
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
-	pushl	$0x08
+	pushl	$GDT_CODE64
 	pushl	$entry64
 	lret
 

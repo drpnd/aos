@@ -34,7 +34,7 @@
 entry64:
 	cli
 
-	movl	$0x20,%eax
+	movl	$GDT_DATA64,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
 	xorl	%eax,%eax
