@@ -132,9 +132,27 @@ struct kstring {
 struct fildes {
     void *data;
     off_t pos;
+    int (*open)(const char *);
     ssize_t (*read)(struct fildes *, void *, size_t);
     ssize_t (*write)(struct fildes *, const void *, size_t);
     off_t (*lseek)(struct fildes *, off_t, int);
+    int (*close)(struct fildes *);
+};
+
+/*
+ * VFS
+ */
+typedef int (*vfs_open_f)(const char *);
+typedef ssize_t (*vfs_read_f)(struct fildes *, void *, size_t);
+typedef ssize_t (*vfs_write_f)(struct fildes *, void *, size_t);
+typedef off_t (*vfs_lseek_f)(struct fildes *, off_t, int);
+typedef int (*vfs_close_f)(struct fildes *);
+struct vfs_func {
+    vfs_open_f open;
+    vfs_read_f read;
+    vfs_write_f write;
+    vfs_lseek_f lseek;
+    vfs_close_f close;
 };
 
 /*
