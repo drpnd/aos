@@ -215,6 +215,22 @@
  *                       (if Version ID > 1)
  *          Bits 12-05: Bit width of fixed-function performance counters
  *                       (if Version ID > 1)
+ *
+ * EAX=80000001H
+ *      EAX: Extended Processor Signature and Feature Bits
+ *      EBX: Reserved
+ *      ECX: Bit 00: LAHF/SAHF available in 64-bit mode
+ *           Bits 31-01: Reserved
+ *      EDX: Bits 10-00: Reserved
+ *           Bit 11: SYSCALL/SYSRET available in 64-bit mode
+ *           Bits 19-12: Reserved = 0
+ *           Bit 20: Execute Disable Bit available
+ *           Bits 25-21: Reserved = 0
+ *           Bit 26: 1-GByte pages are available if 1
+ *           Bit 27: RDTSCP and IA32_TSC_AUX are available if 1
+ *           Bit 28: Reserved = 0
+ *           Bit 29: Intel64 Architecture available if 1
+ *           Bits 31-30: Reserved = 0
  */
 
 
@@ -277,6 +293,49 @@
 #define CPUID1H_EDX_HTT         28      /* Multi-threading */
 #define CPUID1H_EDX_TM          29      /* Therm. Monitor */
 #define CPUID1H_EDX_PBE         31      /* Pend. Brk. EN. */
+
+
+/* Control Registers */
+#define CR0_PE                  0
+#define CR0_MP                  1
+#define CR0_EM                  2
+#define CR0_TS                  3
+#define CR0_ET                  4
+#define CR0_NE                  5
+#define CR0_WP                  16
+#define CR0_AM                  18
+#define CR0_NW                  29
+#define CR0_CD                  30
+#define CR0_PG                  31
+
+#define CR3_PWT                 3
+#define CR3_PCD                 4
+
+#define CR4_VME                 0
+#define CR4_PVI                 1
+#define CR4_TSD                 2
+#define CR4_DE                  3
+#define CR4_PSE                 4
+#define CR4_PAE                 5
+#define CR4_MCE                 6
+#define CR4_PGE                 7
+#define CR4_PCE                 8
+#define CR4_OSFXSR              9
+#define CR4_OSXMMEXCPT          10
+#define CR4_VMXE                13
+#define CR4_SMXE                14
+#define CR4_FSGSBASE            16
+#define CR4_PCIDE               17
+#define CR4_OSXSAVE             18
+#define CR4_SMEP                20
+
+
+/* MSR */
+#define MSR_IA32_EFER           0xc0000080
+#define IA32_EFER_SCE           0               /* SysCall enable */
+#define IA32_EFER_LME           8               /* IA-32e mode enable */
+#define IA32_EFER_LMA           10              /* IA-32e mode active */
+#define IA32_EFER_NXE           11              /* Execute-disable bit enable */
 
 #endif
 

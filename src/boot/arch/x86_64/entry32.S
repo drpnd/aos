@@ -70,16 +70,17 @@ entry32:
 	jz	1f
 	movl	$1,%eax
 	cpuid
-	btl	$25,%edx		/* SSE supported? */
+	btl	$CPUID1H_EDX_SSE,%edx	/* SSE supported? */
 	jz	1f
-	btl	$26,%ecx		/* SSE2 supported? */
+	btl	$CPUID1H_EDX_SSE2,%edx	/* SSE2 supported? */
 	jz	1f
-	btl	$5,%edx			/* PAE supported? */
+	btl	$CPUID1H_EDX_PAE,%edx	/* PAE supported? */
 	jz	1f
 
 	/* Valid CPU */
 	jmp	3f
 1:
+	/* Invalid CPU */
 	movl	$error_msg,%esi
 	call	display_error
 2:
@@ -88,8 +89,8 @@ entry32:
 
 3:
 	/* Enable PAE and SSE */
-	movl	$0x00000220,%eax	/* CR4[bit 5] = PAE */
-	movl	%eax,%cr4		/* CR4[bit 9] = OSFXSR */
+	movl	$((1 << CR4_PAE) | (1 << CR4_OSFXSR)),%eax
+	movl	%eax,%cr4
 /* Create 64bit page table */
 pg_setup:
 	movl	$KERNEL_PGT,%ebx	/* Low 12 bit must be zero */
@@ -124,14 +125,14 @@ pg_setup.2:
 	movl	%ebx,%cr3
 
 	/* Enable long mode */
-	movl	$0xc0000080,%ecx	/* EFER MSR number */
+	movl	$MSR_IA32_EFER,%ecx	/* EFER MSR number */
 	rdmsr				/* Read from 64 bit-specific register */
-	btsl	$8,%eax			/* LME bit = 1 */
+	btsl	$IA32_EFER_LME,%eax	/* LME bit = 1 */
 	wrmsr
 
 	/* Activate page translation and long mode */
 	movl	%cr0,%eax
-	orl	$0x80000001,%eax
+	orl	$((1 << CR0_PG) | CR0_PE),%eax
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
