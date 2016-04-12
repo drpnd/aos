@@ -31,6 +31,8 @@
 #define P_DATA_BASE     0x1000000       /* Data base for each processor */
 #define P_STACK_GUARD   0x10
 
+#define BOOT_TIMEOUT    3               /* Timeout in seconds */
+
 #define BOOTINFO_BASE   0x8000          /* Boot information base address */
 #define BOOTINFO_SIZE   0x100           /* Size of boot info structure */
 
@@ -68,6 +70,18 @@
 
 /* Flags */
 #define EFLAGS_CPUID    21
+
+/* Keyboard */
+#define KBD_LCTRL       0x1d    /* Left ctrl */
+#define KBD_LSHIFT      0x2a    /* Left shift */
+#define KBD_RSHIFT      0x36    /* Right shift */
+#define KBD_CAPS        0x3a    /* Caps lock */
+#define KBD_RCTRL       0x5a    /* Right ctrl */
+#define KBD_UP          0x48    /* Up */
+#define KBD_LEFT        0x4b    /* Left */
+#define KBD_RIGHT       0x4d    /* Right */
+#define KBD_DOWN        0x50    /* Down */
+
 
 /* CPUID features */
 

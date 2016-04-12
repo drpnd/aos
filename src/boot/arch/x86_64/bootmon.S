@@ -23,17 +23,7 @@
 
 	.set	IVT_IRQ0,0x08	/* IRQ0 = 0x08 (BIOS default) */
 	.set	IVT_IRQ8,0x70	/* IRQ0 = 0x70 (BIOS default) */
-	.set	KBD_LCTRL,0x1d	/* Left ctrl */
-	.set	KBD_LSHIFT,0x2a	/* Left shift */
-	.set	KBD_RSHIFT,0x36	/* Right shift */
-	.set	KBD_CAPS,0x3a	/* Caps lock */
-	.set	KBD_RCTRL,0x5a	/* Right ctrl */
-	.set	KBD_UP,0x48	/* Up */
-	.set	KBD_LEFT,0x4b	/* Left */
-	.set	KBD_RIGHT,0x4d	/* Right */
-	.set	KBD_DOWN,0x50	/* Down */
 	.set	VGA_TEXT_COLOR_80x25,0x03
-	.set	BOOT_TIMEOUT,3	/* Timeout in seconds */
 	.set	NUM_RETRIES,3		/* # of retries for disk read */
 	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
 	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
