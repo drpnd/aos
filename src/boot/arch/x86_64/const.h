@@ -51,6 +51,9 @@
 #define SECTOR_SIZE     0x200           /* 512 bytes / sector */
 #define BUFFER          0x6000          /* Buffer: 6000-61ff */
 
+#define MME_SIZE        24              /* Memory map entry size */
+#define MME_SIGN        0x534d4150      /* MME signature (ascii "SMAP")  */
+
 
 /* Descriptors */
 #define GDT_NULL        0x00

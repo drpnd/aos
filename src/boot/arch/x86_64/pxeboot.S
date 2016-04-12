@@ -28,8 +28,6 @@
 	.set	PXENV_SIGNATURE0,0x4e455850	/* PXEN */
 	.set	PXENV_SIGNATURE1,0x2b56		/* V+ */
 	.set	PXE_SIGNATURE,0x45585021	/* !PXE */
-	.set	MME_SIZE,24		/* Memory map entry size */
-	.set	MME_SIGN,0x534d4150	/* MME signature (ascii "SMAP")  */
 
 	.text
 
