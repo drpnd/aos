@@ -28,15 +28,8 @@
 	.set	PXENV_SIGNATURE0,0x4e455850	/* PXEN */
 	.set	PXENV_SIGNATURE1,0x2b56		/* V+ */
 	.set	PXE_SIGNATURE,0x45585021	/* !PXE */
-	.set	KERNEL_ADDR,0x10000
-	.set	INITRD_ADDR,0x00030000
 	.set	MME_SIZE,24		/* Memory map entry size */
 	.set	MME_SIGN,0x534d4150	/* MME signature (ascii "SMAP")  */
-	.set	GDT_CODE64_SEL,0x08
-	.set	GDT_CODE32_SEL,0x10
-	.set	GDT_CODE16_SEL,0x18
-	.set	GDT_DATA64_SEL,0x20
-	.set	GDT_DATA32_SEL,0x28
 
 	.text
 
@@ -125,13 +118,13 @@ parse_pxe:
 
 /* Load kernel and initrd */
 	movw	$kernel,%si
-	movl	$KERNEL_ADDR,%edi
+	movl	$KERNEL_BASE,%edi
 	call	load_tftp_file
 	testw	%ax,%ax
 	jnz	error
 
 	movw	$initrd,%si
-	movl	$INITRD_ADDR,%edi
+	movl	$INITRAMFS_BASE,%edi
 	call	load_tftp_file
 	testw	%ax,%ax
 	jnz	error
@@ -226,7 +219,7 @@ boot16:
 	movl	%eax,%cr0
 
 	/* Go into protected mode and flush the pipeline */
-	ljmpl	$GDT_CODE32_SEL,$boot32
+	ljmpl	$GDT_CODE32,$boot32
 
 
 /* Call PXE API specified by the opcode %bx with the input buffer pointed by
@@ -402,7 +395,7 @@ boot32:
 
 	/* Initialize stack and data segments.  Note that %cs is */
 	/* automatically set after the long jump operation. */
-	movl	$GDT_DATA32_SEL,%eax
+	movl	$GDT_DATA32,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
 	movl	%eax,%es
@@ -470,7 +463,7 @@ pg_setup.2:
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
-	pushl	$GDT_CODE64_SEL
+	pushl	$GDT_CODE64
 	pushl	$boot64
 	lret
 
@@ -484,7 +477,7 @@ boot64:
 	movl	%eax,%gs
 	movl	%eax,%ds
 	movl	%eax,%es
-	movl	$GDT_DATA64_SEL,%eax
+	movl	$GDT_DATA64,%eax
 	movl	%eax,%ss
 
 	/* Clear screen */
@@ -502,7 +495,7 @@ boot64:
 	outw	%ax,%dx
 
 	/* Jump to the kernel main function */
-	movq	$KERNEL_ADDR,%rdi
+	movq	$KERNEL_BASE,%rdi
 	call	ljmp64
 	jmp	halt64
 
@@ -513,7 +506,7 @@ halt64:
 
 ljmp64:
 	/* Load code64 descriptor */
-	pushq	$GDT_CODE64_SEL
+	pushq	$GDT_CODE64
 	pushq	%rdi
 	lretq
 
@@ -531,10 +524,10 @@ idtr:
 gdt:
 	.word	0x0,0x0,0x0,0x0		/* Null entry */
 	.word	0xffff,0x0,0x9a00,0xaf	/* Code64 */
-	.word	0xffff,0x0,0x9a00,0xcf	/* Code32 */
-	.word	0xffff,0x0,0x9a00,0x8f	/* Code16 */
 	.word	0xffff,0x0,0x9200,0xaf	/* Data64 */
+	.word	0xffff,0x0,0x9a00,0xcf	/* Code32 */
 	.word	0xffff,0x0,0x9200,0xcf	/* Data32 */
+	.word	0xffff,0x0,0x9a00,0x8f	/* Code16 */
 gdt.1:
 	/* Global descriptor table register */
 gdtr:
