@@ -21,7 +21,8 @@
  * SOFTWARE.
  */
 
-	.include	"asmconst.h"
+#include "const.h"
+
 	.text
 
 	.code64

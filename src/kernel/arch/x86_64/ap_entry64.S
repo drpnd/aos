@@ -1,5 +1,5 @@
 /*_
- * Copyright (c) 2015-2016 Hirochika Asai <asai@jar.jp>
+ * Copyright (c) 2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,58 +21,22 @@
  * SOFTWARE.
  */
 
-	.include	"asmconst.h"
+#include "const.h"
 
 	.text
 
-	.code32
-	.globl	ap_entry32
+	.code64
+	.globl	ap_entry64
 
 /* Entry point */
-ap_entry32:
+ap_entry64:
 	cli
-
-	/* %cs is automatically set after the long jump operation */
-	/* Setup other segment registers */
 	movl	$AP_GDT_DATA64_SEL,%eax
 	movl	%eax,%ss
 	movl	%eax,%ds
+	xorl	%eax,%eax
 	movl	%eax,%es
 	movl	%eax,%fs
 	movl	%eax,%gs
-
-	/* Obtain APIC ID */
-	movl	$APIC_BASE,%edx
-	movl	0x20(%edx),%eax
-	shrl	$24,%eax
-
-	/* Setup stack with 16 byte guard */
-	addl	$1,%eax
-	movl	$P_DATA_SIZE,%ebx
-	mull	%ebx		/* [%edx:%eax] = %eax * P_DATA_SIZE */
-	addl	$P_DATA_BASE,%eax
-	subl	$P_STACK_GUARD,%eax
-	movl	%eax,%esp
-
-	/* Enable PAE */
-	movl	$0x220,%eax	/* CR4[bit 5] = PAE */
-	movl	%eax,%cr4	/* CR4[bit 9] = OSFXSR */
-
-	/* Setup page table register */
-	movl	$KERNEL_PGT,%ebx
-	movl	%ebx,%cr3
-
-	/* Enable long mode */
-	movl	$0xc0000080,%ecx	/* EFER MSR number */
-	rdmsr			/* Read from 64bit-specific register */
-	btsl	$8,%eax		/* LME bit = 1 */
-	wrmsr			/* Write to 64bit-specific register */
-
-	/* Activate page translation and long mode */
-	movl	$0x80000001,%eax
-	movl	%eax,%cr0
-
-	/* Load code64 descriptor */
-	pushl	$AP_GDT_CODE64_SEL
-	pushl	$ap_entry64
-	lret
+	sti
+	jmp	apstart64
