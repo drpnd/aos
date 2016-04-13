@@ -205,6 +205,10 @@
 #define ERRCODE_TIMEOUT         0x80            /* Error code: Timeout */
 #define SECTOR_SIZE             0x200           /* 512 bytes / sector */
 
+#define BOOTMON_SEG             0x0900  /* Memory where to load boot monitor */
+#define BOOTMON_OFF             0x0000  /*  segment and offset [0900:0000] */
+#define BOOTMON_SIZE            0x000f  /* Boot monitor size in sector */
+
 #endif
 
 /*

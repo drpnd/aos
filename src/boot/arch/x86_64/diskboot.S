@@ -21,13 +21,7 @@
  * SOFTWARE.
  */
 
-	.set	BOOTMON_SEG,0x0900	/* Memory where to load boot monitor */
-	.set	BOOTMON_OFF,0x0000	/*  segment and offset [0900:0000] */
-	.set	BOOTMON_SIZE,0x000f	/* Boot monitor size in sector */
-	.set	NUM_RETRIES,3		/* # of retries for disk read */
-	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
-	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
-	.set	VGA_TEXT_COLOR_80x25,0x03
+#include "const.h"
 
 	.text
 
