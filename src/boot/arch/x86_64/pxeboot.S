@@ -25,10 +25,6 @@
 
 	.file		"pxeboot.s"
 
-	.set	PXENV_SIGNATURE0,0x4e455850	/* PXEN */
-	.set	PXENV_SIGNATURE1,0x2b56		/* V+ */
-	.set	PXE_SIGNATURE,0x45585021	/* !PXE */
-
 	.text
 
 	.code16

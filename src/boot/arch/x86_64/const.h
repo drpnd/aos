@@ -190,6 +190,21 @@
 #define IA32_EFER_LMA           10              /* IA-32e mode active */
 #define IA32_EFER_NXE           11              /* Execute-disable bit enable */
 
+
+/* PXE boot */
+#define PXENV_SIGNATURE0        0x4e455850      /* PXEN */
+#define PXENV_SIGNATURE1        0x2b56          /* V+ */
+#define PXE_SIGNATURE           0x45585021      /* !PXE */
+
+
+/* IRQ */
+#define IVT_IRQ0                0x08            /* IRQ0 = 0x08 (BIOS default) */
+#define IVT_IRQ8                0x70            /* IRQ0 = 0x70 (BIOS default) */
+#define VGA_TEXT_COLOR_80x25    0x03
+#define NUM_RETRIES             3               /* # of retries for disk read */
+#define ERRCODE_TIMEOUT         0x80            /* Error code: Timeout */
+#define SECTOR_SIZE             0x200           /* 512 bytes / sector */
+
 #endif
 
 /*

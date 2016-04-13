@@ -21,13 +21,6 @@
  * SOFTWARE.
  */
 
-	.set	IVT_IRQ0,0x08	/* IRQ0 = 0x08 (BIOS default) */
-	.set	IVT_IRQ8,0x70	/* IRQ0 = 0x70 (BIOS default) */
-	.set	VGA_TEXT_COLOR_80x25,0x03
-	.set	NUM_RETRIES,3		/* # of retries for disk read */
-	.set	ERRCODE_TIMEOUT,0x80	/* Error code: Timeout */
-	.set	SECTOR_SIZE,0x200	/* 512 bytes / sector */
-
 #include "const.h"
 
 	.text
