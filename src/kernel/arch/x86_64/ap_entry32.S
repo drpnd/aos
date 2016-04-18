@@ -69,7 +69,7 @@ ap_entry32:
 	wrmsr			/* Write to 64bit-specific register */
 
 	/* Activate page translation and long mode */
-	movl	$((1 << CR0_PG) | CR0_PE),%eax
+	movl	$((1 << CR0_PG) | (1 << CR0_PE)),%eax
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
