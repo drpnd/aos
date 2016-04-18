@@ -132,7 +132,7 @@ pg_setup.2:
 
 	/* Activate page translation and long mode */
 	movl	%cr0,%eax
-	orl	$((1 << CR0_PG) | CR0_PE),%eax
+	orl	$((1 << CR0_PG) | (1 << CR0_PE)),%eax
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
