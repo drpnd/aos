@@ -55,21 +55,21 @@ ap_entry32:
 	movl	%eax,%esp
 
 	/* Enable PAE */
-	movl	$0x220,%eax	/* CR4[bit 5] = PAE */
-	movl	%eax,%cr4	/* CR4[bit 9] = OSFXSR */
+	movl	$((1 << CR4_PAE) | (1 << CR4_OSFXSR)),%eax
+	movl	%eax,%cr4
 
 	/* Setup page table register */
 	movl	$KERNEL_PGT,%ebx
 	movl	%ebx,%cr3
 
 	/* Enable long mode */
-	movl	$0xc0000080,%ecx	/* EFER MSR number */
+	movl	$MSR_IA32_EFER,%ecx	/* EFER MSR number */
 	rdmsr			/* Read from 64bit-specific register */
-	btsl	$8,%eax		/* LME bit = 1 */
+	btsl	$IA32_EFER_LME,%eax	/* LME bit = 1 */
 	wrmsr			/* Write to 64bit-specific register */
 
 	/* Activate page translation and long mode */
-	movl	$0x80000001,%eax
+	movl	$((1 << CR0_PG) | CR0_PE),%eax
 	movl	%eax,%cr0
 
 	/* Load code64 descriptor */
