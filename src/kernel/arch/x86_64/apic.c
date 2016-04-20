@@ -194,7 +194,7 @@ lapic_start_timer(u64 freq, u8 vec)
 {
     /* Estimate frequency first */
     u64 busfreq;
-    struct p_data *pdata;
+    struct cpu_data *pdata;
 
     /* Get CPU frequency to this CPU data area */
     pdata = this_cpu();

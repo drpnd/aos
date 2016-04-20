@@ -54,17 +54,11 @@
 /* Maximum number of processors supported in this operating system */
 #define MAX_PROCESSORS          256
 
-/* GDT and IDT */
-#define GDT_ADDR                0x74000ULL
-#define GDT_MAX_SIZE            0x2000
-#define IDT_ADDR                0x76000ULL
-#define IDT_MAX_SIZE            0x2000
-
 /* Kernel variable */
 #define KVAR_ADDR               0x78000ULL
 
 /*
- * Boot information from boot loader
+ * Boot information from the boot loader
  */
 struct bootinfo {
     struct {
@@ -117,7 +111,7 @@ struct stackframe64 {
 } __attribute__ ((packed));
 
 /*
- * TSS
+ * Task State Segment (TSS)
  */
 struct tss {
     u32 reserved1;
@@ -212,7 +206,7 @@ struct arch_task {
 /*
  * Data space for each processor
  */
-struct p_data {
+struct cpu_data {
     u32 flags;          /* bit 0: enabled (working); bit 1- reserved */
     u32 cpu_id;
     u64 freq;           /* Frequency */
@@ -231,7 +225,7 @@ struct p_data {
 } __attribute__ ((packed));
 
 /* in arch.c */
-struct p_data * this_cpu(void);
+struct cpu_data * this_cpu(void);
 int
 arch_exec(struct arch_task *, void (*)(void), size_t, int, char *const [],
           char *const []);

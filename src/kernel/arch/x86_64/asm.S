@@ -121,10 +121,10 @@ kstart64:
 
 	/* Setup stack with 16 byte guard */
 	addl	$1,%eax
-	movl	$P_DATA_SIZE,%ebx
+	movl	$CPU_DATA_SIZE,%ebx
 	mull	%ebx			/* [%edx|%eax] = %eax * %ebx */
-	addq	$P_DATA_BASE,%rax
-	subq	$P_STACK_GUARD,%rax
+	addq	$CPU_DATA_BASE,%rax
+	subq	$CPU_STACK_GUARD,%rax
 	movq	%rax,%rsp
 
 	/* Initialize the bootstrap processor */
@@ -153,10 +153,10 @@ apstart64:
 
 	/* Setup stack with 16 byte guard */
 	addl	$1,%eax
-	movl	$P_DATA_SIZE,%ebx
+	movl	$CPU_DATA_SIZE,%ebx
 	mull	%ebx			/* [%edx|%eax] = %eax * %ebx */
-	addq	$P_DATA_BASE,%rax
-	subq	$P_STACK_GUARD,%rax
+	addq	$CPU_DATA_BASE,%rax
+	subq	$CPU_STACK_GUARD,%rax
 	movq	%rax,%rsp
 
 	/* Initialize the application processor */
@@ -855,37 +855,37 @@ _task_restart:
 	xorq	%rax,%rax
 	movl	APIC_LAPIC_ID(%rdx),%eax
 	/* Calculate the processor data space from the APIC ID */
-	movq	$P_DATA_SIZE,%rbx
+	movq	$CPU_DATA_SIZE,%rbx
 	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
-	addq	$P_DATA_BASE,%rax
+	addq	$CPU_DATA_BASE,%rax
 	movq	%rax,%rbp
 	/* If the next task is not scheduled, immediately restart this task */
-	cmpq	$0,P_NEXT_TASK_OFFSET(%rbp)
+	cmpq	$0,CPU_NEXT_TASK_OFFSET(%rbp)
 	jz	2f
-	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
+	movq	CPU_NEXT_TASK_OFFSET(%rbp),%rax
 	/* If the current task is null, then do not need to save anything */
-	cmpq	$0,P_CUR_TASK_OFFSET(%rbp)
+	cmpq	$0,CPU_CUR_TASK_OFFSET(%rbp)
 	jz	1f
 	/* Save the stack pointer (restart point) */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rax
+	movq	CPU_CUR_TASK_OFFSET(%rbp),%rax
 	movq	%rsp,TASK_RP(%rax)
 1:
 	/* Notify that the current task is switched (to the kernel) */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rdi
-	movq	P_NEXT_TASK_OFFSET(%rbp),%rsi
+	movq	CPU_CUR_TASK_OFFSET(%rbp),%rdi
+	movq	CPU_NEXT_TASK_OFFSET(%rbp),%rsi
 	callq	_arch_task_switched
 	/* Task switch (set the stack frame of the new task) */
-	movq	P_NEXT_TASK_OFFSET(%rbp),%rax
-	movq	%rax,P_CUR_TASK_OFFSET(%rbp)
+	movq	CPU_NEXT_TASK_OFFSET(%rbp),%rax
+	movq	%rax,CPU_CUR_TASK_OFFSET(%rbp)
 	movq	TASK_RP(%rax),%rsp
-	movq	$0,P_NEXT_TASK_OFFSET(%rbp)
+	movq	$0,CPU_NEXT_TASK_OFFSET(%rbp)
 	/* Change page table */
 	movq	TASK_CR3(%rax),%rax
 	movq	%rax,%cr3
 	/* Setup sp0 in TSS */
-	movq	P_CUR_TASK_OFFSET(%rbp),%rax
+	movq	CPU_CUR_TASK_OFFSET(%rbp),%rax
 	movq	TASK_SP0(%rax),%rdx
-	leaq	P_TSS_OFFSET(%rbp),%rax
+	leaq	CPU_TSS_OFFSET(%rbp),%rax
 	movq	%rdx,TSS_SP0(%rax)
 2:
 	intr_lapic_isr_done
@@ -906,13 +906,13 @@ _task_replace:
 	xorq	%rax,%rax
 	movl	APIC_LAPIC_ID(%rdx),%eax
 	/* Calculate the processor data space from the APIC ID */
-	movq	$P_DATA_SIZE,%rbx
+	movq	$CPU_DATA_SIZE,%rbx
 	mulq	%rbx		/* [%rdx:%rax] = %rax * %rbx */
-	addq	$P_DATA_BASE,%rax
+	addq	$CPU_DATA_BASE,%rax
 	movq	%rax,%rbp
 	/* Setup sp0 in TSS */
 	movq	TASK_SP0(%rdi),%rdx
-	leaq	P_TSS_OFFSET(%rbp),%rax
+	leaq	CPU_TSS_OFFSET(%rbp),%rax
 	movq	%rdx,TSS_SP0(%rax)
 	intr_lapic_isr_done
 	iretq

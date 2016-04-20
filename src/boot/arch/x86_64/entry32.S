@@ -57,10 +57,10 @@ entry32:
 
 	/* Setup stack with 16 byte guard */
 	addl	$1,%eax
-	movl	$P_DATA_SIZE,%ebx
+	movl	$CPU_DATA_SIZE,%ebx
 	mull	%ebx			/* [%edx|%eax] = %eax * %ebx */
-	addl	$P_DATA_BASE,%eax
-	subl	$P_STACK_GUARD,%eax
+	addl	$CPU_DATA_BASE,%eax
+	subl	$CPU_STACK_GUARD,%eax
 	movl	%eax,%esp
 
 	/* CPU feature check */

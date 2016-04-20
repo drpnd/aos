@@ -27,9 +27,9 @@
 #define KERNEL_BASE     0x00010000      /* Address to load the kernel */
 #define INITRAMFS_BASE  0x00030000      /* Address to load the initramfs */
 #define KERNEL_PGT      0x00079000      /* Page table */
-#define P_DATA_SIZE     0x10000         /* Data size for each processor */
-#define P_DATA_BASE     0x1000000       /* Data base for each processor */
-#define P_STACK_GUARD   0x10
+#define CPU_DATA_SIZE   0x10000         /* Data size for each processor */
+#define CPU_DATA_BASE   0x1000000       /* Data base for each processor */
+#define CPU_STACK_GUARD 0x10
 
 #define BOOT_TIMEOUT    3               /* Timeout in seconds */
 
