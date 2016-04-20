@@ -364,7 +364,7 @@ this_cpu(void)
 {
     struct p_data *pdata;
 
-    pdata = (struct p_data *)(P_DATA_BASE + lapic_id() * P_DATA_SIZE);
+    pdata = (struct p_data *)((u64)P_DATA_BASE + lapic_id() * P_DATA_SIZE);
 
     return pdata;
 }
