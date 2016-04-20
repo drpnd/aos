@@ -324,11 +324,11 @@ ap_init(void)
     prox = acpi_lapic_prox_domain(&arch_acpi, lapic_id());
 
     /* Disable the global page feature */
-    set_cr4(get_cr4() & ~CR4_PGE);
+    set_cr4(get_cr4() & ~(1ULL << CR4_PGE));
     /* Set the page table */
     set_cr3(((struct arch_vmem_space *)g_kmem->space->arch)->pgt);
     /* Enable the global page feature */
-    set_cr4(get_cr4() | CR4_PGE);
+    set_cr4(get_cr4() | (1ULL << CR4_PGE));
 
     /* Enable this processor */
     pdata = this_cpu();

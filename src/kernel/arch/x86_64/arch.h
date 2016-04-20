@@ -26,6 +26,7 @@
 
 #include <aos/const.h>
 #include <aos/types.h>
+#include "const.h"
 
 /* Boot information from the boot loader */
 #define BOOTINFO_BASE           0x8000ULL
@@ -61,34 +62,6 @@
 
 /* Kernel variable */
 #define KVAR_ADDR               0x78000ULL
-
-/*********************************************************/
-/* The folloowing values are also defined in asmconst.h */
-/*********************************************************/
-/* # of IDT entries */
-#define IDT_NR                  256
-/* Kernel page table */
-#define KERNEL_PGT              0x00079000ULL
-/* Per-processor information (flags, cpuinfo, stats, tss, task, stack) */
-#define P_DATA_BASE             0x01000000ULL
-#define P_DATA_SIZE             0x10000
-#define P_STACK_GUARD           0x10
-#define P_TSS_OFFSET            (0x20 + IDT_NR * 8)
-/* Trampoline: 0x70 (0x70000) */
-#define TRAMPOLINE_VEC          0x70
-#define TRAMPOLINE_MAX_SIZE     0x1000
-/* GDT selectors */
-#define GDT_NR                  9
-#define GDT_NULL_SEL            (0<<3)
-#define GDT_RING0_CODE_SEL      (1<<3)
-#define GDT_RING0_DATA_SEL      (2<<3)
-#define GDT_RING3_CODE32_SEL    (3<<3)
-#define GDT_RING3_DATA_SEL      (4<<3)
-#define GDT_RING3_CODE64_SEL    (5<<3)
-#define GDT_TSS_SEL_BASE        (6<<3)
-
-/* Control registers */
-#define CR4_PGE                 (1ULL<<7)
 
 /*
  * Boot information from boot loader

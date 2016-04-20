@@ -25,11 +25,14 @@
 #define _KERNEL_CONST_H
 
 /* GDT selectors */
-#define GDT_RING0_CODE_SEL      0x08
-#define GDT_RING0_DATA_SEL      0x10
-#define GDT_RING3_CODE32_SEL    0x18
-#define GDT_RING3_DATA_SEL      0x20
-#define GDT_RING3_CODE64_SEL    0x28
+#define GDT_NR                  9
+#define GDT_NULL_SEL            (0<<3)
+#define GDT_RING0_CODE_SEL      (1<<3)
+#define GDT_RING0_DATA_SEL      (2<<3)
+#define GDT_RING3_CODE32_SEL    (3<<3)
+#define GDT_RING3_DATA_SEL      (4<<3)
+#define GDT_RING3_CODE64_SEL    (5<<3)
+#define GDT_TSS_SEL_BASE        (6<<3)
 
 /* Temporary GDT for application processors */
 #define AP_GDT_CODE64_SEL       0x08    /* Code64 selector */
@@ -45,7 +48,8 @@
 
 /* Kernel page table */
 #define KERNEL_PGT              0x00079000
-/* Per-processor information (struct p_data) */
+/* Per-processor information (struct p_data: flags, cpuinfo, stats, tss, task,
+   stack) */
 #define P_DATA_BASE             0x01000000
 #define P_DATA_SIZE             0x10000
 #define P_STACK_GUARD           0x10
@@ -60,8 +64,9 @@
 #define TASK_KTASK              40
 /* TSS */
 #define TSS_SP0                 4
-/* Trampoline */
+/* Trampoline: 0x70 (0x70000) */
 #define TRAMPOLINE_VEC          0x70
+#define TRAMPOLINE_MAX_SIZE     0x1000
 
 /* Syscall */
 #define SYSCALL_MAX_NR          0x10

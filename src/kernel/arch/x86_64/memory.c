@@ -1194,7 +1194,7 @@ static void
 _enable_page_global(void)
 {
     /* Enable the global page feature */
-    set_cr4(get_cr4() | CR4_PGE);
+    set_cr4(get_cr4() | (1ULL << CR4_PGE));
 }
 
 /*
@@ -1204,7 +1204,7 @@ static void
 _disable_page_global(void)
 {
     /* Disable the global page feature */
-    set_cr4(get_cr4() & ~CR4_PGE);
+    set_cr4(get_cr4() & ~(1ULL << CR4_PGE));
 }
 
 /*
