@@ -107,6 +107,8 @@
 #define NR_IV                   0x100
 #define IV_IRQ(n)               (0x20 + (n))
 
+#define KTASK_CREDIT            10
+
 /* Errors */
 #define ENOENT                  2
 #define EINTR                   4
@@ -466,7 +468,7 @@ struct ktask {
 
     /* Task type: Tick-full or tickless */
     int type;
-    /* Pointers for scheduler (runqueue) */
+    /* Pointers for scheduler (run queue) */
     struct ktask *next;
     int credit;                 /* quantum */
 };
